@@ -37,14 +37,14 @@ def openSocket(dl, host, port, attempts=10):
 
     except socket.error, e:
       if e.errno == errno.ECONNREFUSED:
-        logMsg(-1, dl, "openSocket: connection to " + host + ":" + str(port) + " refused")
+        logMsg(2, dl, "openSocket: connection to " + host + ":" + str(port) + " refused")
         attempts -= 1
         if  attempts > 0:
           sleep(1)
       else:
         raise
     else:
-      logMsg(3, dl, "openSocket: conncected")
+      logMsg(3, dl, "openSocket: connected")
       connected = True
   
   if connected:

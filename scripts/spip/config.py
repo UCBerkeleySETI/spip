@@ -10,16 +10,19 @@
 import os, re, socket, datetime, threading, time, sys, atexit, errno
 import subprocess
 
+from tempfile import mkstemp
+from shutil import move
+
 class Config(object):
 
   def __init__ (self):
     spip_root = os.environ.get('SPIP_ROOT');
   
-    config_file = spip_root + "/share/spip.cfg"
-    self.config = self.readCFGFileIntoDict (config_file)
+    self.config_file = spip_root + "/share/spip.cfg"
+    self.config = self.readCFGFileIntoDict (self.config_file)
 
-    site_file = spip_root + "/share/site.cfg"
-    self.site = self.readCFGFileIntoDict (site_file)
+    self.site_file = spip_root + "/share/site.cfg"
+    self.site = self.readCFGFileIntoDict (self.site_file)
 
   def getSPIP_ROOT(self):
     return self.spip_root
@@ -29,6 +32,9 @@ class Config(object):
 
   def getSiteConfig(self):
     return self.site
+
+  def updateKeyValueConfig (self, key, value):
+    self.updateKeyValueCFGFile(key, value, self.config_file)
 
   @staticmethod
   def readCFGFileIntoDict(filename):
@@ -58,14 +64,47 @@ class Config(object):
       print "ERROR: cannot open " + filename + " for writing"
     else:
       for key in sorted(cfg.keys()):
-        fptr.write(key.ljust(20) + cfg[key] + "\n")
+        fptr.write(key.ljust(19) + " " + cfg[key] + "\n")
       fptr.close()
+
+  @staticmethod
+  def writeDictToColonSVFile (cfg, filename):
+    try:
+      fptr = open(filename, 'w')
+    except IOError:
+      print "ERROR: cannot open " + filename + " for writing"
+    else:
+      for key in sorted(cfg.keys()):
+        fptr.write(key + ";" + cfg[key] + "\n")
+      fptr.close()
+
+  @staticmethod
+  def updateKeyValueCFGFile(key, value, filename):
+    try:
+      iptr = open(filename, 'r')
+    except IOError:
+      print "ERROR: cannot open " + filename + " for reading"
+    else:
+      try:
+        optr, abs_path = mkstemp()
+      except IOError:
+        print "ERROR: cannot open temporary file for writing"
+      else:
+        for line in iptr:
+          if line.startswith(key + " "):
+            optr.write(key.ljust(19) + " " + value + "\n")
+          else:
+            optr.write(line)
+        os.close(iptr)
+        os.close(optr)
+        os.remove (filename)
+        move(abs_path, filename)
 
   @staticmethod
   def writeDictToString (cfg):
     string = ""
     for key in sorted(cfg.keys()):
-      string += (key.ljust(16) + str(cfg[key]) + "\n")
+      string += (key.ljust(19) + " " + str(cfg[key]) + "\n")
     return string
 
   @staticmethod
@@ -81,6 +120,26 @@ class Config(object):
           cfg[parts[0]] = parts[1].strip()
     return cfg
 
+  @staticmethod
+  def mergeHeaderFreq (h1, h2):
+
+    header = h1
+
+    header["BYTES_PER_SECOND"] = str (int(h1["BYTES_PER_SECOND"]) + int(h2["BYTES_PER_SECOND"]))
+    header["NCHAN"] = str (int(h1["NCHAN"]) + int(h2["NCHAN"]))
+    header["START_CHANNEL"] = str (min(int(h1["START_CHANNEL"]), int(h2["START_CHANNEL"])))
+    header["END_CHANNEL"] = str (max(int(h1["END_CHANNEL"]), int(h2["END_CHANNEL"])))
+
+    bw1 = float(h1["BW"])
+    bw2 = float(h2["BW"])
+    freq1 = float(h1["FREQ"])
+    freq2 = float(h2["FREQ"])
+
+    header["BW"] = str (bw1 + bw2)
+    header["FREQ"] = str ((freq1 - bw1/2) + ((bw1+bw2)/2))
+
+    return header
+
   def getStreamConfigFixed (self, id):
 
     cfg = {}
@@ -88,6 +147,7 @@ class Config(object):
     cfg["HDR_VERSION"] = self.site["HDR_VERSION"]
     cfg["HDR_SIZE"]    = self.site["HDR_SIZE"]
     cfg["TELESCOPE"]   = self.site["TELESCOPE"]
+    cfg["DSB"]         = self.site["DSB"]
 
     cfg["RECEIVER"]   = self.config["RECEIVER"]
     cfg["INSTRUMENT"] = self.config["INSTRUMENT"]

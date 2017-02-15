@@ -25,6 +25,7 @@ AC_PROG_CC
 AM_PROG_CC_C_O
 
 # Checks for libraries.
+SWIN_LIB_CUDA
 SWIN_LIB_PSRDADA
 SWIN_LIB_HWLOC
 BOOST_REQUIRE([1.48],[AC_MSG_NOTICE([Could not find BOOST]])
@@ -62,6 +63,7 @@ AC_CONFIG_FILES([Makefile
   web/controls/Makefile
   web/images/Makefile
   web/js/Makefile
+  web/results/Makefile
   web/logs/Makefile
   web/status/Makefile
   web/search/Makefile

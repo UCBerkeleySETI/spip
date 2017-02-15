@@ -7,14 +7,15 @@
 # 
 ###############################################################################
 
-import socket, sys, traceback
+import socket, sys, traceback, re
 from select import select
 from xmltodict import parse
+from xml.parsers.expat import ExpatError
 
 from spip.config import Config
 from spip.daemons.bases import ServerBased,BeamBased
 from spip.daemons.daemon import Daemon
-from spip.utils import sockets
+from spip.utils import sockets,times
 
 DAEMONIZE = True
 DL     = 1
@@ -23,6 +24,7 @@ class LogsDaemon(Daemon):
 
   def __init__ (self, name, id):
     Daemon.__init__(self, name, str(id))
+    self.timestamp_re = re.compile ("^\[\d\d\d\d-\d\d-\d\d-\d\d:\d\d:\d\d\.\d\d\d\d\d\d\]")
 
   # over ride the default log message so that 
   def log (self, level, message):
@@ -73,21 +75,25 @@ class LogsDaemon(Daemon):
           if (handle == sock):
             (new_conn, addr) = sock.accept()
             self.log(1, "main: accept connection from "+repr(addr))
-            can_read.append(new_conn)
       
             # read header information about this logging stream
             header = new_conn.recv (4096)
-            # return a single character to confirm header has been receive
-            new_conn.send('\n')
-            header = header.strip()
-           
-            xml = parse(header)
 
-            headers[new_conn] = xml
-            line_buffers[new_conn] = ""
+            try: 
+              xml = parse(header)
+            except ExpatError as e:
+              self.log(0, "main: accept: xml error [" + header + "]")
+              new_conn.send ("<xml>Malformed XML message</xml>\r\n")
+              new_conn.close()
+            else:
+              # add to list of open file handles
+              can_read.append(new_conn)
+              # return a single character to confirm header has been receive
+              new_conn.send('\n')
+              headers[new_conn] = xml
+              line_buffers[new_conn] = ""
 
           else:
-
             message = handle.recv(4096)
 
             # if the socket has been closed
@@ -111,6 +117,8 @@ class LogsDaemon(Daemon):
 
               if well_terminated:
                 line_buffers[handle] = ""
+              else:
+                to_use -= 1
 
               for i in range(to_use):
                 line = lines[i]
@@ -123,7 +131,11 @@ class LogsDaemon(Daemon):
     source = header['log_stream']['source']
     dest   = header['log_stream']['dest']
     id     = header['log_stream']['id']['#text']
-    
+   
+    if not self.timestamp_re.match (line):
+      prefix = "[" + times.getCurrentTimeUS() + "] "
+      line = prefix + line
+
     if id == "-1":
       file = self.log_dir + "/spip_" + dest + ".log"
     else:

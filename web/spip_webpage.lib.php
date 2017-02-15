@@ -44,6 +44,11 @@ class spip_webpage
 
   }
 
+  function printJavaScriptTail()
+  {
+
+  }
+
   function openBlockHeader($block_title)
   {
     echo "<table class='wrapper'>\n";
@@ -134,12 +139,9 @@ function handleDirect($child_class)
     echo "<div id='main'>\n";
 
     echo "  <div id='header'>\n";
+    echo "    <h1>SPIP</h1>\n";
+    echo "    <h2 class='sub'>".$obj->config["INSTRUMENT"]."</h2>\n";
     echo "    <div id='hdr-overlay'></div>\n";
-    echo "    <div id='hdr-box1' class='box'></div>\n";
-    echo "    <div id='hdr-box2' class='box'></div>\n";
-    echo "    <div id='hdr-box3' class='box'></div>\n";
-    echo "    <div id='hdr-box4' class='box'></div>\n";
-    echo "    <h1>".$obj->config["INSTRUMENT"]." - Swinburne Pulsar Instrumentation Package</h1>\n";
     echo "  </div>\n";
 
     // print the main navigation panel
@@ -148,6 +150,7 @@ function handleDirect($child_class)
       $nav_items = array ("/spip/timing/" => "Timing", 
                           "/spip/stats/" => "Stats",
                           "/spip/status/" => "Status",
+                          "/spip/results/" => "Results",
                           "/spip/controls/" => "Controls",
                           "/spip/logs/" => "Logs");
 
@@ -204,6 +207,9 @@ function handleDirect($child_class)
     echo "  </div>\n";
 
     echo "</div>\n";  // main
+
+    $obj->printJavaScriptTail();
+
     echo "</body>\n";
     echo "</html>\n";
 
