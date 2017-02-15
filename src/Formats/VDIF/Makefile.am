@@ -1,11 +1,11 @@
 
 noinst_LTLIBRARIES = libvdif.la
 
-libvdif_headers = spip/UDPFormatVDIF.h spip/vdifio.h
+libvdif_headers = spip/UDPFormatVDIF.h spip/vheader.h spip/mk5blib.h
 
-libvdif_la_SOURCES = UDPFormatVDIF.C vdifio.c
+libvdif_la_SOURCES = UDPFormatVDIF.C vheader.c mk5blib.c
 
-bin_PROGRAMS = vdif_udprecv vdif_udpgen
+bin_PROGRAMS = vdif_udprecv vdif_udpgen vlbi_fake
 
 vdif_udprecv_SOURCES = vdif_udprecv.C
 vdif_udpgen_SOURCES = vdif_udpgen.C
@@ -22,5 +22,6 @@ LDADD = libvdif.la \
 	$(top_builddir)/src/Util/libspiputil.la \
 	$(top_builddir)/src/libspip.la -lpthread 
 
-AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@
-LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@
+AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @VDIFIO_CFLAGS@
+AM_CFLAGS = $(AM_CXXFLAGS)
+LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @VDIFIO_LIBS@
