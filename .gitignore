@@ -68,6 +68,7 @@ src/Formats/UWB/uwb_dbstats
 src/Formats/UWB/uwb_simdb
 src/Formats/UWB/uwb_udpdb
 src/Formats/UWB/uwb_udprecv
+src/Formats/VDIF/vlbi_fake
 src/Formats/VDIF/vdif_udpgen
 src/Formats/VDIF/vdif_udprecv
 src/SignalProcessing/delay_pipeline
