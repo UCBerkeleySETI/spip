@@ -5,6 +5,8 @@
  *
  ***************************************************************************/
 
+//#define _DEBUG
+
 #include "spip/Time.h"
 #include "spip/AsciiHeader.h"
 #include "spip/UDPReceiver.h"
@@ -188,7 +190,7 @@ void spip::UDPReceiver::receive ()
 #endif
 
   // overflow buffer
-  const int64_t overflow_bufsz = 2097152;
+  const int64_t overflow_bufsz = 2097152 * 2;
   int64_t overflow_lastbyte = 0;
   int64_t overflow_maxbyte = next_byte_offset + overflow_bufsz;
   int64_t overflowed_bytes = 0;
@@ -226,10 +228,17 @@ void spip::UDPReceiver::receive ()
           {
             pkts = (vma_packets_t*) buf;
             int npkts = pkts->n_packet_num;
-            struct vma_packet_t *pkt = &pkts->pkts[0];
-            buf_ptr = (char *) pkt->iov[0].iov_base;
+            if (npkts == 1)
+            {
+              struct vma_packet_t *pkt = &pkts->pkts[0];
+              buf_ptr = (char *) pkt->iov[0].iov_base;
+              have_packet = true;
+            }
           }
-          have_packet = true;
+          else
+          {
+            have_packet = true;
+          }
         }
         // since we are blocking on UDP socket
         else if (got == -1)
