@@ -8,7 +8,8 @@
 #ifndef __UDPFormatVDIF_h
 #define __UDPFormatVDIF_h
 
-#include "spip/vdifio.h"
+#include "vdifio.h"
+
 #include "spip/UDPFormat.h"
 
 #include <cstring>
