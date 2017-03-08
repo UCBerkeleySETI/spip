@@ -62,27 +62,69 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
   // open the UDP socket on INADDR_ANY
   open ("any", port);
 
-  // use setsockopt() to request that the kernel join a multicast group
-  mreq.imr_multiaddr.s_addr=inet_addr(group.c_str());
-  mreq.imr_interface.s_addr=inet_addr(ip_address.c_str());
+  // if we have the XXX.XXX.XXX.XXX+Y notation, then open a sequence of multicast groups
+  std::string delimiter = "+";
+  size_t pos = group.find(delimiter);
+
+  // if no + notation
+  if (pos == std::string::npos)
+  {
+
+    num_multicast = 1;
+    groups.resize(num_multicast);
+    mreqs.resize(num_multicast);
+    groups[0] = group;
+  }
+  else
+  {
+    // get the XXX.XXX.XXX.XXX
+    std::string mcast = group.substr(0, pos);
+    // get the +Y
+    std::string plus = group.substr(pos + delimiter.length());
+    num_multicast = std::stoi (plus) + 1;
+
+    // build multicast addresses
+    groups.resize(num_multicast);
+    mreqs.resize(num_multicast);
+
+    std::string period = ".";
+    size_t mcast_prefix_pos = mcast.find_last_of(period);
+    std::string mcast_prefix = mcast.substr(0, mcast_prefix_pos);
+    size_t mcast_suffix = std::stoi(mcast.substr(mcast_prefix_pos+1));
+
+    for (unsigned i=0; i<num_multicast; i++)
+    {
+      groups[i] = mcast_prefix + "." + std::to_string(mcast_suffix + i);
+    }
+  }
+
+  for (unsigned i=0; i<num_multicast; i++)
+  {
+    mreqs[i].imr_multiaddr.s_addr=inet_addr(groups[i].c_str());
+    mreqs[i].imr_interface.s_addr=inet_addr(ip_address.c_str());
 
 #ifdef _DEBUG
-  cerr << "spip::UDPSocketReceive::open_multicast mreq.imr_multiaddr.s_addr=inet_addr=" << group << ":" << port << endl;
-  cerr << "spip::UDPSocketReceive::open_multicast mreq.imr_interface.s_addr=inet_addr=" << ip_address<< endl;
+    cerr << "spip::UDPSocketReceive::open_multicast mreq.imr_multiaddr.s_addr=inet_addr=" << groups[i] << ":" << port << endl;
+    cerr << "spip::UDPSocketReceive::open_multicast mreq.imr_interface.s_addr=inet_addr=" << ip_address<< endl;
 #endif
 
-  if (setsockopt(fd, IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreq,sizeof(mreq)) < 0)
-  {
-    throw runtime_error ("could not subscribe to multicast address");
+    // use setsockopt() to request that the kernel join a multicast group
+    if (setsockopt(fd, IPPROTO_IP,IP_ADD_MEMBERSHIP,&(mreqs[i]),sizeof(mreqs[i])) < 0)
+    { 
+      throw runtime_error ("could not subscribe to multicast address");
+    }
   }
   multicast = true;
 }
 
 void spip::UDPSocketReceive::leave_multicast ()
 {
-  if (setsockopt(fd, IPPROTO_IP,IP_DROP_MEMBERSHIP,&mreq,sizeof(mreq)) < 0)
+  for (unsigned i=0; i<num_multicast; i++)
   {
-    cerr << "could not unsubscribe from multicast address" << endl;
+    if (setsockopt(fd, IPPROTO_IP,IP_DROP_MEMBERSHIP,&mreqs[i], sizeof(mreqs[i])) < 0)
+    {
+      cerr << "could not unsubscribe from multicast address" << endl;
+    }
   }
 }
 

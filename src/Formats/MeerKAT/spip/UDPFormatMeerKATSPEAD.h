@@ -1,6 +1,6 @@
 
-#ifndef __UDPFormatMeerKATSPEADSPEAD_h
-#define __UDPFormatMeerKATSPEADSPEAD_h
+#ifndef __UDPFormatMeerKATSPEAD_h
+#define __UDPFormatMeerKATSPEAD_h
 
 #include "spip/meerkat_def.h"
 #include "spip/UDPFormat.h"
@@ -41,6 +41,8 @@ namespace spip {
       void set_channel_range (unsigned start, unsigned end);
 
       int64_t get_timestamp_fast ();
+
+      int64_t get_timestamp_and_channel();
 
       static void encode_seq (char * buf, uint64_t seq)
       {
@@ -100,15 +102,13 @@ namespace spip {
 
       unsigned pkts_per_heap;
 
-      int64_t curr_heap_cnt;
+      std::vector<int64_t> timestamps;
 
-      uint64_t curr_sample_number;
+      std::vector<int64_t> channels;
 
-      uint64_t curr_heap_offset;
+      std::vector<int64_t> curr_heap_cnts;
 
-      uint64_t curr_heap_number;
-
-      uint64_t curr_heap_bytes;
+      std::vector<uint64_t> curr_heap_offsets;
 
       unsigned nbytes_per_heap;
 
@@ -121,6 +121,10 @@ namespace spip {
       unsigned header_npol;
 
       int offset ;
+
+      int num_spead_streams;
+
+      int channels_per_spead_stream;
 
   };
 
