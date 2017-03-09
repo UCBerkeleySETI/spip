@@ -75,7 +75,7 @@ class PubSubThread (threading.Thread):
     self.tsubint_re = re.compile ("subarray_[0-9]+_script_tsubint")
     self.expid_re = re.compile ("subarray_[0-9]+_script_experiment_id")
     self.sbsid_re = re.compile ("subarray_[0-9]+_active_sbs")
-    self.description_re = re.compile ("subarray_[0-9]+_script_description")
+    self.desc_re = re.compile ("subarray_[0-9]+_script_description")
 
     self.subarrays_res = []
     self.subarrays_res.append(re.compile ("[a-zA-Z]+_1_[a-zA-Z]+"))
@@ -1244,72 +1244,62 @@ class KATCPServer (DeviceServer):
           self._data_products[data_product_id]['n_beams'] = str(n_beams)
           self._data_products[data_product_id]['cbf_source'] = cbf_source
 
-          if n_beams == 1:
-            sources = [cbf_source]
-          else:
-            sources = cbf_source.split(",")
+          cbf_source_pols = cbf_source.split(",")
+          
+          mcasts = ["",""]
+          ports = [0, 0]
 
-          for i in range(len(sources)):
-            (addr, port) = sources[i].split(":")
-            (mcast, count) = addr.split("+")
+          (addr, port) = cbf_source_pols[0].split(":")
+          mcasts[0] = addr
+          ports[0] = int(port)
 
-            self.script.log (2, "data_product_configure: parsed " + mcast + "+" + count + ":" + port)
-            if not count == "1":
-              response = "CBF source did not match ip_address+1:port"
-              self.script.log (-1, "data_product_configure: " + response)
-              return ("fail", response)
+          (addr, port) = cbf_source_pols[1].split(":")
+          mcasts[1] = addr
+          ports[1] = int(port)
 
-            mcasts = ["",""]
-            ports = [0, 0]
+          self.script.log (2, "data_product_configure: parsed " + mcasts[0] + ":" + str(ports[0]))
+          self.script.log (2, "data_product_configure: parsed " + mcasts[1] + ":" + str(ports[1]))
 
-            quartets = mcast.split(".")
-            mcasts[0] = ".".join(quartets)
-            quartets[3] = str(int(quartets[3])+1)
-            mcasts[1] = ".".join(quartets)
+          ibeam = self._data_products[data_product_id]['beams'][i]
+          b = self.script.beams[ibeam]
 
-            ports[0] = int(port)
-            ports[1] = int(port)
+          self.script.log (1, "data_product_configure: connecting to RECV instance to update configuration")
 
-            ibeam = self._data_products[data_product_id]['beams'][i]
-            b = self.script.beams[ibeam]
+          for istream in range(int(self.script.cfg["NUM_STREAM"])):
+            (host, beam_idx, subband) = self.script.cfg["STREAM_" + str(istream)].split(":")
+            beam = self.script.cfg["BEAM_" + beam_idx]
+            if b == beam:
 
-            self.script.log (1, "data_product_configure: connecting to RECV instance to update configuration")
+              # reset ADC_SYNC_TIME on the beam
+              self.script.beam_configs[b]["lock"].acquire()
+              self.script.beam_configs[b]["ADC_SYNC_TIME"] = "0";
+              self.script.beam_configs[b]["lock"].release()
 
-            for istream in range(int(self.script.cfg["NUM_STREAM"])):
-              (host, beam_idx, subband) = self.script.cfg["STREAM_" + str(istream)].split(":")
-              beam = self.script.cfg["BEAM_" + beam_idx]
-              if b == beam:
+              port = int(self.script.cfg["STREAM_RECV_PORT"]) + istream
+              self.script.log (3, "data_product_configure: connecting to " + host + ":" + str(port))
+              sock = sockets.openSocket (DL, host, port, 1)
+              if sock:
 
-                # reset ADC_SYNC_TIME on the beam
-                self.script.beam_configs[b]["lock"].acquire()
-                self.script.beam_configs[b]["ADC_SYNC_TIME"] = "0";
-                self.script.beam_configs[b]["lock"].release()
+                req =  "<?req version='1.0' encoding='ISO-8859-1'?>"
+                req += "<recv_cmd>"
+                req +=   "<command>configure</command>"
+                req +=   "<params>"
+                req +=     "<param key='DATA_MCAST_0'>" + mcasts[0] + "</param>"
+                req +=     "<param key='DATA_MCAST_1'>" + mcasts[1] + "</param>"
+                req +=     "<param key='DATA_PORT_0'>" + str(ports[0]) + "</param>"
+                req +=     "<param key='DATA_PORT_1'>" + str(ports[1]) + "</param>"
+                req +=     "<param key='META_MCAST_0'>" + mcasts[0] + "</param>"
+                req +=     "<param key='META_MCAST_1'>" + mcasts[1] + "</param>"
+                req +=     "<param key='META_PORT_0'>" + str(ports[0]) + "</param>"
+                req +=     "<param key='META_PORT_1'>" + str(ports[1]) + "</param>"
+                req +=   "</params>"
+                req += "</recv_cmd>"
 
-                port = int(self.script.cfg["STREAM_RECV_PORT"]) + istream
-                self.script.log (3, "data_product_configure: connecting to " + host + ":" + str(port))
-                sock = sockets.openSocket (DL, host, port, 1)
-                if sock:
-
-                  req =  "<?req version='1.0' encoding='ISO-8859-1'?>"
-                  req += "<recv_cmd>"
-                  req +=   "<command>configure</command>"
-                  req +=   "<params>"
-                  req +=     "<param key='DATA_MCAST_0'>" + mcasts[0] + "</param>"
-                  req +=     "<param key='DATA_MCAST_1'>" + mcasts[1] + "</param>"
-                  req +=     "<param key='DATA_PORT_0'>" + str(ports[0]) + "</param>"
-                  req +=     "<param key='DATA_PORT_1'>" + str(ports[1]) + "</param>"
-                  req +=     "<param key='META_MCAST_0'>" + mcasts[0] + "</param>"
-                  req +=     "<param key='META_MCAST_1'>" + mcasts[1] + "</param>"
-                  req +=     "<param key='META_PORT_0'>" + str(ports[0]) + "</param>"
-                  req +=     "<param key='META_PORT_1'>" + str(ports[1]) + "</param>"
-                  req +=   "</params>"
-                  req += "</recv_cmd>"
-
-                  self.script.log (1, "data_product_configure: sending XML req")
-                  sock.send(req)
-                  recv_reply = sock.recv (65536)
-                  self.script.log (1, "data_product_configure: received " + recv_reply)
-                  sock.close()
+                self.script.log (1, "data_product_configure: sending XML req")
+                sock.send(req)
+                recv_reply = sock.recv (65536)
+                self.script.log (1, "data_product_configure: received " + recv_reply)
+                sock.close()
 
           return ("ok", "data product " + str (data_product_id) + " configured")
 
