@@ -53,8 +53,16 @@ class MeerKATArchiverDaemon(Daemon):
 
       self.log (2, "MeerKATArchiverDaemon::generateObsInfoDat creating obs_info.dat")
 
+      if not os.path.exists(obs_results_file):
+        self.log (-1, "MeerKATArchiverDaemon::generateObsInfoDat: " + obs_results_file + " did not exist")
+        return ("fail", "obs.results file did not exist")
       obs_results = Config.readCFGFileIntoDict(obs_results_file)
+
+      if not os.path.exists(obs_header_file):
+        self.log (-1, "MeerKATArchiverDaemon::generateObsInfoDat: " + obs_header_file + " did not exist")
+        return ("fail", "obs.header file did not exist")
       obs_header = Config.readCFGFileIntoDict(obs_header_file)
+
       obs_info_dat = {}
   
       obs_info_dat["observer"] = self.extractKey(obs_header ,"OBSERVER")
@@ -113,6 +121,11 @@ class MeerKATArchiverDaemon(Daemon):
 
           # form the obs.dat file that is parsed during ingest
           (rval, response) = self.generateObsInfoDat (finished_subdir, completed_subdir)
+          if not rval == "ok":
+            self.log (-1, "main: self.generateObsInfoDat for " + utc + " failed: " + response)
+            base_dir = self.completed_dir + "/" + completed_subdir
+            os.rename (base_dir + "/obs.finished", base_dir + "/obs.failed")
+            continue
 
           # name of the directory to transfer (flat)
           ftp_utc = utc.replace(":","").replace("-","")
