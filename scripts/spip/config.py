@@ -58,14 +58,14 @@ class Config(object):
 
   @staticmethod
   def writeDictToCFGFile (cfg, filename):
-    try:
-      fptr = open(filename, 'w')
-    except IOError:
-      print "ERROR: cannot open " + filename + " for writing"
-    else:
-      for key in sorted(cfg.keys()):
-        fptr.write(key.ljust(19) + " " + cfg[key] + "\n")
-      fptr.close()
+    #try:
+    fptr = open(filename, 'w')
+    #except IOError, e:
+    #  print "ERROR: cannot open " + filename + " for writing: " + str(e)
+    #else:
+    for key in sorted(cfg.keys()):
+      fptr.write(key.ljust(19) + " " + cfg[key] + "\n")
+    fptr.close()
 
   @staticmethod
   def writeDictToColonSVFile (cfg, filename):
