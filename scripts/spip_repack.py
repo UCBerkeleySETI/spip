@@ -202,7 +202,6 @@ class RepackDaemon(Daemon):
           for file in files:
 
             processed_this_loop += 1
-
             self.log (1, observation + ": processing " + file)
 
             if archives[file] == len(self.subbands):
@@ -243,8 +242,18 @@ class RepackDaemon(Daemon):
               all_finished = False
             filename = obs_dir + "/" + subband["cfreq"] + "/obs.failed"
             if os.path.exists(filename):
+              self.log (-1, "found failed subband: " + filename)
               any_failed = True
          
+          # check that at least 1 archive was produced
+          if all_finished:
+            cmd = "find " + out_dir + " -type f -name '????-??-??-??:??:??.ar' | wc -l"
+            rval, lines = self.system(cmd, 3)
+            if rval or  lines[0] == "0":
+              self.log (-1, "main: no archives have been produced")
+              all_finished = False
+              any_failed = True
+
           # the observation has failed, cleanup
           if any_failed:
             self.log (1, observation + ": processing -> failed")
@@ -268,33 +277,34 @@ class RepackDaemon(Daemon):
               os.makedirs(fin_parent_dir, 0755)
 
             fin_dir = self.finished_dir + "/" + beam + "/" + utc + "/" + source
-            self.log (2, "main: finalise_observation("+obs_dir+")")
+            self.log (2, "main: finalise_observation("+beam + "," + obs_dir + "," + fin_dir + "," + out_dir + ")")
             (rval, response) = self.finalise_observation (beam, obs_dir, fin_dir, out_dir)
             if rval:
               self.log (-1, "failed to finalise observation: " + response)
             else:
 
-              # merge the headers from each sub-band
+              # merge the headers from each sub-band in the finished dir
+              self.log (2, "main: header_file=" + fin_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
               header = Config.readCFGFileIntoDict (fin_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
               for i in range(1,len(self.subbands)):
                 header_sub = Config.readCFGFileIntoDict (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.header")
                 header = Config.mergerHeaderFreq (header, header_sub)
                 os.remove (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.header")
                 os.remove (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.finished")
-                os.removedirs (fin_dir + "/" + self.subbands[i]["cfreq"])
+                os.rmdir(fin_dir + "/" + self.subbands[i]["cfreq"])
               os.remove (fin_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
               os.remove (fin_dir + "/" + self.subbands[0]["cfreq"] + "/obs.finished")
-              os.removedirs (fin_dir + "/" + self.subbands[0]["cfreq"])
+              os.rmdir(fin_dir + "/" + self.subbands[0]["cfreq"])
 
+              self.log (2, "main: writing header to " + fin_dir + "/" + "obs.header")
               Config.writeDictToCFGFile (header, fin_dir + "/" + "obs.header")
+              self.log (2, "main: writing header to " + fin_dir + "/" + "obs.header")
               shutil.copyfile (fin_dir + "/obs.header", out_dir + "/obs.header")
 
 
       if processed_this_loop == 0:
         self.log (3, "time.sleep(1)")
         time.sleep(1)
-
-  def
 
   # 
   # patch missing information into the PSRFITS header 
@@ -546,43 +556,63 @@ class RepackDaemon(Daemon):
 
     self.end_observation (beam, obs_dir, fail_dir, arch_dir)
 
+    cmd = "mkdir -p " + arch_dir
+    rval, lines = self.system (cmd, 3)
+    if rval:
+      return (1, "finalise_observation: failed to create " + arch_dir)
+
     # touch obs.failed file in the archival directory
     cmd = "touch " + arch_dir + "/obs.failed"
     rval, lines = self.system (cmd, 3)
 
     # simply move the observation to the failed directory
     try:
+      fail_parent_dir = os.path.dirname(fail_dir)
+      if not os.path.exists(fail_parent_dir):
+        os.mkdir (fail_parent_dir, 0755)
       os.rename (obs_dir, fail_dir)
     except OSError, e:
+      self.log (0, "fail_observation failed to rename " + obs_dir + " to " + fail_dir)
+      self.log (0, str(e))
       return (1, "failed to rename obs_dir to fail_dir")
 
     # delete the parent directory of obs_dir
     parent_dir = os.path.dirname (obs_dir)
-    os.removedirs(parent_dir)
+    os.rmdir(parent_dir)
     return (0, "")
 
 
-  def finalise_observation (self, beam, obs_dir, fin_dir, arch_dir):
+  # transition observation from processing to finished
+  def finalise_observation (self, beam, proc_dir, fin_dir, arch_dir):
 
-    self.end_observation (beam, obs_dir, fin_dir, arch_dir)
+    self.end_observation (beam, proc_dir, fin_dir, arch_dir)
+
+    cmd = "mkdir -p " + arch_dir
+    rval, lines = self.system (cmd, 3)
+    if rval:
+      return (1, "finalise_observation: failed to create " + arch_dir)
 
     # touch and obs.finished file in the archival directory
     cmd = "touch " + arch_dir + "/obs.finished"
     rval, lines = self.system (cmd, 3)
+    if rval:
+      return (1, "finalise_observation: failed to create " + arch_dir + "/obs.finished")
 
-    # simply move the observation to the finished directory
+    # simply move the observation from processing to finished
     try:
-      os.rename (obs_dir, fin_dir)
+      self.log (3, "finalise_observation: rename(" + proc_dir + "," + fin_dir + ")")
+      os.rename (proc_dir, fin_dir)
     except OSError, e:
-      return (1, "failed to rename obs_dir to fin_dir")
+      self.log (0, "finalise_observation: failed to rename proc_dir: " + str(e))
+      return (1, "finalise_observation failed to rename proc_dir to fin_dir")
 
-    # delete the parent directory of obs_dir
-    parent_dir = os.path.dirname (obs_dir)
-    os.removedirs(parent_dir)
+    # delete the parent directory of proc_dir
+    parent_dir = os.path.dirname (proc_dir)
+    self.log (3, "finalise_observation: rmdir(" + parent_dir + ")") 
+    os.rmdir(parent_dir)
     return (0, "")
 
-
-  def end_observation (self, beam, obs_dir, fin_dir, arch_dir)    :
+  def end_observation (self, beam, obs_dir, fin_dir, arch_dir):
 
     # write the most recent images disk for long term storage
     timestamp = times.getCurrentTime()
