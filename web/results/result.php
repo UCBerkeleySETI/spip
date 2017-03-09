@@ -87,6 +87,18 @@ class result extends spip_webpage
                 }
               }
             }
+
+            var obs_header = xmlObj.getElementsByTagName("results_obs_header")[0];
+            html = "<table>";
+            html += "<tr><th colspan='2'>Header</th></tr>";
+            for (i=0; i<obs_header.childNodes.length; i++)
+            {
+              var param = obs_header.childNodes[i];
+              var name = param.tagName;
+              html += "<tr><td width='40%'>"+name+"</td><td>"+get_node_value(param)+"</td></tr>"
+            }
+            html += "</table>"
+            document.getElementById('results_obs_header').innerHTML = html;
           }
         }
       }
@@ -129,7 +141,8 @@ class result extends spip_webpage
   <tr>
     <td valign=top width='50%'>
 
-      <table>
+      <table width='100%'>
+        <tr><th colspan='2'>Summary</th></tr>
 <?php
         $this->printInfoRow("UTC START", 'utc_start');
         $this->printInfoRow("Beam", 'beam');
@@ -146,6 +159,10 @@ class result extends spip_webpage
 ?>
       </table>
 
+      <hr/>
+
+      <span id='results_obs_header'></span>
+
     </td>
 
     <td valign=top>
@@ -156,6 +173,7 @@ class result extends spip_webpage
         $this->printImgRow("Time vs Phase", "time_vs_phase");
         $this->printImgRow("Bandpass", "bandpass");
 ?>
+      </table>
     </td>
   </tr>
 </table>
@@ -166,7 +184,7 @@ class result extends spip_webpage
   function printInfoRow($name, $id)
   { 
     echo "        <tr>\n";
-    echo "          <th style=text-align:left;'>".$name."</th>\n";
+    echo "          <th style='text-align:left;' width='40%'>".$name."</th>\n";
     echo "          <td><span id='".$id."'></span></td>\n";
     echo "        </tr>\n";
   }
@@ -189,24 +207,45 @@ class result extends spip_webpage
       return;
     }
     $xml = "<result_update>";
-
-    $result_socket = new spip_socket();
-
-    $xml_req  = XML_DEFINITION;
-    $xml_req .= "<results_request>";
-    $xml_req .= "<requestor>result page</requestor>";
-    $xml_req .= "<type>obs_info</type>";
-    $xml_req .= "<beam>".$get["beam"]."</beam>";
-    $xml_req .= "<utc_start>".$get["utc_start"]."</utc_start>";
-    $xml_req .= "<source>".$get["source"]."</source>";
-    $xml_req .= "</results_request>";
-
-    if ($result_socket->open ($this->host, $this->port, 0) == 0)
     {
-      $result_socket->write ($xml_req."\r\n");
-      list ($rval, $reply) = $result_socket->read();
-      $xml .= rtrim($reply);
-      $result_socket->close();
+      $result_socket = new spip_socket();
+
+      $xml_req  = XML_DEFINITION;
+      $xml_req .= "<results_request>";
+      $xml_req .= "<requestor>result page</requestor>";
+      $xml_req .= "<type>obs_info</type>";
+      $xml_req .= "<beam>".$get["beam"]."</beam>";
+      $xml_req .= "<utc_start>".$get["utc_start"]."</utc_start>";
+      $xml_req .= "<source>".$get["source"]."</source>";
+      $xml_req .= "</results_request>";
+
+      if ($result_socket->open ($this->host, $this->port, 0) == 0)
+      {
+        $result_socket->write ($xml_req."\r\n");
+        list ($rval, $reply) = $result_socket->read();
+        $xml .= rtrim($reply);
+        $result_socket->close();
+      }
+    }
+
+    {
+      $xml_req  = XML_DEFINITION;
+      $xml_req .= "<results_request>";
+      $xml_req .= "<requestor>result page</requestor>";
+      $xml_req .= "<type>obs_header</type>";
+      $xml_req .= "<beam>".$get["beam"]."</beam>";
+      $xml_req .= "<utc_start>".$get["utc_start"]."</utc_start>";
+      $xml_req .= "<source>".$get["source"]."</source>";
+      $xml_req .= "</results_request>";
+
+      $result_hdr_socket = new spip_socket();
+      if ($result_hdr_socket->open ($this->host, $this->port, 0) == 0)
+      {
+        $result_hdr_socket->write ($xml_req."\r\n");
+        list ($rval, $reply) = $result_hdr_socket->read();
+        $xml .= rtrim($reply);
+        $result_hdr_socket->close();
+      }
     }
 
     $xml .= "</result_update>";
