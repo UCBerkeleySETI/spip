@@ -49,10 +49,13 @@ class PubSubThread (threading.Thread):
     self.logger = logging.getLogger('katportalclient.example') 
     self.logger.setLevel(logging.INFO)
 
-    self.io_loop = tornado.ioloop.IOLoop.current()
-    self.io_loop.add_callback (self.connect, self.logger)
+    self.io_loop = []
+    self.policy = "event-rate 1.0 300.0"
+    self.title  = "ptuse_unconfigured"
+    self.running = False
+    self.restart_io_loop = True
 
-    prefix = "subarray_" + str(int(id+1)) + "_script"
+  def configure (self):
 
     self.subs = ['cbf.*.bandwidth', 'cbf.*.centerfrequency', 'cbf.*.channels']
     self.subs.append ('cbf.synchronisation.epoch')
@@ -84,17 +87,47 @@ class PubSubThread (threading.Thread):
     self.subarrays_res.append(re.compile ("[a-zA-Z]+_4_[a-zA-Z]+"))
 
   def run (self):
-    self.script.log(2, "PubSubThread.run()")
-    self.script.log(3, "PubSubThread.io_loop starting...")
-    self.io_loop.start()
+    self.script.log(2, "PubSubThread::run starting while")
+
+    while self.restart_io_loop:
+      
+      # open connection to CAM
+      self.io_loop = tornado.ioloop.IOLoop.current()
+      self.io_loop.add_callback (self.connect, self.logger)
+
+      self.script.log(1, "PubSubThread::run starting IO loop")
+
+      self.running = True
+      self.restart_io_loop = False
+      self.io_loop.start()
+      self.running = False
+      self.io_loop = []
+
+      self.script.log(1, "PubSubThread::run unsubscrubing")
+      # unsubscribe and disconnect from CAM
+      self.ws_client.unsubscribe(self.title)
+      self.ws_client.disconnect()
+
+    self.script.log(2, "PubSubThread::run exiting")
 
   def join (self):
-    self.script.log(1, "PubSubThread.join()")
+    self.script.log(1, "PubSubThread::join self.stop()")
     self.stop()
+    time.sleep(0.1)
 
   def stop (self):
-    self.script.log(1, "PubSubThread.stop()")
-    self.io_loop.stop()
+    self.script.log(2, "PubSubThread::stop()")
+    if self.running:
+      self.script.log(2, "PubSubThread::stop io_loop.stop()")
+      self.io_loop.stop()
+    return
+
+  def restart (self):
+    # get the IO loop to restart on the call to stop()
+    self.restart_io_loop = True
+    if self.running:
+      self.script.log(2, "PubSubThread::restart self.stop()")
+      self.stop()
     return
 
   @tornado.gen.coroutine
@@ -102,7 +135,7 @@ class PubSubThread (threading.Thread):
     self.script.log(2, "PubSubThread::connect()")
     self.ws_client = KATPortalClient(self.metadata_server, self.on_update_callback, logger=logger)
     yield self.ws_client.connect()
-    result = yield self.ws_client.subscribe('ptuse_test')
+    result = yield self.ws_client.subscribe(self.title)
 
     list = ['cbf.*.bandwidth', 'cbf.*.centerfrequency', 'cbf.*.channels']
     list.append ('cbf.synchronisation.epoch')
@@ -117,10 +150,10 @@ class PubSubThread (threading.Thread):
     list.append ('subarray.*.product')
 
     results = yield self.ws_client.set_sampling_strategies(
-        'ptuse_test', list, 'event-rate 1.0 300.0')
+        self.title, list, self.policy)
 
     for result in results:
-      self.script.log(2, "PubSubThread::connect subscribed to " + str(result))
+      self.script.log(1, "PubSubThread::connect subscribed to " + str(result))
 
   def on_update_callback (self, msg):
 
@@ -195,7 +228,7 @@ class PubSubThread (threading.Thread):
       self.update_subarrays_config(4, "DESCRIPTION", name, str(value))
 
     else:
-      self.script.log(1, "PubSubThread::update_config no match on " + name)
+      self.script.log(2, "PubSubThread::update_config no match on " + name)
 
     self.script.log(3, "PubSubThread::update_config done")
 
@@ -411,6 +444,12 @@ class KATCPDaemon(Daemon):
       self.log(-2, "set_katcp: no hosts configured")
     self.katcp._host_list.set_value (r)
 
+  def set_pubsub (self, pubsub):
+      self.pubsub = pubsub
+
+  def get_pubsub (self):
+    return self.pubsub
+
   #############################################################################
   # script core
   def main (self, id):
@@ -435,7 +474,7 @@ class KATCPDaemon(Daemon):
         (host, port) = lmc.split(":")
         self.log(2, "KATCPDaemon::main openSocket("+host+","+port+")")
         try:
-          sock = sockets.openSocket (DL, host, int(port), 1)
+          sock = sockets.openSocket (DL, host, int(port), 1, 1)
           if sock:
             sock.send(self.lmc_cmd)
             lmc_reply = sock.recv (65536)
@@ -458,7 +497,7 @@ class KATCPDaemon(Daemon):
           return
         (host, port) = repack.split(":")
         try:
-          sock = sockets.openSocket (DL, host, int(port), 1)
+          sock = sockets.openSocket (DL, host, int(port), 1, 1)
           if sock:
             sock.send (self.repack_cmd)
             repack_reply = sock.recv (65536)
@@ -989,9 +1028,9 @@ class KATCPServer (DeviceServer):
       if len(self._data_products[data_product_id]["beams"]) <= 0:
         return ("fail", "data product " + data_product_id + " had no configured beams")
 
-      for ibeam in self._data_products[data_product_id]['beams']:
-        b = self.script.beams[ibeam]
-        self.script.beam_configs[b]["ADC_SYNC_TIME"] = str(adc_sync_time)
+      for i in range(4):
+        if self.script.data_product_res[i].match(data_product_id):
+          self.script.subarray_configs[i]["ADC_SYNC_TIME"] = str(adc_sync_time)
 
       return ("ok", "")
 
@@ -1040,7 +1079,7 @@ class KATCPServer (DeviceServer):
 
       # check the ADC_SYNC_TIME is valid for this beam
       if self.script.beam_configs[beam_id]["ADC_SYNC_TIME"] == "0":
-        return ("fail", "ADC Synchronisation Time was not valid")
+        return ("fail", "ADC Synchronisation Time for beam "+beam_id+" was not valid "+self.script.beam_configs[beam_id]["ADC_SYNC_TIME"])
     
       # set the pulsar name, this should include a check if the pulsar is in the catalog
       self.script.beam_configs[beam_id]["lock"].acquire()
@@ -1231,6 +1270,9 @@ class KATCPServer (DeviceServer):
             response = "PTUSE configured for " + nchan + " channels"
             self.script.log (-1, "data_product_configure: " + response)
             return ("fail", response)
+
+          self.script.log (1, "data_product_configure: pubsub.restart()")
+          self.script.pubsub.restart()
 
           # assign the ibeam to the list of beams for this data_product
           self._data_products[data_product_id]['beams'] = []
@@ -1469,7 +1511,11 @@ if __name__ == "__main__":
 
     pubsub_thread = PubSubThread (script, beam_id)
     #pubsub_thread = PubSubSimThread (script, beam_id)
+    pubsub_thread.configure()
     pubsub_thread.start()
+
+    script.log(2, "__main__: script.set_pubsub()")
+    script.set_pubsub (pubsub_thread)
 
     script.log(2, "__main__: script.main()")
     script.main (beam_id)

@@ -23,9 +23,11 @@ def getHostMachineName():
 
 ###############################################################################
 # open a standard socket
-def openSocket(dl, host, port, attempts=10):
+def openSocket(dl, host, port, attempts=10, timeout=None):
 
   sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+  sock.settimeout(timeout)
   connected = False
 
   while (not connected and attempts > 0):

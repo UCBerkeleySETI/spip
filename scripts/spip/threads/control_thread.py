@@ -35,7 +35,7 @@ class ControlThread(threading.Thread):
       rval, lines = self.script.system (cmd, 3)
 
     if path.exists(self.script.quit_file):
-      self.script.log (2, "ControlThread: quit request detected")
+      self.script.log (1, "ControlThread: quit request detected")
       self.script.quit_event.set()
     #if path.exists(self.script.reload_file):
     #  self.script.log (2, "ControlThread: reload request detected")

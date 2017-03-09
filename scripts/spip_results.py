@@ -189,9 +189,10 @@ class ResultsReportingThread(ReportingThread):
     if utc_start in self.script.results.keys():
       if source in self.script.results[utc_start].keys():
         xml = "<results_obs_header>"
-        xml += rs[utc_start][source]["header"] 
+        xml += self.script.results[utc_start][source]["header"] 
         xml += "</results_obs_header>"
-    return True, xml 
+
+    return True, xml + "\r\n"
 
 class ResultsDaemon(Daemon):
 
@@ -322,10 +323,11 @@ class ResultsDaemon(Daemon):
     data["snr"] = "-1"
 
     # convert entire header into XML
+    data["header"] = ""
     keys = header.keys()
     keys.sort()
     for key in keys:
-      data["header"] = "<" + key + ">" + header[key] + "</" + key + ">"
+      data["header"] += "<" + key + ">" + header[key] + "</" + key + ">"
 
     psrplot_opts = "-c x:view='(0.0,1.0)' -c y:view='(0.0,1.0)' -g 160x120 -D -/png"
 
