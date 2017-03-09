@@ -18,8 +18,8 @@ using namespace std;
 spip::UDPFormatVDIF::UDPFormatVDIF(int pps)
 {
   // this assumes the use of the 32 byte VDIF Data Frame Header
-  packet_header_size = sizeof(vdif_header);
-  packet_data_size   = 2;
+  packet_header_size = VDIF_HEADER_BYTES;
+  packet_data_size   = 8192;
 
   // Each VDIF thread contains 2 "channels", 1 masquerading as each polarisation
   // Each thread represents 1 coarse channel, so a single VDIF data stream will have
@@ -122,21 +122,26 @@ void spip::UDPFormatVDIF::compute_header ()
   int vdif_nchan = nchan * npol;
   setVDIFNumChannels (&header, vdif_nchan);
 
+  // no method for this
+  header.iscomplex = (ndim - 1);
+
   // determine largest packet size, such that there is an integer
   // number of packets_per_second
   packet_data_size = 8192;
   int nbit_per_sample = (nbit * npol * nchan * ndim);
-  int match = 0;
-
-  while (packet_data_size * 8 > nbit_per_sample && !match)
+  uint64_t match = bytes_per_second % packet_data_size;
+  cerr << "start: packet_data_size=" << packet_data_size << " nbit_per_sample=" << nbit_per_sample << " bytes_per_second=" << bytes_per_second << " match=" << match << endl;
+  while (packet_data_size * 8 > nbit_per_sample && match != 0)
   {
     match = bytes_per_second % packet_data_size;
     packet_data_size -= 8;
+    cerr << "find: packet_data_size=" << packet_data_size << " nbit_per_sample=" << nbit_per_sample << endl;
   }
 
-  if (!match)
+  if (match != 0)
     throw invalid_argument ("No packet size matched VDIF1.1 criteria");
 
+  cerr << "end: packet_data_size=" << packet_data_size << endl;
   packets_per_second = bytes_per_second / packet_data_size;
 
   header.nbits = (nbit - 1);
@@ -183,12 +188,12 @@ inline void spip::UDPFormatVDIF::encode_header_seq (char * buf, uint64_t seq)
 
 inline void spip::UDPFormatVDIF::encode_header (char * buf)
 {
-  memcpy (buf, (void *) &header, sizeof (vdif_header));
+  memcpy (buf, (void *) &header, VDIF_HEADER_BYTES);
 }
 
 inline void spip::UDPFormatVDIF::decode_header (char * buf)
 {
-  memcpy ((void *) &header, buf, sizeof (vdif_header));
+  memcpy ((void *) &header, buf, VDIF_HEADER_BYTES);
 }
 
 inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_size)
@@ -201,6 +206,10 @@ inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_si
     // decode the header parameters
     decode_header (buf);
 
+    printVDIFHeader ((const struct vdif_header *) &header, VDIFHeaderPrintLevelLong);
+
+    int vdif_epoch = getVDIFEpoch (&header);
+    
     // handle older header versions
     if ((int) (header.legacymode) == 1)
       packet_header_size = 16;
@@ -208,7 +217,10 @@ inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_si
       packet_header_size = 32; 
 
     if (ndim != (int) (header.iscomplex) + 1)
+    {
+      cerr << "NDIM mismatch CONFIG=" << ndim << ", VDIF header=" << (header.iscomplex + 1) << endl;
       throw invalid_argument ("NDIM mismtach between config and VDIF header");
+    }
 
     if (nbit != getVDIFBitsPerSample (&header))
       throw invalid_argument ("NBIT mismtach between config and VDIF header");
@@ -219,8 +231,7 @@ inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_si
     packet_data_size = getVDIFFrameBytes (&header) - packet_header_size;
     int nsamp = (8 * packet_data_size) / (npol * nbit * ndim);
 
-    int vdif_epoch = getVDIFEpoch (&header);
-    int offset_second = getVDIFFullSecond (&header);
+    int offset_second = getVDIFFrameEpochSecOffset (&header);
     int frame_number  = getVDIFFrameNumber (&header);
 
     // this code will not work past 2030 something
@@ -268,7 +279,7 @@ inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_si
   payload = buf + packet_header_size;
 
   // extract key parameters from the header
-  const int offset_second = getVDIFFullSecond (header_ptr) - start_second;
+  const int offset_second = getVDIFFrameEpochSecOffset (header_ptr) - start_second;
   const int frame_number  = getVDIFFrameNumber (header_ptr);
 
   // calculate the byte offset for this frame within the data stream

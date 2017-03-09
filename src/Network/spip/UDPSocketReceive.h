@@ -4,6 +4,7 @@
 
 #include "spip/UDPSocket.h"
 
+#include <vector>
 #include <netinet/in.h>
 
 namespace spip {
@@ -41,8 +42,11 @@ namespace spip {
 
       bool multicast;
 
-      struct ip_mreq mreq;
+      size_t num_multicast;
 
+      std::vector<std::string> groups;
+
+      std::vector<struct ip_mreq> mreqs;
   };
 
 }

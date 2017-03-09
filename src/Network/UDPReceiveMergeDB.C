@@ -561,7 +561,7 @@ bool spip::UDPReceiveMergeDB::receive_thread (int p)
   int64_t next_byte_offset = 0;
 
   // overflow buffer
-  const int64_t overflow_bufsz = chunk_size;
+  const int64_t overflow_bufsz = chunk_size * 2;
   int64_t overflow_maxbyte = 0;
   int64_t overflowed_bytes = 0;
 
@@ -654,9 +654,12 @@ bool spip::UDPReceiveMergeDB::receive_thread (int p)
               if (flags == MSG_VMA_ZCOPY)
               {
                 pkt = (vma_packets_t*) buf;
-                buf_ptr = (char *) pkt->pkts[0].iov[0].iov_base;
+                if (pkt->n_packet_num == 1)
+                {
+                  buf_ptr = (char *) pkt->pkts[0].iov[0].iov_base;
+                  have_packet = true;
+                }
               }
-              have_packet = true;
             }
             else if (got == -1)
             {

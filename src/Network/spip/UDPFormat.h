@@ -60,7 +60,11 @@ namespace spip {
 
       unsigned get_header_size () { return packet_header_size; } ;
 
+      void set_header_size (unsigned size ) { packet_header_size = size; } ;
+
       unsigned get_data_size () { return packet_data_size; } ;
+
+      void set_data_size (unsigned size ) { packet_data_size = size; } ;
 
       double rand_normal (double mean, double stddev);
 
