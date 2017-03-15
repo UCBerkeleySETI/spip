@@ -1302,7 +1302,7 @@ class KATCPServer (DeviceServer):
           self.script.log (2, "data_product_configure: parsed " + mcasts[0] + ":" + str(ports[0]))
           self.script.log (2, "data_product_configure: parsed " + mcasts[1] + ":" + str(ports[1]))
 
-          ibeam = self._data_products[data_product_id]['beams'][i]
+          ibeam = self._data_products[data_product_id]['beams'][0]
           b = self.script.beams[ibeam]
 
           self.script.log (1, "data_product_configure: connecting to RECV instance to update configuration")
@@ -1318,7 +1318,7 @@ class KATCPServer (DeviceServer):
               self.script.beam_configs[b]["lock"].release()
 
               port = int(self.script.cfg["STREAM_RECV_PORT"]) + istream
-              self.script.log (3, "data_product_configure: connecting to " + host + ":" + str(port))
+              self.script.log (2, "data_product_configure: connecting to " + host + ":" + str(port))
               sock = sockets.openSocket (DL, host, port, 1)
               if sock:
 
@@ -1340,7 +1340,7 @@ class KATCPServer (DeviceServer):
                 self.script.log (1, "data_product_configure: sending XML req")
                 sock.send(req)
                 recv_reply = sock.recv (65536)
-                self.script.log (1, "data_product_configure: received " + recv_reply)
+                self.script.log (2, "data_product_configure: received " + recv_reply)
                 sock.close()
 
           return ("ok", "data product " + str (data_product_id) + " configured")
