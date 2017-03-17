@@ -153,7 +153,7 @@ class PubSubThread (threading.Thread):
         self.title, list, self.policy)
 
     for result in results:
-      self.script.log(1, "PubSubThread::connect subscribed to " + str(result))
+      self.script.log(2, "PubSubThread::connect subscribed to " + str(result))
 
   def on_update_callback (self, msg):
 
@@ -1179,56 +1179,14 @@ class KATCPServer (DeviceServer):
 
       # The data product is deconfigured, and beams released
       if len(msg.arguments) == 5:
+
         self.script.log (1, "data_product_configure: deconfiguring " + str(data_product_id))
-
-        if not data_product_id in self._data_products.keys():
-          response = str(data_product_id) + " was not a configured data product"
-          self.script.log (-1, "data_product_configure: " + response)
-          return ("fail", response)
-
-        # check if the data_product was configured
-        if len(self._data_products[data_product_id]['beams']) == 0:
-          response = str(data_product_id) + " had 0 beams configured"
-          self.script.log (-1, "data_product_configure: " + response)
-          return ("fail", response)
-
-        # update config file for beams to match the cbf_source
-        for ibeam in self._data_products[data_product_id]['beams']:
-          b = self.script.beams[ibeam]
-          for istream in range(int(self.script.cfg["NUM_STREAM"])):
-            (host, beam_idx, subband) = self.script.cfg["STREAM_" + str(istream)].split(":")
-            beam = self.script.cfg["BEAM_" + beam_idx]
-            if b == beam:
-
-              # reset ADC_SYNC_TIME on the beam
-              self.script.beam_configs[b]["lock"].acquire()
-              self.script.beam_configs[b]["ADC_SYNC_TIME"] = "0";
-              self.script.beam_configs[b]["lock"].release()
-
-              port = int(self.script.cfg["STREAM_RECV_PORT"]) + istream
-              self.script.log (3, "data_product_configure: connecting to " + host + ":" + str(port))
-              sock = sockets.openSocket (DL, host, port, 1)
-              if sock:
-
-                req =  "<?req version='1.0' encoding='ISO-8859-1'?>"
-                req += "<recv_cmd>"
-                req +=   "<command>deconfigure</command>"
-                req += "</recv_cmd>"
-
-                sock.send(req)
-                recv_reply = sock.recv (65536)
-                sock.close()
-
-          # remove the data product
-          self.script.log (1, "data_product_configure: self.configured_beams=" + str(self.configured_beams))
-          self.configured_beams -= int(self._data_products[data_product_id]['n_beams'])
-          self.script.log (1, "data_product_configure: self.configured_beams=" + str(self.configured_beams))
-          self._data_products.pop(data_product_id, None)
-          self.script.log (1, "data_product_configure: keys=" + str(self._data_products))
-
-        response = "data product " + str(data_product_id) + " deconfigured"
-        self.script.log (1, "data_product_configure: " + response)
-        return ("ok", response)
+        (result, response) = self.deconfigure_data_product (data_product_id)
+        if result == "ok":
+          self.script.log (1, "data_product_configure: " + response)
+        else:
+          self.script.log (0, "data_product_configure: " + response)
+        return (result, response)
 
       if len(msg.arguments) == 6:
         # if the configuration for the specified data product matches extactly the 
@@ -1247,6 +1205,17 @@ class KATCPServer (DeviceServer):
 
         # the data product requires configuration
         else:
+
+          if data_product_id in self._data_products.keys():
+            self.script.log (-1, "data_product_configure: found configured data product:"  + str(data_product_id))
+            self.script.log (1, "data_product_configure: deconfiguring " + str(data_product_id))
+            (result, response) = self.deconfigure_data_product (data_product_id)
+            if result == "ok":
+              self.script.log (1, "data_product_configure: " + response)
+            else:
+              self.script.log (0, "data_product_configure: " + response)
+              return (result, response)
+
           self._data_products[data_product_id] = {}
 
           self.script.log (1, "data_product_configure: new data product " + data_product_id)
@@ -1259,6 +1228,7 @@ class KATCPServer (DeviceServer):
 
           # check if the number of existing + new beams > available
           if self.configured_beams + n_beams > self.available_beams:
+            self.script.log (-1, "data_product_configure: configured_beams=" + str(self.configured_beams) + " n_beams=" + str(n_beams) + " available_beams=" + str(self.available_beams))
             self._data_products.pop(data_product_id, None)
             response = "requested more beams than were available"
             self.script.log (-1, "data_product_configure: " + response)
@@ -1286,7 +1256,7 @@ class KATCPServer (DeviceServer):
           self._data_products[data_product_id]['n_beams'] = str(n_beams)
           self._data_products[data_product_id]['cbf_source'] = cbf_source
 
-          cbf_source_pols = cbf_source.split(",")
+          cbf_source_pols = re.split(';|,', cbf_source)
           
           mcasts = ["",""]
           ports = [0, 0]
@@ -1466,8 +1436,59 @@ class KATCPServer (DeviceServer):
       parts = lines[0].split()
       if len(parts) == 2 and parts[0] == "1":
         return ("ok", parts[1])
-        
-       
+     
+    # deconfigures a previously configured data product  
+    def deconfigure_data_product (self, data_product_id):       
+      if not data_product_id in self._data_products.keys():
+        response = str(data_product_id) + " was not a configured data product"
+        self.script.log (-1, "deconfigure_data_product: " + response)
+        return ("fail", response)
+
+      # check if the data_product was configured
+      if len(self._data_products[data_product_id]['beams']) == 0:
+        response = str(data_product_id) + " had 0 beams configured"
+        self.script.log (-1, "deconfigure_data_product: " + response)
+        return ("fail", response)
+
+      # update config file for beams to match the cbf_source
+      for ibeam in self._data_products[data_product_id]['beams']:
+        b = self.script.beams[ibeam]
+        for istream in range(int(self.script.cfg["NUM_STREAM"])):
+          (host, beam_idx, subband) = self.script.cfg["STREAM_" + str(istream)].split(":")
+          beam = self.script.cfg["BEAM_" + beam_idx]
+          if b == beam:
+
+            # reset ADC_SYNC_TIME on the beam
+            self.script.beam_configs[b]["lock"].acquire()
+            self.script.beam_configs[b]["ADC_SYNC_TIME"] = "0";
+            self.script.beam_configs[b]["lock"].release()
+
+            port = int(self.script.cfg["STREAM_RECV_PORT"]) + istream
+            self.script.log (3, "deconfigure_data_product: connecting to " + host + ":" + str(port))
+            sock = sockets.openSocket (DL, host, port, 1)
+            if sock:
+
+              req =  "<?req version='1.0' encoding='ISO-8859-1'?>"
+              req += "<recv_cmd>"
+              req +=   "<command>deconfigure</command>"
+              req += "</recv_cmd>"
+
+              sock.send(req)
+              recv_reply = sock.recv (65536)
+              sock.close()
+
+        # remove the data product
+        self.script.log (1, "deconfigure_data_product: self.configured_beams=" + str(self.configured_beams))
+        self.configured_beams -= int(self._data_products[data_product_id]['n_beams'])
+        self.script.log (1, "deconfigure_data_product: self.configured_beams=" + str(self.configured_beams))
+        self._data_products.pop(data_product_id, None)
+        self.script.log (1, "deconfigure_data_product: keys=" + str(self._data_products))
+
+      response = "data product " + str(data_product_id) + " deconfigured"
+      self.script.log (1, "deconfigure_data_product: " + response)
+      return ("ok", response)
+
+
 ###############################################################################
 #
 if __name__ == "__main__":
