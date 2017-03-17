@@ -57,18 +57,17 @@ class PubSubThread (threading.Thread):
 
   def configure (self):
 
-    self.subs = ['cbf.*.bandwidth', 'cbf.*.centerfrequency', 'cbf.*.channels']
+    self.subs = ['bandwidth', 'delay.centre.frequency', 'n_chans']
     self.subs.append ('cbf.synchronisation.epoch')
     self.subs.append ('script.observer')
     self.subs.append ('script.target')
     self.subs.append ('product')
     self.subs.append ('subarray')
-    self.subs.append ('data')
 
-    self.adc_start_re = re.compile ("data_[0-9]+_cbf_synchronisation_epoch")
-    self.bandwidth_re = re.compile ("data_[0-9]+_cbf_[a-zA-Z0-9]*_bandwidth")
-    self.centerfreq_re = re.compile ("data_[0-9]+_cbf_[a-zA-Z0-9]*_centerfrequency")
-    self.channels_re = re.compile ("data_[0-9]+_cbf_[a-zA-Z0-9]*_channels")
+    self.adc_start_re = re.compile ("cbf_roach_[0-9]+_[a-zA-Z0-9]*_synchronisation_epoch")
+    self.bandwidth_re = re.compile ("cbf_roach_[0-9]+_[a-zA-Z0-9]*_bandwidth")
+    self.centerfreq_re = re.compile ("cbf_roach_[0-9]+_[a-zA-Z0-9]*_delay_centre_frequency")
+    self.channels_re = re.compile ("cbf_roach_[0-9]+_[a-zA-Z0-9]*_n_chans")
     self.target_re = re.compile ("subarray_[0-9]+_script_target")
     self.ra_re = re.compile ("subarray_[0-9]+_script_ra")
     self.dec_re = re.compile ("subarray_[0-9]+_script_dec")
@@ -81,10 +80,10 @@ class PubSubThread (threading.Thread):
     self.desc_re = re.compile ("subarray_[0-9]+_script_description")
 
     self.subarrays_res = []
-    self.subarrays_res.append(re.compile ("[a-zA-Z]+_1_[a-zA-Z]+"))
-    self.subarrays_res.append(re.compile ("[a-zA-Z]+_2_[a-zA-Z]+"))
-    self.subarrays_res.append(re.compile ("[a-zA-Z]+_3_[a-zA-Z]+"))
-    self.subarrays_res.append(re.compile ("[a-zA-Z]+_4_[a-zA-Z]+"))
+    self.subarrays_res.append(re.compile ("[a-zA-Z_]+_1_[a-zA-Z]+"))
+    self.subarrays_res.append(re.compile ("[a-zA-Z_]+_2_[a-zA-Z]+"))
+    self.subarrays_res.append(re.compile ("[a-zA-Z_]+_3_[a-zA-Z]+"))
+    self.subarrays_res.append(re.compile ("[a-zA-Z_]+_4_[a-zA-Z]+"))
 
   def run (self):
     self.script.log(2, "PubSubThread::run starting while")
@@ -103,7 +102,7 @@ class PubSubThread (threading.Thread):
       self.running = False
       self.io_loop = []
 
-      self.script.log(1, "PubSubThread::run unsubscrubing")
+      self.script.log(1, "PubSubThread::run unsubscribing")
       # unsubscribe and disconnect from CAM
       self.ws_client.unsubscribe(self.title)
       self.ws_client.disconnect()
@@ -137,10 +136,10 @@ class PubSubThread (threading.Thread):
     yield self.ws_client.connect()
     result = yield self.ws_client.subscribe(self.title)
 
-    list = ['cbf.*.bandwidth', 'cbf.*.centerfrequency', 'cbf.*.channels']
-    list.append ('cbf.synchronisation.epoch')
-    list.append ('subarray.*.active.sbs')
-    list.append ('subarray.*.pool.resources')
+    list = ['bandwidth', 'delay.centre.frequency', 'n_chans']
+    list.append ('synchronisation.epoch')
+    list.append ('active.sbs')
+    list.append ('pool.resources')
     list.append ('subarray.*.script.observer')
     list.append ('subarray.*.script.target')
     list.append ('subarray.*.script.ants')
@@ -1058,6 +1057,7 @@ class KATCPServer (DeviceServer):
       self.script.log (1, "request_target_start(" + data_product_id + "," + beam_id + "," + target_name+")")
       (result, message) = self.test_beam_valid (data_product_id, beam_id)
       if result == "fail":
+        self.script.log (-1, message)
         return (result, message)
 
       for i in range(4):
@@ -1075,10 +1075,12 @@ class KATCPServer (DeviceServer):
       self.script.log (1, "request_target_start: target_name=[" + target_name + "]")
       (result, message) = self.test_pulsar_valid (target_name)
       if result != "ok":
+        self.script.log (-1, message)
         return (result, message)
 
       # check the ADC_SYNC_TIME is valid for this beam
       if self.script.beam_configs[beam_id]["ADC_SYNC_TIME"] == "0":
+        self.script.log (-1, "ADC Synchronisation Time for beam "+beam_id+" was not valid "+self.script.beam_configs[beam_id]["ADC_SYNC_TIME"])
         return ("fail", "ADC Synchronisation Time for beam "+beam_id+" was not valid "+self.script.beam_configs[beam_id]["ADC_SYNC_TIME"])
     
       # set the pulsar name, this should include a check if the pulsar is in the catalog
