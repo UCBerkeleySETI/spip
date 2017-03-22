@@ -120,10 +120,10 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
   timestamps.resize(num_spead_streams);
   channels.resize(num_spead_streams);
 
-  for (unsigned i=0; i< num_spead_streams; i++)
+  for (unsigned i=0; i<num_spead_streams; i++)
   {
     curr_heap_cnts[i] = -1;
-    channels[i] = i * channels_per_spead_stream;
+    channels[i] = (i * channels_per_spead_stream) + start_channel;
   }
 
   if (header.get ("ADC_SYNC_TIME", "%ld", &adc_sync_time) != 1)
@@ -398,7 +398,7 @@ int64_t spip::UDPFormatMeerKATSPEAD::get_timestamp_and_channel()
     }
   }
 
-  int64_t spead_stream = channel / channels_per_spead_stream;
+  int64_t spead_stream = (channel - start_channel) / channels_per_spead_stream;
   timestamps[spead_stream] = timestamp;
   assert (channels[spead_stream] == channel);
   return spead_stream;
