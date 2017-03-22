@@ -117,10 +117,14 @@ int spip::UDPReceiveDB::configure (const char * config)
 
   // now write new params to header
   uint64_t resolution = format->get_resolution();
-  cerr << "spip::UDPReceiveDB::configure resolution=" << resolution << endl;
   if (header.set("RESOLUTION", "%lu", resolution) < 0)
     throw invalid_argument ("failed to write RESOLUTION to header");
+
+  if (db->get_data_bufsz() % resolution != 0)
+    throw invalid_argument ("Data block buffer size must be multiple of RESOLUTION");
+
 }
+
 
 void spip::UDPReceiveDB::prepare ()
 {

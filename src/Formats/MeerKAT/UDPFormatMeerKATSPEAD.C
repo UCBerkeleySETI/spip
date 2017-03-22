@@ -124,6 +124,9 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
   {
     curr_heap_cnts[i] = -1;
     channels[i] = (i * channels_per_spead_stream) + start_channel;
+#ifdef _DEBUG
+  cerr << "spip::UDPFormatMeerKATSPEAD::prepare channels[" << i << "]=" << channels[i] << endl;
+#endif
   }
 
   if (header.get ("ADC_SYNC_TIME", "%ld", &adc_sync_time) != 1)
@@ -285,7 +288,7 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
       {
 #ifdef _DEBUG
         if (offset == 1)
-          cerr << "FIRST HEAP timestamp= " << timestamps[spead_stream]
+          cerr << "FIRST HEAP timestamp=" << timestamps[spead_stream]
                << " adc_sample=" << adc_sample << " obs_start_sample=" << obs_start_sample 
                << " obs_sample=" << obs_sample
                << " samples_to_byte_offset=" << samples_to_byte_offset
@@ -297,7 +300,7 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
       curr_heap_cnts[spead_stream] = header.heap_cnt;
       curr_heap_offsets[spead_stream] = (uint64_t) (obs_sample * samples_to_byte_offset) + (spead_stream * header.heap_length);
 
-#ifdef _DEBUG
+#ifdef _DEBUG_LOTS
       double t_offset = (double) obs_sample / adc_sample_rate;
       cerr << "spip::UDPFormatMeerKATSPEAD::decode_packet adc=" << adc_sample << " t_offset=" << t_offset << endl;
 #endif

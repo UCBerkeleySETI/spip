@@ -133,6 +133,11 @@ int spip::UDPReceiveMergeDB::configure (const char * config_str)
 
   // get the resolution from the two formats
   chunk_size = formats[0]->get_resolution() + formats[1]->get_resolution();
+
+  // ensure that this is an integer factor of the block size
+  if (db->get_data_bufsz() % chunk_size != 0)
+    throw invalid_argument ("Data block buffer size must be multiple of RESOLUTION");
+
   overflow = (char *) malloc (chunk_size);
 
   for (unsigned i=0; i<2; i++)
