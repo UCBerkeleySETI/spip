@@ -18,9 +18,9 @@ LDADD = $(top_builddir)/src/Affinity/libspipaffinity.la \
 
 if HAVE_PSRDADA
 
-libspipnet_headers += spip/UDPReceiveDB.h spip/UDPReceiveMergeDB.h
+libspipnet_headers += spip/UDPReceiveDB.h spip/UDPReceiveMergeDB.h spip/UDPReceiveMergeDBs.h
 
-libspipnet_la_SOURCES += UDPReceiveDB.C UDPReceiveMergeDB.C
+libspipnet_la_SOURCES += UDPReceiveDB.C UDPReceiveMergeDB.C UDPReceiveMergeDBs.C
 
 AM_CXXFLAGS += @PSRDADA_CFLAGS@ -I$(top_builddir)/src/Dada
 LDADD += $(top_builddir)/src/Dada/libspipdada.la
