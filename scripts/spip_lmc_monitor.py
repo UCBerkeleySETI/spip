@@ -66,6 +66,20 @@ def getLoads (dl):
 
   return result, loads
 
+def getNTPSynced (dl):
+
+  result = 0
+
+  cmd = "/usr/sbin/ntpq -c 'rv 0 offset'"
+  rval, lines = core.system (cmd, 3 <= dl)
+  if rval == 0 and len(lines) == 1:
+    if lines[0] != "/usr/sbin/ntpq: read: Connection refused":
+      parts = lines[0].split("=")
+      offset = float(parts[1])
+      # offset in milliseconds
+      if offset < 5:
+        return (result, True)
+  return (result, False)
 
 # request SMRB state from SMRB monitoring points
 def getSMRBCapacity (stream_ids, quit_event, dl):
@@ -182,6 +196,11 @@ if __name__ == "__main__":
   core.logMsg(2, test_dl, "rval="+str(rval))
   core.logMsg(2, test_dl, "loads="+str(loads))
 
+  core.logMsg(2, test_dl, "reading NTP synchronisation")
+  rval, synced = getNTPSynced(test_dl)
+  core.logMsg(2, test_dl, "rval="+str(rval))
+  core.logMsg(2, test_dl, "synced="+str(synced))
+
   core.logMsg(2, test_dl, "reading IPMI sensor info")
   rval, sensors = getIPMISensors (test_dl)
   core.logMsg(2, test_dl, "rval="+str(rval))
@@ -189,4 +208,3 @@ if __name__ == "__main__":
 
   sys.exit(0)
     
-
