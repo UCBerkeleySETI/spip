@@ -30,11 +30,17 @@ endif
 
 if HAVE_SPEAD2
 
-libspipnet_la_SOURCES += SPEADReceiveDB.C SPEADReceiver.C SPEADBeamFormerConfig.C \
-                         SPEADReceiverMerge.C SPEADReceiveMergeDB.C
+libspipnet_la_SOURCES += SPEADReceiver.C SPEADBeamFormerConfig.C \
+                         SPEADReceiverMerge.C
 
 AM_CXXFLAGS += @BOOST_CPPFLAGS@ @SPEAD2_CFLAGS@
 LDADD += @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@
+
+if HAVE_PSRDADA
+
+libspipnet_la_SOURCES += SPEADReceiveDB.C SPEADReceiveMergeDB.C
+
+endif
 
 endif
 
