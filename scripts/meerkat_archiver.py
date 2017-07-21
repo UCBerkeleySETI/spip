@@ -94,7 +94,11 @@ class MeerKATArchiverDaemon(Daemon):
 
     self.log (2, "main: creating AuthenticatedFtpTransfer")
 
-    self.ftp_agent = katsdptransfer.ftp_transfer.AuthenticatedFtpTransfer (server=self.ftp_server, username=self.ftp_username, password=self.ftp_password, local_path=self.local_path,remote_path=self.remote_path, tx_md5=False)
+    try:
+      self.ftp_agent = katsdptransfer.ftp_transfer.AuthenticatedFtpTransfer (server=self.ftp_server, username=self.ftp_username, password=self.ftp_password, local_path=self.local_path,remote_path=self.remote_path, tx_md5=False)
+    except gaierror as e:
+      self.log (0, "main: katsdtransfer failed to initialize: " + str(e))
+      self.quit_event.set()
 
     while not self.quit_event.isSet():
 
