@@ -303,6 +303,8 @@ class KATCPDaemon(Daemon):
     self.katcp._host_sensors["load5"].set_value (float(xml["lmc_reply"]["system_load"]["load5"]))
     self.katcp._host_sensors["load15"].set_value (float(xml["lmc_reply"]["system_load"]["load15"]))
 
+    self.katcp._host_sensors["local_time_synced"].set_value (boolean(xml["lmc_reply"]["local_time_synced"]))
+
     if not xml["lmc_reply"]["sensors"] == None:
       for sensor in xml["lmc_reply"]["sensors"]["metric"]:
 
