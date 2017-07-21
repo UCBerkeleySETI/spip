@@ -62,6 +62,11 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
   // open the UDP socket on INADDR_ANY
   open ("any", port);
 
+#ifdef _DEBUG
+   cerr << "spip::UDPSocketReceive::open_multicast ip_address=" << ip_address 
+        << " group=" << group << " port=" << port << endl;
+#endif
+
   // if we have the XXX.XXX.XXX.XXX+Y notation, then open a sequence of multicast groups
   std::string delimiter = "+";
   size_t pos = group.find(delimiter);
@@ -69,7 +74,6 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
   // if no + notation
   if (pos == std::string::npos)
   {
-
     num_multicast = 1;
     groups.resize(num_multicast);
     mreqs.resize(num_multicast);
@@ -83,6 +87,9 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
     std::string plus = group.substr(pos + delimiter.length());
     num_multicast = std::stoi (plus) + 1;
 
+#ifdef _DEBUG
+   cerr << "spip::UDPSocketReceive::open_multicast num_multicast=" << num_multicast << endl;
+#endif
     // build multicast addresses
     groups.resize(num_multicast);
     mreqs.resize(num_multicast);
@@ -111,6 +118,8 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
     // use setsockopt() to request that the kernel join a multicast group
     if (setsockopt(fd, IPPROTO_IP,IP_ADD_MEMBERSHIP,&(mreqs[i]),sizeof(mreqs[i])) < 0)
     { 
+      int perrno = errno;
+      cerr << "Error setsockopt: " << strerror(perrno) << endl;
       throw runtime_error ("could not subscribe to multicast address");
     }
   }
