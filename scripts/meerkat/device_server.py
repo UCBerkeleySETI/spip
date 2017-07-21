@@ -27,7 +27,7 @@ DL = 1
 # Actual KATCP server implementation
 class KATCPServer (DeviceServer):
 
-  VERSION_INFO = ("ptuse-api", 1, 0)
+  VERSION_INFO = ("ptuse-api", 2, 0)
   BUILD_INFO = ("ptuse-implementation", 0, 1, "")
 
   # Optionally set the KATCP protocol version and features. Defaults to
