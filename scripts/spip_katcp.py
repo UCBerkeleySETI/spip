@@ -1085,8 +1085,8 @@ class KATCPServer (DeviceServer):
     
       # set the pulsar name, this should include a check if the pulsar is in the catalog
       self.script.beam_configs[beam_id]["lock"].acquire()
-      if self.script.beam_configs[beam_id]["MODE"] == "CAL":
-        target_name = target_name + "_R"
+      #if self.script.beam_configs[beam_id]["MODE"] == "CAL":
+      #  target_name = target_name + "_R"
       self.script.beam_configs[beam_id]["SOURCE"] = target_name
       self.script.beam_configs[beam_id]["lock"].release()
 
@@ -1410,10 +1410,25 @@ class KATCPServer (DeviceServer):
         if ibeam < len(self.script.beams) and self.script.beams[ibeam] == beam_id:
           return ("ok", "")
       return ("fail", "data product " + data_product_id + " did not contain beam " + beam_id)
-
     
     # test whether the specified target exists in the pulsar catalog
     def test_pulsar_valid (self, target):
+
+      # remove the _R suffix
+      if target.endswith('_R'):
+        target = target[:-3]
+
+      # check if the target matches the fluxcal.on file
+      cmd = "grep " + target + cfg["CONFIG_DIR"] + "/fluxcal.on | wc -l"
+      rval, lines = self.script.system (cmd, 3)
+      if rval == 0 and len(lines) == 1 and int(lines[1]) > 0:
+        return ("ok", "")
+
+      # check if the target matches the fluxcal.off file
+      cmd = "grep " + target + cfg["CONFIG_DIR"] + "/fluxcal.off | wc -l"
+      rval, lines = self.script.system (cmd, 3)
+      if rval == 0 and len(lines) == 1 and int(lines[1]) > 0:
+        return ("ok", "")
 
       self.script.log (2, "test_pulsar_valid: get_psrcat_param (" + target + ", jname)")
       (reply, message) = self.get_psrcat_param (target, "jname")
