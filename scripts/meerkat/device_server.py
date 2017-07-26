@@ -349,9 +349,7 @@ class KATCPServer (DeviceServer):
     """Cease data processing with target_name."""
     self.script.log (1, "request_target_stop(" + data_product_id+")")
 
-    self.script.beam_config["lock"].acquire()
-    self.script.beam_config["SOURCE"] = ""
-    self.script.beam_config["lock"].release()
+    self.script.reset_beam_config (self.script.beam_config)
 
     host = self.script.tcs_host
     port = self.script.tcs_port

@@ -399,7 +399,7 @@ class KATCPDaemon(Daemon):
   # reset the sepcified beam configuration
   def reset_beam_config (self, bcfg):
     bcfg["lock"].acquire()
-    bcfg["SOURCE"] = "J0835-4510"
+    bcfg["SOURCE"] = "None"
     bcfg["RA"] = "None"
     bcfg["DEC"] = "None"
     bcfg["PID"] = "None"
@@ -418,7 +418,6 @@ class KATCPDaemon(Daemon):
     bcfg["PROPOSAL_ID"] = "None"
     bcfg["DESCRIPTION"] = "None"
     bcfg["lock"].release()
-
 
   #############################################################################
   # configure fixed sensors (for lifetime of script)
@@ -1085,8 +1084,6 @@ class KATCPServer (DeviceServer):
     
       # set the pulsar name, this should include a check if the pulsar is in the catalog
       self.script.beam_configs[beam_id]["lock"].acquire()
-      #if self.script.beam_configs[beam_id]["MODE"] == "CAL":
-      #  target_name = target_name + "_R"
       self.script.beam_configs[beam_id]["SOURCE"] = target_name
       self.script.beam_configs[beam_id]["lock"].release()
 
@@ -1119,10 +1116,10 @@ class KATCPServer (DeviceServer):
       if result == "fail":
         return (result, message)
 
-      self.script.beam_configs[beam_id]["lock"].acquire()
-      self.script.beam_configs[beam_id]["SOURCE"] = ""
-      self.script.beam_configs[beam_id]["lock"].release()
+      # reset the beam configuration now that the observation has ended
+      self.script.reset_beam_config (self.script.beam_configs[beam_id])
 
+      # issue stop command
       host = self.script.tcs_hosts[beam_id]
       port = self.script.tcs_ports[beam_id]
       sock = sockets.openSocket (DL, host, int(port), 1)
