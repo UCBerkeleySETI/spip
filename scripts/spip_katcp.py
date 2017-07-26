@@ -1419,13 +1419,13 @@ class KATCPServer (DeviceServer):
         target = target[:-3]
 
       # check if the target matches the fluxcal.on file
-      cmd = "grep " + target + cfg["CONFIG_DIR"] + "/fluxcal.on | wc -l"
+      cmd = "grep " + target + " " + self.script.cfg["CONFIG_DIR"] + "/fluxcal.on | wc -l"
       rval, lines = self.script.system (cmd, 3)
       if rval == 0 and len(lines) == 1 and int(lines[1]) > 0:
         return ("ok", "")
 
       # check if the target matches the fluxcal.off file
-      cmd = "grep " + target + cfg["CONFIG_DIR"] + "/fluxcal.off | wc -l"
+      cmd = "grep " + target + " " + self.script.cfg["CONFIG_DIR"] + "/fluxcal.off | wc -l"
       rval, lines = self.script.system (cmd, 3)
       if rval == 0 and len(lines) == 1 and int(lines[1]) > 0:
         return ("ok", "")
