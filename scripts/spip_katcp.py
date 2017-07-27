@@ -1411,9 +1411,11 @@ class KATCPServer (DeviceServer):
     # test whether the specified target exists in the pulsar catalog
     def test_pulsar_valid (self, target):
 
+      self.script.log (2, "test_pulsar_valid: target='["+ target +"]")
+        
       # remove the _R suffix
       if target.endswith('_R'):
-        target = target[:-3]
+        target = target[:-2]
 
       # check if the target matches the fluxcal.on file
       cmd = "grep " + target + " " + self.script.cfg["CONFIG_DIR"] + "/fluxcal.on | wc -l"
@@ -1439,13 +1441,18 @@ class KATCPServer (DeviceServer):
         return ("fail", "pulsar " + target + " did not exist in catalog")
 
     def get_psrcat_param (self, target, param):
+
+      # remove the _R suffix
+      if target.endswith('_R'):
+        target = target[:-2]
+
       cmd = "psrcat -all " + target + " -c " + param + " -nohead -o short"
       rval, lines = self.script.system (cmd, 3)
       if rval != 0 or len(lines) <= 0:
         return ("fail", "could not use psrcat")
 
       if lines[0].startswith("WARNING"):
-        return ("fail", "pulsar " + target_name + " did not exist in catalog")
+        return ("fail", "pulsar " + target + " did not exist in catalog")
 
       parts = lines[0].split()
       if len(parts) == 2 and parts[0] == "1":
