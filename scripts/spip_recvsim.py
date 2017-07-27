@@ -53,7 +53,7 @@ class RecvSimDaemon(Daemon,StreamBased):
       self.quit_event.set()
 
     else:
-
+      self.binary_list.remove (cmd)
       local_config = self.getConfiguration()
 
       self.cpu_core = self.cfg["STREAM_RECV_CORE_" + str(self.id)]
@@ -85,6 +85,7 @@ class RecvSimDaemon(Daemon,StreamBased):
      
       # this should be a persistent / blocking command 
       rval = self.system_piped (cmd, log_pipe.sock)
+      self.binary_list.remove (cmd)
 
       if rval:
         self.log (-2, cmd + " failed with return value " + str(rval))
