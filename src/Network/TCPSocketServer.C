@@ -144,3 +144,26 @@ void spip::TCPSocketServer::close_client ()
     close(client_fd);
   client_fd = 0;
 }
+
+string spip::TCPSocketServer::read_client (size_t bytes_to_recv)
+{
+  resize (bytes_to_recv + 1);
+
+  ssize_t bytes_read = read (client_fd, buf, bytes_to_recv);
+  if (bytes_read >= 0)
+    buf[bytes_read] = '\0';
+
+  return string(buf);
+}
+
+ssize_t spip::TCPSocketServer::write_client (char * buffer, size_t bytes)
+{
+  size_t bytes_to_send = bytes + 2;
+  resize (bytes_to_send + 1);
+  strncpy (buf, buffer, bytes);
+  strcat (buf, "\r\n");
+
+  ssize_t bytes_sent = write (client_fd, buf, bytes_to_send);
+  return bytes_sent;
+}
+

@@ -8,6 +8,7 @@
 #include "spip/TCPSocket.h"
 
 #include <arpa/inet.h>
+#include <unistd.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -41,6 +42,28 @@ void spip::TCPSocket::open (int port)
   // fill in the udp socket struct with class, listening IP, port
   server.sin_family = AF_INET;
   server.sin_port = htons(port);
+}
+
+string spip::TCPSocket::read_bytes (size_t bytes_to_recv)
+{
+  resize (bytes_to_recv + 1);
+
+  ssize_t bytes_read = read (fd, buf, bytes_to_recv);
+  if (bytes_read >= 0)
+    buf[bytes_read] = '\0';
+
+  return string(buf);
+}
+
+ssize_t spip::TCPSocket::write_bytes (char * buffer, size_t bytes)
+{
+  size_t bytes_to_send = bytes + 2;
+  resize (bytes_to_send + 1);
+  strncpy (buf, buffer, bytes);
+  strcat (buf, "\r\n");
+
+  ssize_t bytes_sent = write (fd, buf, bytes_to_send);
+  return bytes_sent;
 }
 
 void spip::TCPSocket::close_me ()

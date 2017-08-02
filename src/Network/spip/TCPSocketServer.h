@@ -28,7 +28,13 @@ namespace spip {
       // try to accept a connection within a timeout
       int accept_client (int timeout);
 
+      // close a client socket connection
       void close_client ();
+
+      // read an string from the client socket
+      std::string read_client (size_t bytes_to_recv);
+
+      ssize_t write_client (char * buffer, size_t bytes);
 
     private:
 
