@@ -5,7 +5,7 @@
 #include "spip/ska1_def.h"
 #include "spip/UDPFormat.h"
 
-#define UDP_FORMAT_CUSTOM_PACKET_NSAMP 1024
+#define UDP_FORMAT_CUSTOM_PACKET_NSAMP 2048
 #define UDP_FORMAT_CUSTOM_NDIM 2
 #define UDP_FORMAT_CUSTOM_NPOL 2
 
