@@ -11,6 +11,10 @@
 #include "spip/HardwareAffinity.h"
 #endif
 
+#ifdef HAVE_VMA
+#include "spip/UDPSocketReceiveVMA.h"
+#endif
+
 #include "spip/TCPSocketServer.h"
 #include "spip/UDPReceiveMergeDB.h"
 #include "spip/Time.h"
@@ -175,6 +179,8 @@ void spip::UDPReceiveMergeDB::set_control_cmd (spip::ControlCmd cmd)
 {
   pthread_mutex_lock (&mutex_db);
   control_cmd = cmd;
+  if (control_cmd == Stop || control_cmd == Quit)
+    spip::UDPSocketReceive::keep_receiving = false;
   pthread_cond_signal (&cond_db);
   pthread_mutex_unlock (&mutex_db);
 }
@@ -340,6 +346,8 @@ void spip::UDPReceiveMergeDB::close ()
 
 void spip::UDPReceiveMergeDB::start_threads (int c1, int c2)
 {
+  spip::UDPSocketReceive::keep_receiving = true;
+
   // cpu cores on which to bind each recv thread
   cores[0] = c1;
   cores[1] = c2;
@@ -510,30 +518,20 @@ bool spip::UDPReceiveMergeDB::receive_thread (int p)
   hw_affinity.bind_to_memory (cores[p]);
 #endif
 
-#ifdef HAVE_VMA
-  struct vma_api_t * vma_api = vma_get_api();
-  struct vma_packets_t* pkt = NULL;
-  if (!vma_api)
-  {
-    cerr << "WARNING: VMA support compiled, but VMA not available" << endl;
-  }
-#else
-  char vma_api = 0;
-#endif
-
   // allocated and configured in main threasd
   UDPFormat * format = formats[p];
   UDPStats * stat = stats[p];
 
   // open socket within the context of this thread 
+#ifdef HAVE_VMA
+  UDPSocketReceiveVMA * sock = new UDPSocketReceiveVMA;
+#else
   UDPSocketReceive * sock = new UDPSocketReceive;
+#endif
   if (data_mcasts[p].size() > 0)
     sock->open_multicast (data_hosts[p], data_mcasts[p], data_ports[p]);
   else
     sock->open (data_hosts[p], data_ports[p]); 
-
-  if (!vma_api)
-    sock->set_nonblock ();
 
   size_t sock_bufsz = format->get_header_size() + format->get_data_size();
   sock->resize (sock_bufsz);
@@ -541,18 +539,6 @@ bool spip::UDPReceiveMergeDB::receive_thread (int p)
 
   pthread_cond_t * cond_recv = &(cond_recvs[p]);
   pthread_mutex_t * mutex_recv = &(mutex_recvs[p]);
-
-  bool keep_receiving = true;
-  bool have_packet = false;
-  bool obs_started = false;
-
-  struct sockaddr_in client_addr;
-  struct sockaddr * addr = (struct sockaddr *) &client_addr;
-  socklen_t addr_size = sizeof(struct sockaddr);
-
-  int fd = sock->get_fd();
-  char * buf = sock->get_buf();
-  char * buf_ptr = buf;
 
   // block accounting 
   const int64_t data_bufsz = db->get_data_bufsz();
@@ -571,7 +557,7 @@ bool spip::UDPReceiveMergeDB::receive_thread (int p)
 
   bool filled_this_buffer = false;
   unsigned bytes_received, bytes_dropped;
-  int flags, got;
+  int got;
   uint64_t nsleeps;
   uint64_t ibuf = 0;
 
@@ -633,146 +619,86 @@ bool spip::UDPReceiveMergeDB::receive_thread (int p)
 
       // while we have not filled this buffer with data from
       // this polarisation
-      while (!filled_this_buffer && keep_receiving)
+      while (!filled_this_buffer && sock->still_receiving())
       {
-        if (vma_api)
+        // get a packet from the socket
+        got = sock->recv_from();
+
+        // received a bad packet, brutal exit
+        if (got == 0)
         {
-  #ifdef HAVE_VMA
-          if (pkt)
-          {
-            vma_api->free_packets(fd, pkt->pkts, pkt->n_packet_num);
-            pkt = NULL;
-          }
-          while (!have_packet && keep_receiving)
-          {
-            if (control_cmd == Stop || control_cmd == Quit)
-              keep_receiving = false;
-            flags = 0;
-            got = (int) vma_api->recvfrom_zcopy(fd, buf, sock_bufsz, &flags, addr, &addr_size);
-            if (got  > 32)
-            {
-              if (flags == MSG_VMA_ZCOPY)
-              {
-                pkt = (vma_packets_t*) buf;
-                if (pkt->n_packet_num == 1)
-                {
-                  buf_ptr = (char *) pkt->pkts[0].iov[0].iov_base;
-                  have_packet = true;
-                }
-              }
-            }
-            else if (got == -1)
-            {
-              nsleeps++;
-              if (nsleeps > 1000)
-              {
-                stat->sleeps(1000);
-                nsleeps -= 1000;
-              }
-            }
-            else
-            {
-              cerr << "spip::UDPReceiveMergeDB::receive error expected " << sock_bufsz
-                   << " B, received " << got << " B" <<  endl;
-              set_control_cmd (Stop);
-              keep_receiving = false;
-            }
-          }
-  #endif
+          set_control_cmd (Stop);
         }
         else
         {
-          while (!have_packet && keep_receiving)
+          byte_offset = format->decode_packet (sock->buf_ptr, &bytes_received);
+
+          if (byte_offset < 0)
           {
-            got = (int) recvfrom (fd, buf, sock_bufsz, 0, addr, &addr_size);
-            if (got > 32)
+            // ignore if byte_offset is -ve
+            sock->consume_packet();
+
+            // data stream is finished
+            if (byte_offset == -2)
             {
-              have_packet = true;
-            }
-            else if (got == -1)
-            {
-              nsleeps++;
-              if (nsleeps > 1000)
-              {
-                stat->sleeps(1000);
-                nsleeps -= 1000;
-              }
-            }
-            else
-            {
-              cerr << "spip::UDPReceiveMergeDB::receive error expected " << sock_bufsz
-                   << " B, received " << got << " B" <<  endl;
-              set_control_cmd (Stop);
-              keep_receiving = false;
+              set_control_cmd(Stop);
             }
           }
-        }
-
-        byte_offset = format->decode_packet (buf_ptr, &bytes_received);
-
-        if (byte_offset < 0)
-        {
-          // ignore if byte_offset is -ve
-          have_packet = false;
-
-          // data stream is finished
-          if (byte_offset == -2)
-          {
-            set_control_cmd(Stop);
-            keep_receiving = false;
-          } 
-        }
-        // packet that is part of this observation
-        else
-        {
-          // adjust byte offset from single pol to dual pol
-          byte_offset += pol_offset;
-
-          // packet belongs in current buffer
-          if ((byte_offset >= curr_byte_offset) && (byte_offset < next_byte_offset))
-          {
-            bytes_this_buf += bytes_received;
-            stat->increment_bytes (bytes_received);
-            format->insert_last_packet (block + (byte_offset - curr_byte_offset));
-            have_packet = false;
-          }
-          // packet fits in the overflow buffer
-          else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
-          {
-            format->insert_last_packet (overflow + (byte_offset - next_byte_offset));
-
-            overflow_lastbytes[p] = std::max((byte_offset - next_byte_offset) + bytes_received, overflow_lastbytes[p]);
-            overflowed_bytes += bytes_received;
-            have_packet = false;
-          }
-          // packet belong to a previous buffer (this is a drop that has already been counted)
-          else if (byte_offset < curr_byte_offset)
-          {
-            have_packet = false;
-          }
-          // packet belongs to a future buffer, that is beyond the overflowr
+          // packet that is part of this observation
           else
           {
+            // adjust byte offset from single pol to dual pol
+            byte_offset += pol_offset;
+
+            // packet belongs in current buffer
+            if ((byte_offset >= curr_byte_offset) && (byte_offset < next_byte_offset))
+            {
+              bytes_this_buf += bytes_received;
+              stat->increment_bytes (bytes_received);
+              format->insert_last_packet (block + (byte_offset - curr_byte_offset));
+              sock->consume_packet();
+            }
+            // packet fits in the overflow buffer
+            else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
+            {
+              format->insert_last_packet (overflow + (byte_offset - next_byte_offset));
+
+              overflow_lastbytes[p] = std::max((byte_offset - next_byte_offset) + bytes_received, overflow_lastbytes[p]);
+              overflowed_bytes += bytes_received;
+              sock->consume_packet();
+            }
+            // packet belong to a previous buffer (this is a drop that has already been counted)
+            else if (byte_offset < curr_byte_offset)
+            {
+              sock->consume_packet();
+            }
+            // packet belongs to a future buffer, that is beyond the overflowr
+            else
+            {
+              filled_this_buffer = true;
+            }
+          }
+
+          // close open data block buffer if is is now full
+          if (bytes_this_buf >= pol_bufsz || filled_this_buffer)
+          {
+#ifdef _DEBUG
+            if (p == 1)
+              cerr << "spip::UDPReceiveMergeDB::receive["<<p<<"] close_block "
+                   << " bytes_this_buf=" << bytes_this_buf 
+                   << " pol_bufsz=" << pol_bufsz 
+                   << " overflow_lastbytes=" << overflow_lastbytes[p]
+                   << " filled_this_buffer=" << filled_this_buffer << endl;
+#endif
+            stat->dropped_bytes (pol_bufsz - bytes_this_buf);
             filled_this_buffer = true;
-            have_packet = true;
           }
         }
-
-        // close open data block buffer if is is now full
-        if (bytes_this_buf >= pol_bufsz || filled_this_buffer)
-        {
-#ifdef _DEBUG
-          if (p == 1)
-            cerr << "spip::UDPReceiveMergeDB::receive["<<p<<"] close_block "
-                 << " bytes_this_buf=" << bytes_this_buf 
-                 << " pol_bufsz=" << pol_bufsz 
-                 << " overflow_lastbytes=" << overflow_lastbytes[p]
-                 << " filled_this_buffer=" << filled_this_buffer << endl;
-#endif
-          stat->dropped_bytes (pol_bufsz - bytes_this_buf);
-          filled_this_buffer = true;
-        }
       }
+
+      // update stats for any sleeps
+      nsleeps = sock->process_sleeps();
+      stat->sleeps(nsleeps);
 
       pthread_mutex_lock (&mutex_db);
       full[p] = true;

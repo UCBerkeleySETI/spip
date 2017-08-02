@@ -50,3 +50,11 @@ AM_CXXFLAGS += @CUDA_CFLAGS@
 LDADD += @CUDA_LIBS@
 
 endif
+
+if HAVE_VMA
+
+libspipnet_la_SOURCES += UDPSocketReceiveVMA.C
+
+libspipnet_headers += spip/UDPSocketReceiveVMA.h
+
+endif

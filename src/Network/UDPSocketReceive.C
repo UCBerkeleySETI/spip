@@ -23,6 +23,9 @@ spip::UDPSocketReceive::UDPSocketReceive ()
   have_packet = 0;
   kernel_bufsz = 131071;      // general default buffer size for linux kernels
   multicast = false;
+
+  // TODO check that this doesn't need to be reassigned
+  buf_ptr = buf;
 }
 
 spip::UDPSocketReceive::~UDPSocketReceive ()
@@ -32,6 +35,13 @@ spip::UDPSocketReceive::~UDPSocketReceive ()
   if (buf)
     free (buf);
   buf = 0;
+}
+
+// ensure buf_ptr points to the buffer
+void spip::UDPSocketReceive::resize (size_t new_bufsz)
+{
+  spip::Socket::resize (new_bufsz);
+  buf_ptr = buf;
 }
 
 void spip::UDPSocketReceive::open (string ip_address, int port)
@@ -55,6 +65,7 @@ void spip::UDPSocketReceive::open (string ip_address, int port)
   {
     throw runtime_error ("could not bind to UDP socket");
   }
+  set_nonblock();
 }
 
 void spip::UDPSocketReceive::open_multicast (string ip_address, string group, int port)
@@ -124,6 +135,7 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
     }
   }
   multicast = true;
+  set_nonblock();
 }
 
 void spip::UDPSocketReceive::leave_multicast ()
@@ -224,6 +236,42 @@ size_t spip::UDPSocketReceive::recv ()
   }
 
   return received;
+}
+
+size_t spip::UDPSocketReceive::recv_from()
+{
+  size_t got = 0;
+  while (!have_packet && keep_receiving)
+  {
+    got = (int) recvfrom (fd, buf, bufsz, 0, NULL, NULL);
+    if (got > 32)
+    {
+      have_packet = true;
+    }
+    else if (got == -1)
+    {
+      nsleeps++;
+      if (nsleeps > 1000)
+      {
+        nsleeps -= 1000;
+      }
+    }
+    else
+    {
+      cerr << "spip::UDPSocketReceive error expected " << bufsz << " B, "
+           << "received " << got << " B" <<  endl;
+      have_packet = true;
+      got = 0;
+    }
+  }
+  return got;
+}
+
+uint64_t spip::UDPSocketReceive::process_sleeps ()
+{
+  uint64_t accumulated_sleeps = nsleeps;
+  nsleeps = 0;
+  return accumulated_sleeps;
 }
 
 
