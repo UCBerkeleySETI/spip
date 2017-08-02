@@ -335,6 +335,11 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
   return (int64_t) curr_heap_offsets[spead_stream] + header.payload_offset;
 }
 
+inline int64_t spip::UDPFormatMeerKATSPEAD::get_subband (int64_t byte_offset, int nsubband)
+{
+  return (header.payload_offset * nsubband) / header.heap_length;
+}
+
 inline int spip::UDPFormatMeerKATSPEAD::insert_last_packet (char * buffer)
 {
   memcpy (buffer, header.payload, header.payload_length);
