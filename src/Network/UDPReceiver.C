@@ -119,7 +119,7 @@ void spip::UDPReceiver::prepare ()
   else
     sock->set_nonblock ();
 
-  size_t sock_size = format->get_header_size() + format->get_data_size();
+  size_t sock_size = (format->get_header_size() + format->get_data_size()) * 2;
   if (verbose)
     cerr << "spip::UDPReceiver::prepare sock->resize(" << sock_size << ")" << endl;
   sock->resize (sock_size);
@@ -166,6 +166,8 @@ void spip::UDPReceiver::receive ()
   char * buf = sock->get_buf();
   char * buf_ptr = buf;
   size_t sock_bufsz = sock->get_bufsz();
+  if (verbose)
+    cerr << "spip::UDPReceiver::receive sock_bufsz=" << sock_bufsz << endl;
 
   bool have_packet = false;
   int got;
@@ -221,18 +223,18 @@ void spip::UDPReceiver::receive ()
       while (!have_packet && keep_receiving)
       {
         flags = 0;
-        got = vma_api->recvfrom_zcopy(fd, buf, sock_bufsz, &flags, addr, &addr_size);
+        got = (int) vma_api->recvfrom_zcopy(fd, buf, sock_bufsz, &flags, addr, &addr_size);
         if (got  > 32)
         {
-          if ((flags & MSG_VMA_ZCOPY) == MSG_VMA_ZCOPY)
+          if (flags == MSG_VMA_ZCOPY)
           {
             pkts = (vma_packets_t*) buf;
-            int npkts = pkts->n_packet_num;
-            if (npkts == 1)
+            if (pkts->n_packet_num == 1)
             {
-              struct vma_packet_t *pkt = &pkts->pkts[0];
-              buf_ptr = (char *) pkt->iov[0].iov_base;
-              have_packet = true;
+              buf_ptr = (char *) pkts->pkts[0].iov[0].iov_base;
+              int * ptr_val = (int *) buf_ptr;
+              if ((*ptr_val) != 1)
+                have_packet = true;
             }
           }
           else
