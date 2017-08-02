@@ -97,7 +97,11 @@ inline int64_t spip::UDPFormatCustom::decode_packet (char *buf, unsigned * paylo
   // set the pointer to the payload
   payload_ptr = buf + packet_header_size;
 
-  //cerr << "header.channel_number=" << header.channel_number << " start_channel=" << start_channel << " channel_stride=" << channel_stride << endl;
+#ifdef _DEBUG
+  cerr << "spip::UDPFormatCustom::decode_packet header.channel_number=" << header.channel_number 
+       << " start_channel=" << start_channel 
+       << " channel_stride=" << channel_stride << endl;
+#endif
 
   // compute absolute byte offset for this packet within the data stream
   const uint64_t byte_offset = (header.seq_number * seq_to_bytes) + 
