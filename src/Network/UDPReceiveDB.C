@@ -11,6 +11,10 @@
 #include "spip/Time.h"
 #include "sys/time.h"
 
+#ifdef HAVE_VMA
+#include "spip/UDPSocketReceiveVMA.h"
+#endif
+
 #include <signal.h>
 #include <unistd.h>
 #include <cstring>
@@ -18,15 +22,6 @@
 #include <stdexcept>
 #include <new>
 #include <pthread.h>
-
-#ifdef  HAVE_VMA
-#include <mellanox/vma_extra.h>
-#endif
-
-#define UDPReceiveDB_CMD_NONE 0
-#define UDPReceiveDB_CMD_START 1
-#define UDPReceiveDB_CMD_STOP 2
-#define UDPReceiveDB_CMD_QUIT 3
 
 //#define _DEBUG
 
@@ -41,15 +36,6 @@ spip::UDPReceiveDB::UDPReceiveDB(const char * key_string)
 
   format = NULL;
   control_port = -1;
-
-#ifdef HAVE_VMA
-  vma_api = vma_get_api(); 
-  if (!vma_api)
-    cerr << "spip::UDPReceiveDB::UDPReceiveDB VMA support compiled, but VMA not available" << endl;
-  pkts = NULL;
-#else
-  vma_api = 0;
-#endif
 
   control_cmd = None;
   control_state = Idle;
@@ -129,7 +115,11 @@ int spip::UDPReceiveDB::configure (const char * config)
 void spip::UDPReceiveDB::prepare ()
 {
   // create and open a UDP receiving socket
+#ifdef HAVE_VMA
+  sock = new UDPSocketReceiveVMA ();
+#else
   sock = new UDPSocketReceive ();
+#endif
 
   if (data_mcast.size() > 0)
   {
@@ -139,14 +129,6 @@ void spip::UDPReceiveDB::prepare ()
   else
     sock->open (data_host, data_port);
   
-  if (!vma_api)
-  {
-    cerr << "setting nonblock" << endl;
-    sock->set_nonblock ();
-  }
-  else
-    sock->set_block ();
-
   size_t sock_bufsz = format->get_header_size() + format->get_data_size();
   cerr << "spip::UDPReceiveDB::prepare resize(" << sock_bufsz << ")" << endl;
   sock->resize (sock_bufsz);
@@ -177,7 +159,14 @@ void * spip::UDPReceiveDB::control_thread_wrapper (void * ptr)
 
 void spip::UDPReceiveDB::stop_control_thread ()
 {
-  control_cmd = Quit;
+  set_control_cmd (Quit);
+}
+
+void spip::UDPReceiveDB::set_control_cmd (spip::ControlCmd cmd)
+{
+  control_cmd = cmd;
+  if (control_cmd == Stop || control_cmd == Quit)
+    spip::UDPSocketReceive::keep_receiving = false;
 }
 
 // start a control thread that will receive commands from the TCS/LMC
@@ -213,29 +202,18 @@ void spip::UDPReceiveDB::control_thread()
   while (control_cmd != Quit && fd < 0)
   {
     // accept with a 1 second timeout
-#ifdef _DEBUG
-    cerr << "control_thread : ctrl_sock->accept_client(1)" << endl;
-#endif
     fd = control_sock->accept_client (1);
-#ifdef _DEBUG
-    cerr << "control_thread : fd=" << fd << endl;
-#endif
     if (fd >= 0 )
     {
-      if (verbose > 1)
-        cerr << "control_thread : reading data from socket" << endl;
-      ssize_t bytes_read = read (fd, cmds, DEFAULT_HEADER_SIZE);
-
-      if (verbose)
-        cerr << "control_thread: bytes_read=" << bytes_read << endl;
-
+      string received = control_sock->read_client (DADA_DEFAULT_HEADER_SIZE);
+      const char * cmds = received.c_str();
       control_sock->close_client();
       fd = -1;
 
       // now check command in list of header commands
       if (spip::AsciiHeader::header_get (cmds, "COMMAND", "%s", cmd) != 1)
         throw invalid_argument ("COMMAND did not exist in header");
-      //if (verbose)
+      if (verbose)
         cerr << "control_thread: cmd=" << cmd << endl;
       if (strcmp (cmd, "START") == 0)
       {
@@ -249,21 +227,21 @@ void spip::UDPReceiveDB::control_thread()
         open ();
 
         // write header
-        //if (verbose)
+        if (verbose)
           cerr << "control_thread: control_cmd = Start" << endl;
-        control_cmd = Start;
+        set_control_cmd(Start);
       }
       else if (strcmp (cmd, "STOP") == 0)
       {
-        //if (verbose)
+        if (verbose)
           cerr << "control_thread: control_cmd = Stop" << endl;
-        control_cmd = Stop;
+        set_control_cmd(Stop);
       }
       else if (strcmp (cmd, "QUIT") == 0)
       {
-        //if (verbose)
+        if (verbose)
           cerr << "control_thread: control_cmd = Quit" << endl;
-        control_cmd = Quit;
+        set_control_cmd(Quit);
       }
     }
 
@@ -283,7 +261,7 @@ void spip::UDPReceiveDB::start_stats_thread ()
 
 void spip::UDPReceiveDB::stop_stats_thread ()
 {
-  control_cmd = Stop;
+  set_control_cmd(Stop);
   void * result;
   pthread_join (stats_thread_id, &result);
 }
@@ -439,7 +417,9 @@ void spip::UDPReceiveDB::close ()
 // receive UDP packets for the specified time at the specified data rate
 bool spip::UDPReceiveDB::receive ()
 {
+#ifdef _DEBUG
   cerr << "spip::UDPReceiveDB::receive ()" << endl;
+#endif
 
   keep_receiving = true;
   prev.tv_sec = 0;
@@ -447,17 +427,9 @@ bool spip::UDPReceiveDB::receive ()
 
   control_state = Idle;
 
-  //uint64_t packet_number = 0;
   uint64_t total_bytes_recvd = 0;
-
+  uint64_t nsleeps;
   int got;
-  uint64_t nsleeps = 0;
-
-  struct sockaddr_in client_addr;
-  struct sockaddr * addr = (struct sockaddr *) &client_addr;
-  socklen_t addr_size = sizeof(struct sockaddr);
-
-  bool have_packet = false;
   bool obs_started = false;
 
   // block control logic
@@ -468,14 +440,10 @@ bool spip::UDPReceiveDB::receive ()
   const unsigned header_size = format->get_header_size();
   const unsigned data_size   = format->get_data_size();
   const uint64_t samples_per_buf = format->get_samples_for_bytes (data_bufsz);
-  cerr << "spip::UDPReceiveDB::receive samples_per_buf=" << samples_per_buf << " data_bufsz=" << data_bufsz << endl;
 
-  int fd = sock->get_fd();
-  char * buf = sock->get_buf();
-  char * buf_ptr  = buf;
-  char * payload = buf + header_size;
-  size_t sock_bufsz = sock->get_bufsz();
-  int result;
+#ifdef _DEBUG
+  cerr << "spip::UDPReceiveDB::receive samples_per_buf=" << samples_per_buf << " data_bufsz=" << data_bufsz << endl;
+#endif
 
   // block accounting 
   int64_t curr_byte_offset = 0;
@@ -505,169 +473,113 @@ bool spip::UDPReceiveDB::receive ()
 #endif
 
   control_state = Idle;
-  keep_receiving = true;
+  spip::UDPSocketReceive::keep_receiving = true;
 
-  while (keep_receiving)
+  while (sock->still_receiving())
   {
-    if (vma_api)
+    // get a packet from the socket
+    got = sock->recv_from();
+
+    // received a bad packet, brutal exit
+    if (got == 0)
     {
-#ifdef HAVE_VMA
-      if (pkts)
-      {
-        vma_api->free_packets(fd, pkts->pkts, pkts->n_packet_num);
-        pkts = NULL;
-      }
-      while (!have_packet && keep_receiving)
-      {
-        flags = 0;
-        got = (int) vma_api->recvfrom_zcopy(fd, buf, sock_bufsz, &flags, addr, &addr_size);
-        if (got  > 32)
-        {
-          if (flags & MSG_VMA_ZCOPY) 
-          {
-            pkts = (struct vma_packets_t*) buf;
-            struct vma_packet_t *pkt = &pkts->pkts[0];
-            buf_ptr = (char *) (pkt->iov[0].iov_base);
-          }
-          have_packet = true;
-        }
-        else
-        {
-          cerr << "spip::UDPReceiveDB::receive error expected " << sock_bufsz  
-               << " B, received " << got << " B" <<  endl;
-          control_cmd = Stop;
-          cerr << "control_cmd = Stop VMA" << endl;
-          control_state = Stopping;
-          cerr << "control_state = Stopping VMA" << endl;
-          keep_receiving = false;
-        }
-      }
-#endif
+      set_control_cmd(Stop);
+      control_state = Stopping;
     }
     else
     {
-      while (!have_packet && keep_receiving)
+      // check for start of observation, signified by receiving a packet with a 
+      // low seqeunce number
+      if (control_state == Idle && control_cmd == Start)
       {
-        got = (int) recvfrom (fd, buf, sock_bufsz, 0, addr, &addr_size);
-        if (got > 32)
+        cerr << "control_state == Active" << endl;
+        control_state = Active;
+      }
+
+      if (control_state == Active)
+      {
+        // open a new data block buffer if necessary
+        if (!db->is_block_open())
         {
-          have_packet = true;
-        }
-        else if (got == -1)
-        {
-          nsleeps++;
-          if (nsleeps > 1000)
+          block = (char *) db->open_block();
+          need_next_block = false;
+
+          if (bytes_this_buf == 0 && curr_byte_offset > 0)
           {
-            stats->sleeps(1000);
-            nsleeps -= 1000;
+            cerr << "spip::UDPReceiveDB::receive received 0 packets this buf" << endl;
+            keep_receiving = false;
           }
+
+          // update absolute limits
+          curr_byte_offset = next_byte_offset;
+          next_byte_offset += data_bufsz;
+          overflow_maxbyte = next_byte_offset + overflow_bufsz;
+
+  #ifdef _DEBUG
+          cerr << "spip::UDPReceiveDB::receive [" << curr_byte_offset << " - " 
+               << next_byte_offset << "] (" << bytes_this_buf << ")" << endl;
+  #endif
+
+          if (overflow_lastbyte > 0)
+          {
+            memcpy (block, overflow, overflow_lastbyte);
+            overflow_lastbyte = 0;
+            bytes_this_buf = overflowed_bytes;
+            stats->increment_bytes (overflowed_bytes);
+            overflowed_bytes = 0;
+          }
+          else
+            bytes_this_buf = 0;
+        }
+
+        byte_offset = format->decode_packet (sock->buf_ptr, &bytes_received);
+
+        // packet belongs in current buffer
+        if ((byte_offset >= curr_byte_offset) && (byte_offset < next_byte_offset))
+        {
+          bytes_this_buf += bytes_received;
+          stats->increment_bytes (bytes_received); 
+          format->insert_last_packet (block + (byte_offset - curr_byte_offset));
+          sock->consume_packet();
+        }
+        else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
+        {
+          format->insert_last_packet (overflow + (byte_offset - next_byte_offset));
+          overflow_lastbyte = std::max((byte_offset - next_byte_offset) + bytes_received, overflow_lastbyte);
+          overflowed_bytes += bytes_received;
+          sock->consume_packet();
+        }
+        else if (byte_offset < curr_byte_offset)
+        {
+          // ignore
+          sock->consume_packet();
         }
         else
         {
-          cerr << "spip::UDPReceiveDB::receive error expected " << sock_bufsz  
-               << " B, received " << got << " B" <<  endl;
-          control_cmd = Stop;
-          control_state = Stopping;
-          keep_receiving = false;
+          need_next_block = true;
+        }
+
+        // close open data block buffer if is is now full
+        if (bytes_this_buf >= data_bufsz || need_next_block)
+        {
+#ifdef _DEBUG
+            cerr << bytes_this_buf << " / " << data_bufsz << " => " << 
+                ((float) bytes_this_buf / (float) data_bufsz) * 100 << endl;
+          cerr << "spip::UDPReceiveDB::receive close_block bytes_this_buf=" 
+               << bytes_this_buf << " bytes_per_buf=" << data_bufsz 
+               << " need_next_block=" << need_next_block << endl;
+          format->print_packet_header();
+#endif
+          stats->dropped_bytes (data_bufsz - bytes_this_buf);
+          db->close_block (data_bufsz);
+          need_next_block = true;
         }
       }
     }
 
-    if (control_cmd == Stop)
-      cerr << "spip::UDPReceiveDB::receive control_cmd == Stop" << endl;
-
+    // update stats for any sleeps
+    nsleeps = sock->process_sleeps();
     stats->sleeps(nsleeps);
-    nsleeps = 0;
-
-    // check for start of observation, signified by receiving a packet with a 
-    // low seqeunce number
-    if (control_state == Idle && control_cmd == Start)
-    {
-      cerr << "control_state == Active" << endl;
-      control_state = Active;
-    }
-
-    if (control_state == Active && have_packet)
-    {
-      // open a new data block buffer if necessary
-      if (!db->is_block_open())
-      {
-        block = (char *) db->open_block();
-        need_next_block = false;
-
-        if (bytes_this_buf == 0 && curr_byte_offset > 0)
-        {
-          cerr << "spip::UDPReceiveDB::receive received 0 packets this buf" << endl;
-          keep_receiving = false;
-        }
-
-        // update absolute limits
-        curr_byte_offset = next_byte_offset;
-        next_byte_offset += data_bufsz;
-        overflow_maxbyte = next_byte_offset + overflow_bufsz;
-
-#ifdef _DEBUG
-        cerr << "spip::UDPReceiveDB::receive [" << curr_byte_offset << " - " 
-             << next_byte_offset << "] (" << bytes_this_buf << ")" << endl;
-#endif
-
-        if (overflow_lastbyte > 0)
-        {
-          memcpy (block, overflow, overflow_lastbyte);
-          overflow_lastbyte = 0;
-          bytes_this_buf = overflowed_bytes;
-          stats->increment_bytes (overflowed_bytes);
-          overflowed_bytes = 0;
-        }
-        else
-          bytes_this_buf = 0;
-      }
-
-      byte_offset = format->decode_packet (buf_ptr, &bytes_received);
-
-      // packet belongs in current buffer
-      if ((byte_offset >= curr_byte_offset) && (byte_offset < next_byte_offset))
-      {
-        bytes_this_buf += bytes_received;
-        stats->increment_bytes (bytes_received); 
-        format->insert_last_packet (block + (byte_offset - curr_byte_offset));
-        have_packet = false;
-      }
-      else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
-      {
-        format->insert_last_packet (overflow + (byte_offset - next_byte_offset));
-        overflow_lastbyte = std::max((byte_offset - next_byte_offset) + bytes_received, overflow_lastbyte);
-        overflowed_bytes += bytes_received;
-        have_packet = false;
-      }
-      else if (byte_offset < curr_byte_offset)
-      {
-        // ignore
-        have_packet = false;
-      }
-      else
-      {
-        need_next_block = true;
-        have_packet = true;
-      }
-
-      // close open data block buffer if is is now full
-      if (bytes_this_buf >= data_bufsz || need_next_block)
-      {
-#ifdef _DEBUG
-          cerr << bytes_this_buf << " / " << data_bufsz << " => " << 
-              ((float) bytes_this_buf / (float) data_bufsz) * 100 << endl;
-        cerr << "spip::UDPReceiveDB::receive close_block bytes_this_buf=" 
-             << bytes_this_buf << " bytes_per_buf=" << data_bufsz 
-             << " need_next_block=" << need_next_block
-             << " have_packet=" << have_packet << endl;
-        format->print_packet_header();
-#endif
-        stats->dropped_bytes (data_bufsz - bytes_this_buf);
-        db->close_block (data_bufsz);
-        need_next_block = true;
-      }
-    }
 
     if (control_cmd == Stop || control_cmd == Quit)
     {
@@ -676,11 +588,9 @@ bool spip::UDPReceiveDB::receive ()
            << endl; 
 #endif
       cerr << "Stopping acquisition" << endl;
-      keep_receiving = false;
+      spip::UDPSocketReceive::keep_receiving = false;
       control_state = Idle;
-      cerr << "control_state = Idle" << endl;
-      control_cmd = None;
-      cerr << "control_cmd = None" << endl;
+      set_control_cmd (None);
     }
   }
 

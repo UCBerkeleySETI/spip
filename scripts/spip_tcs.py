@@ -291,8 +291,6 @@ class TCSDaemon(Daemon):
           # convert to a single ascii string
           obs_header = Config.writeDictToString (obs)
 
-          self.log(1, "issue_start_cmd: beam=" + b)
-
           # work out which streams correspond to these beams
           for istream in range(int(self.cfg["NUM_STREAM"])):
             (host, beam_idx, subband) = self.cfg["STREAM_"+str(istream)].split(":")

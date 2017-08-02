@@ -89,6 +89,8 @@ namespace spip {
 
       ControlState control_state;
 
+      AsciiHeader config;
+
       AsciiHeader header;
 
       bool keep_generating;

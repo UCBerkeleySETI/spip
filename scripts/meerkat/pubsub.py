@@ -64,6 +64,10 @@ class PubSubThread (threading.Thread):
     self.subs.append ( sa_prefix +".script.active.sbs")
     self.subs.append ( sa_prefix +".script.description")
 
+  # configure a new metadata server 
+  def set metadata_server (self, server):
+    self.metadata_server = server
+
   # configure the pub/sub instance to 
   def set_sub_array (self, sub_array, beam):
     self.script.log(2, "PubSubThread::set_sub_array sub_array="+ str(sub_array) + " beam=" + str(beam))

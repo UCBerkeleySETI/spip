@@ -54,6 +54,7 @@ namespace spip {
 
       void decode_spead (char * buf);
       inline int64_t decode_packet (char * buf, unsigned *payload_size);
+      inline int64_t get_subband (int64_t byte_offset, int nsubband);
       inline int insert_last_packet (char * buf);
 
       void print_packet_header ();

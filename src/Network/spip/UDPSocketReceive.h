@@ -2,6 +2,7 @@
 #ifndef __UDPSocketReceive_h
 #define __UDPSocketReceive_h
 
+#include "config.h"
 #include "spip/UDPSocket.h"
 
 #include <vector>
@@ -13,9 +14,14 @@ namespace spip {
 
     public:
 
+      static bool keep_receiving;
+
       UDPSocketReceive ();
 
       ~UDPSocketReceive ();
+
+      // resize the socket
+      void resize (size_t new_bufsz);
 
       // open the socket
       void open (std::string, int);
@@ -32,14 +38,29 @@ namespace spip {
 
       size_t recv ();
 
+      inline void consume_packet() { have_packet = false; };
+
+      inline bool still_receiving() { return keep_receiving; } ;
+
+      uint64_t process_sleeps ();
+
+      // pointer to the socket buffer, may be reassigned
+      char * buf_ptr;
+
+      // receive a packet from the UDP socket
+      size_t recv_from ();
+
+    protected:
+
+      // flag for whether bufsz contains a packet
+      bool have_packet;
+
     private:
 
       // size of the kernel socket buffer;
       size_t kernel_bufsz;
 
-      // flag for whether bufsz contains a packet
-      char have_packet;
-
+      // if the receiving socket is multicast
       bool multicast;
 
       size_t num_multicast;
@@ -47,6 +68,9 @@ namespace spip {
       std::vector<std::string> groups;
 
       std::vector<struct ip_mreq> mreqs;
+
+      uint64_t nsleeps;
+
   };
 
 }

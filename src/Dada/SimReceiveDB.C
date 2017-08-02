@@ -45,24 +45,27 @@ spip::SimReceiveDB::~SimReceiveDB()
   delete db;
 }
 
-int spip::SimReceiveDB::configure (const char * config)
+int spip::SimReceiveDB::configure (const char * config_str)
 {
-  if (spip::AsciiHeader::header_get (config, "NCHAN", "%u", &nchan) != 1)
-    throw invalid_argument ("NCHAN did not exist in header");
+  // save the config for use on the first open block
+  config.load_from_str (config_str);
 
-  if (spip::AsciiHeader::header_get (config, "NBIT", "%u", &nbit) != 1)
-    throw invalid_argument ("NBIT did not exist in header");
+  if (config.get( "NCHAN", "%u", &nchan) != 1)
+    throw invalid_argument ("NCHAN did not exist in config");
 
-  if (spip::AsciiHeader::header_get (config, "NPOL", "%u", &npol) != 1)
-    throw invalid_argument ("NPOL did not exist in header");
+  if (config.get( "NBIT", "%u", &nbit) != 1)
+    throw invalid_argument ("NBIT did not exist in config");
 
-  if (spip::AsciiHeader::header_get (config, "NDIM", "%u", &ndim) != 1)
-    throw invalid_argument ("NDIM did not exist in header");
+  if (config.get( "NPOL", "%u", &npol) != 1)
+    throw invalid_argument ("NPOL did not exist in config");
 
-  if (spip::AsciiHeader::header_get (config, "TSAMP", "%f", &tsamp) != 1)
-    throw invalid_argument ("TSAMP did not exist in header");
+  if (config.get( "NDIM", "%u", &ndim) != 1)
+    throw invalid_argument ("NDIM did not exist in config");
 
-  if (spip::AsciiHeader::header_get (config, "BW", "%f", &bw) != 1)
+  if (config.get( "TSAMP", "%f", &tsamp) != 1)
+    throw invalid_argument ("TSAMP did not exist in config");
+
+  if (config.get( "BW", "%f", &bw) != 1)
     throw invalid_argument ("BW did not exist in header");
 
   channel_bw = bw / nchan;
@@ -70,17 +73,26 @@ int spip::SimReceiveDB::configure (const char * config)
   bits_per_second = (double) (nchan * npol * ndim * nbit) * (1000000.0f / tsamp);
   bytes_per_second = bits_per_second / 8.0;
 
-  // save the header for use on the first open block
-  header.load_from_str (config);
-
   if (!format)
-    throw runtime_error ("unable for prepare format");
-  format->configure (header, "");
+    throw runtime_error ("unable to configure format");
+  format->configure (config, "");
 
   // now write new params to header
   uint64_t resolution = format->get_resolution();
-  if (header.set("RESOLUTION", "%lu", resolution) < 0)
-    throw invalid_argument ("failed to write RESOLUTION to header");
+  if (config.set("RESOLUTION", "%lu", resolution) < 0)
+    throw invalid_argument ("failed to write RESOLUTION to config");
+
+  const uint64_t data_bufsz = db->get_data_bufsz();
+
+  // generate a buffer full of noise that is twice as large as out block size
+  if (verbose)
+    cerr << "spip::SimReceiveDB::configure generating noise buffer" << endl;
+
+  format->set_noise_buffer_size (2 * data_bufsz);
+  format->generate_noise_buffer (nbit);
+
+  if (verbose)
+    cerr << "spip::SimReceiveDB::configure configured" << endl;
 }
 
 void spip::SimReceiveDB::prepare ()
@@ -126,12 +138,14 @@ void spip::SimReceiveDB::control_thread()
     control_port = 32132;
   }
 
-  cerr << "spip::SimReceiveDB::control_thread creating TCPSocketServer" << endl;
+  if (verbose)
+    cerr << "spip::SimReceiveDB::control_thread creating TCPSocketServer" << endl;
   spip::TCPSocketServer * control_sock = new spip::TCPSocketServer();
 
   // open a listen sock on all interfaces for the control port
-  cerr << "spip::SimReceiveDB::control_thread open socket on port=" 
-       << control_port << endl;
+  if (verbose)
+    cerr << "spip::SimReceiveDB::control_thread open socket on port=" 
+         << control_port << endl;
   control_sock->open ("any", control_port, 1);
 
   int fd = -1;
@@ -144,34 +158,27 @@ void spip::SimReceiveDB::control_thread()
   while (control_cmd != Quit && fd < 0)
   {
     // accept with a 1 second timeout
-#ifdef _DEBUG
-    cerr << "control_thread : ctrl_sock->accept_client(1)" << endl;
-#endif
     fd = control_sock->accept_client (1);
-#ifdef _DEBUG
-    cerr << "control_thread : fd=" << fd << endl;
-#endif
     if (fd >= 0 )
     {
-      if (verbose > 1)
-        cerr << "control_thread : reading data from socket" << endl;
-      ssize_t bytes_read = read (fd, cmds, DEFAULT_HEADER_SIZE);
-
-      if (verbose)
-        cerr << "control_thread: bytes_read=" << bytes_read << endl;
-
+      string received = control_sock->read_client (DADA_DEFAULT_HEADER_SIZE);
+      const char * cmds = received.c_str();
       control_sock->close_client();
       fd = -1;
 
       // now check command in list of header commands
       if (spip::AsciiHeader::header_get (cmds, "COMMAND", "%s", cmd) != 1)
         throw invalid_argument ("COMMAND did not exist in header");
-      //if (verbose)
+      if (verbose)
         cerr << "control_thread: cmd=" << cmd << endl;
       if (strcmp (cmd, "START") == 0)
       {
+        // re-import the config
+        header.clone (config);
+
         // append cmds to header
         header.append_from_str (cmds);
+
         if (header.del ("COMMAND") < 0)
           throw runtime_error ("Could not remove COMMAND from header");
 
@@ -180,19 +187,19 @@ void spip::SimReceiveDB::control_thread()
         open ();
 
         // write header
-        //if (verbose)
+        if (verbose)
           cerr << "control_thread: control_cmd = Start" << endl;
         control_cmd = Start;
       }
       else if (strcmp (cmd, "STOP") == 0)
       {
-        //if (verbose)
+        if (verbose)
           cerr << "control_thread: control_cmd = Stop" << endl;
         control_cmd = Stop;
       }
       else if (strcmp (cmd, "QUIT") == 0)
       {
-        //if (verbose)
+        if (verbose)
           cerr << "control_thread: control_cmd = Quit" << endl;
         control_cmd = Quit;
       }
@@ -311,7 +318,12 @@ void spip::SimReceiveDB::update_stats()
 
 void spip::SimReceiveDB::open ()
 {
+  if (header.get_header_length() == 0)
+    header.clone(config);
+
   format->prepare (header, "");
+
+  cerr << header.raw() << endl;
   open (header.raw());
 }
 
@@ -365,10 +377,6 @@ bool spip::SimReceiveDB::generate (int tobs)
   control_state = Idle;
   keep_generating = true;
 
-  // generate a buffer full of noise that is twice as large as out block size
-  format->set_noise_buffer_size (2 * data_bufsz);
-  format->generate_noise_buffer (nbit);
-
   struct timeval timestamp;
   time_t start_second = 0;
 
@@ -381,6 +389,7 @@ bool spip::SimReceiveDB::generate (int tobs)
       control_state = Active;
       gettimeofday (&timestamp, 0);
       start_second = timestamp.tv_sec + DELTA_START;
+      cerr << "Setting startt second=" << start_second << endl;
     }
 
     // if started

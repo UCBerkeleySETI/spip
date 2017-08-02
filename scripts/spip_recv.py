@@ -145,7 +145,7 @@ class RecvDaemon(Daemon,StreamBased):
       rval = self.system_piped (recv_cmd, log_pipe.sock, int(DL), env)
 
       self.running = False 
-      self.binary_list = []
+      self.binary_list.remove (cmd)
 
       if rval:
         if self.quit_event.isSet():

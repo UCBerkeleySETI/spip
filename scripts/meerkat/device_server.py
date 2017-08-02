@@ -140,10 +140,17 @@ class KATCPServer (DeviceServer):
         unit="",
         default=0)
 
+      self._host_sensors["local_time_synced"] = Sensor.boolean(host+".local_time_synced",
+        description=host+": NTP server synchronisation",
+        unit="",
+        default=0)
+
+      self.add_sensor(self._host_sensors["num_cores"])
       self.add_sensor(self._host_sensors["num_cores"])
       self.add_sensor(self._host_sensors["load1"])
       self.add_sensor(self._host_sensors["load5"])
       self.add_sensor(self._host_sensors["load15"])
+      self.add_sensor(self._host_sensors["local_time_synced"])
 
       cpu_temp_pattern  = re.compile("cpu[0-9]+_temp")
       fan_speed_pattern = re.compile("fan[0-9,a-z]+")
@@ -259,9 +266,21 @@ class KATCPServer (DeviceServer):
 
   @request()
   @return_reply(Float())
-  def request_power(self, req):
-    """Return the standard deviation of the 8-bit power level."""
-    return ("ok", self._beam_sensors["power"].value())
+  def request_beamformer_stddev_polh(self, req):
+    """Return the standard deviation of the 8-bit power level of pol H."""
+    return ("ok", self._beam_sensors["power_polh"].value())
+
+  @request()
+  @return_reply(Float())
+  def request_beamformer_stddev_polv(self, req):
+    """Return the standard deviation of the 8-bit power level of pol V."""
+    return ("ok", self._beam_sensors["power_polv"].value())
+
+  @request()
+  @return_reply(Float())
+  def request_local_time_synced (self, req):
+    """Return the sychronisation with NTP time"""
+    return ("ok", self._beam_sensors["local_time_synced"].value())
 
   @request(Str(), Float())
   @return_reply(Str())
@@ -330,9 +349,7 @@ class KATCPServer (DeviceServer):
     """Cease data processing with target_name."""
     self.script.log (1, "request_target_stop(" + data_product_id+")")
 
-    self.script.beam_config["lock"].acquire()
-    self.script.beam_config["SOURCE"] = ""
-    self.script.beam_config["lock"].release()
+    self.script.reset_beam_config (self.script.beam_config)
 
     host = self.script.tcs_host
     port = self.script.tcs_port
@@ -396,7 +413,7 @@ class KATCPServer (DeviceServer):
       if data_product_id == self._data_product["id"] and \
           self._data_product['antennas'] == msg.arguments[1] and \
           self._data_product['n_channels'] == msg.arguments[2] and \
-          self._data_product['cbf_source'] == msg.arguments[3]:
+          self._data_product['cbf_source'] == str(msg.arguments[3]):
         response = "configuration for " + str(data_product_id) + " matched previous"
         self.script.log (1, "configure: " + response)
         return ("ok", response)
@@ -416,13 +433,9 @@ class KATCPServer (DeviceServer):
           self.script.log (1, "configure: could not match subarray from " + data_product_id)
           return ("fail", "could not data product to sub array")
 
-        self.script.log (1, "configure: restarting pubsub for subarray " + str(the_sub_array))
-        self.script.pubsub.set_sub_array (the_sub_array, self.script.beam_name)
-        self.script.pubsub.restart()
-
         antennas = msg.arguments[1]
         n_channels = msg.arguments[2]
-        cbf_source = msg.arguments[3]
+        streams = json.loads(msg.arguments[3])
 
         # check if the number of existing + new beams > available
         (cfreq, bwd, nchan) = self.script.cfg["SUBBAND_CONFIG_0"].split(":")
@@ -435,28 +448,43 @@ class KATCPServer (DeviceServer):
         self._data_product['id'] = data_product_id
         self._data_product['antennas'] = antennas
         self._data_product['n_channels'] = n_channels
-        self._data_product['cbf_source'] = cbf_source
+        self._data_product['streams'] = str(streams)
 
-        # parse the CBF_SOURCE to determine multicast groups
-        (addr, port) = cbf_source.split(":")
-        (mcast, count) = addr.split("+")
-
-        self.script.log (2, "configure: parsed " + mcast + "+" + count + ":" + port)
-        if not count == "1":
-          response = "CBF source did not match ip_address+1:port"
+        # determine the CAM metadata server and update pubsub
+        if 'cam.http' in streams.keys() and 'camdata' in streams['cam.http']:
+          self.script.pubsub.set_metadata_server (streams['cam.http']['camdata'])
+        else:
+          response = "Could not extract streams[cam.http][camdata]"
           self.script.log (-1, "configure: " + response)
           return ("fail", response)
+        
+        # restart the pubsub service
+        self.script.log (1, "configure: restarting pubsub for subarray " + str(the_sub_array))
+        self.script.pubsub.set_sub_array (the_sub_array, self.script.beam_name)
+        self.script.pubsub.restart()
 
-        mcasts = ["",""]
-        ports = [0, 0]
+        # determine the X and Y tied array channelised voltage streams
+        key = 'cbf.tied_array_channelised_voltage'
+        if key in streams.keys():
+          stream = 'i0.tied-array-channelised-voltage.0x'
+          if stream in streams[key].keys():
+            (mcast, port) = self.parseStreamAddress (streams[key][stream])
+            mcasts[0] = mcast
+            ports[0] = int(port)
+          else:
+            response = "Could not extract streams["+key+"]["+stream+"]"
+            self.script.log (-1, "configure: " + response)
+            return ("fail", response)
 
-        quartets = mcast.split(".")
-        mcasts[0] = ".".join(quartets)
-        quartets[3] = str(int(quartets[3])+1)
-        mcasts[1] = ".".join(quartets)
-
-        ports[0] = int(port)
-        ports[1] = int(port)
+          stream = 'i0.tied-array-channelised-voltage.0y'
+          if stream in streams[key].keys():
+            (mcast, port) = self.parseStreamAddress (streams[key][stream])
+            mcasts[1] = mcast
+            ports[1] = int(port)
+          else:
+            response = "Could not extract streams["+key+"]["+stream+"]"
+            self.script.log (-1, "configure: " + response)
+            return ("fail", response)
 
         self.script.log (1, "configure: connecting to RECV instance to update configuration")
 
@@ -501,6 +529,16 @@ class KATCPServer (DeviceServer):
       response = "expected 0, 1 or 4 arguments"
       self.script.log (-1, "configure: " + response)
       return ("fail", response)
+
+  # parse address of from spead://AAA.BBB.CCC.DDD+NN:PORT into 
+  def parseStreamAddress (self, stream)
+
+    self.script.log (2, "parseStreamAddress: parsing " + stream)
+    (prefix, spead_address) = stream.split("//")
+    (mcast, port) = spead_address.split(":")
+    self.script.log (2, "parseStreamAddress: parsed " + mcast + ":" + port)
+
+    return (mcast, port)
 
   @return_reply(Str())
   def request_deconfigure(self, req, msg):
@@ -584,7 +622,7 @@ class KATCPServer (DeviceServer):
 
   @request(Float())
   @return_reply(Str())
-  def request_dm(self, req, dm):
+  def request_dispersion_measure (self, req, dm):
     """Set the value of dispersion measure to be removed"""
     if dm < 0 or dm > 2000:
       return ("fail", "dm not within range 0 - 2000")
@@ -593,7 +631,7 @@ class KATCPServer (DeviceServer):
 
   @request(Float())
   @return_reply(Str())
-  def request_cal_freq(self, req, cal_freq):
+  def request_calibration_freq(self, req, cal_freq):
     """Set the value of noise diode firing frequecny in Hz."""
     if cal_freq < 0 or cal_freq > 1000:
       return ("fail", "CAL freq not within range 0 - 1000")

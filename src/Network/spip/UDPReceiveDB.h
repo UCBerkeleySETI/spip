@@ -76,6 +76,8 @@ namespace spip {
 
       void update_stats();
 
+      void set_control_cmd (ControlCmd cmd);
+
       std::string data_host;
 
       std::string data_mcast;

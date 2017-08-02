@@ -399,7 +399,7 @@ class KATCPDaemon(Daemon):
   # reset the sepcified beam configuration
   def reset_beam_config (self, bcfg):
     bcfg["lock"].acquire()
-    bcfg["SOURCE"] = "J0835-4510"
+    bcfg["SOURCE"] = "None"
     bcfg["RA"] = "None"
     bcfg["DEC"] = "None"
     bcfg["PID"] = "None"
@@ -418,7 +418,6 @@ class KATCPDaemon(Daemon):
     bcfg["PROPOSAL_ID"] = "None"
     bcfg["DESCRIPTION"] = "None"
     bcfg["lock"].release()
-
 
   #############################################################################
   # configure fixed sensors (for lifetime of script)
@@ -1085,8 +1084,6 @@ class KATCPServer (DeviceServer):
     
       # set the pulsar name, this should include a check if the pulsar is in the catalog
       self.script.beam_configs[beam_id]["lock"].acquire()
-      if self.script.beam_configs[beam_id]["MODE"] == "CAL":
-        target_name = target_name + "_R"
       self.script.beam_configs[beam_id]["SOURCE"] = target_name
       self.script.beam_configs[beam_id]["lock"].release()
 
@@ -1119,10 +1116,10 @@ class KATCPServer (DeviceServer):
       if result == "fail":
         return (result, message)
 
-      self.script.beam_configs[beam_id]["lock"].acquire()
-      self.script.beam_configs[beam_id]["SOURCE"] = ""
-      self.script.beam_configs[beam_id]["lock"].release()
+      # reset the beam configuration now that the observation has ended
+      self.script.reset_beam_config (self.script.beam_configs[beam_id])
 
+      # issue stop command
       host = self.script.tcs_hosts[beam_id]
       port = self.script.tcs_ports[beam_id]
       sock = sockets.openSocket (DL, host, int(port), 1)
@@ -1410,10 +1407,27 @@ class KATCPServer (DeviceServer):
         if ibeam < len(self.script.beams) and self.script.beams[ibeam] == beam_id:
           return ("ok", "")
       return ("fail", "data product " + data_product_id + " did not contain beam " + beam_id)
-
     
     # test whether the specified target exists in the pulsar catalog
     def test_pulsar_valid (self, target):
+
+      self.script.log (2, "test_pulsar_valid: target='["+ target +"]")
+        
+      # remove the _R suffix
+      if target.endswith('_R'):
+        target = target[:-2]
+
+      # check if the target matches the fluxcal.on file
+      cmd = "grep " + target + " " + self.script.cfg["CONFIG_DIR"] + "/fluxcal.on | wc -l"
+      rval, lines = self.script.system (cmd, 3)
+      if rval == 0 and len(lines) == 1 and int(lines[0]) > 0:
+        return ("ok", "")
+
+      # check if the target matches the fluxcal.off file
+      cmd = "grep " + target + " " + self.script.cfg["CONFIG_DIR"] + "/fluxcal.off | wc -l"
+      rval, lines = self.script.system (cmd, 3)
+      if rval == 0 and len(lines) == 1 and int(lines[0]) > 0:
+        return ("ok", "")
 
       self.script.log (2, "test_pulsar_valid: get_psrcat_param (" + target + ", jname)")
       (reply, message) = self.get_psrcat_param (target, "jname")
@@ -1427,13 +1441,18 @@ class KATCPServer (DeviceServer):
         return ("fail", "pulsar " + target + " did not exist in catalog")
 
     def get_psrcat_param (self, target, param):
+
+      # remove the _R suffix
+      if target.endswith('_R'):
+        target = target[:-2]
+
       cmd = "psrcat -all " + target + " -c " + param + " -nohead -o short"
       rval, lines = self.script.system (cmd, 3)
       if rval != 0 or len(lines) <= 0:
         return ("fail", "could not use psrcat")
 
       if lines[0].startswith("WARNING"):
-        return ("fail", "pulsar " + target_name + " did not exist in catalog")
+        return ("fail", "pulsar " + target + " did not exist in catalog")
 
       parts = lines[0].split()
       if len(parts) == 2 and parts[0] == "1":

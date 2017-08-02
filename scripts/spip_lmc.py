@@ -267,6 +267,10 @@ class LMCDaemon (Daemon,HostBased):
         rval, loads = lmc_mon.getLoads (DL)
         self.log(3, "main: " + str(loads))
 
+        self.log(3, "main: getNTPSynced()")
+        rval, ntp_sync = lmc_mon.getNTPSynced(DL)
+        self.log(3, "main: " + str(ntp_sync))
+
         self.log(3, "main: getSMRBCapacity(" + str(client_streams)+ ")")
         rval, smrbs = lmc_mon.getSMRBCapacity (client_streams, self.quit_event, DL)
         self.log(3, "main: " + str(smrbs))
@@ -374,6 +378,8 @@ class LMCDaemon (Daemon,HostBased):
                     response += "<used units='MB'>" + disks[disk]["used"] + "</used>"
                     response += "<available units='MB'>" + disks[disk]["available"] + "</available>"
                     response += "</disk>"
+
+                  response += "<local_time_synced>"+str(ntp_sync)+"</local_time_synced>"
 
                   for stream in smrbs.keys():
                     for key in smrbs[stream].keys():

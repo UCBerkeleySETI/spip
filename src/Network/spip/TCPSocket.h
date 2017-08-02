@@ -21,6 +21,10 @@ namespace spip {
 
       void close_me ();
 
+      std::string read_bytes (size_t bytes_to_read);
+
+      ssize_t write_bytes (char * buffer, size_t bytes_to_write);
+
     protected:
 
       struct sockaddr_in server;

@@ -118,9 +118,10 @@ class ProcDaemon (Daemon, StreamBased):
       while (not self.quit_event.isSet()):
 
         cmd = "dada_header -k " + db_key_in
-        self.binary_list.append (cmd)
         self.log(0, cmd)
+        self.binary_list.append (cmd)
         rval, lines = self.system (cmd)
+        self.binary_list.remove (cmd)
 
         # if the command returned ok and we have a header
         if rval != 0:
@@ -223,8 +224,8 @@ class ProcDaemon (Daemon, StreamBased):
 
           # create processing threads
           self.log (1, "creating processing threads")      
-          fold_cmd = "numactl -C " + cpu_core + " -- " + fold_cmd
-          fold_thread = procThread (fold_cmd, fold_dir, fold_log_pipe.sock, 1)
+          cmd = "numactl -C " + cpu_core + " -- " + fold_cmd
+          fold_thread = procThread (cmd, fold_dir, fold_log_pipe.sock, 1)
 
           #trans_thread = procThread (trans_cmd, self.log_sock.sock, 2)
           #search_thread = procThread (search_cmd, self.log_sock.sock, 2)
@@ -239,6 +240,10 @@ class ProcDaemon (Daemon, StreamBased):
           self.log (2, "waiting for fold thread to terminate")
           rval = fold_thread.join() 
           self.log (2, "fold thread joined")
+
+          # remove the binary command from the list
+          self.binary_list.remove (fold_cmd)
+
           if rval:
             self.log (-2, "fold thread failed")
             quit_event.set()

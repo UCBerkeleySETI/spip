@@ -23,6 +23,9 @@ spip::UDPSocketReceive::UDPSocketReceive ()
   have_packet = 0;
   kernel_bufsz = 131071;      // general default buffer size for linux kernels
   multicast = false;
+
+  // TODO check that this doesn't need to be reassigned
+  buf_ptr = buf;
 }
 
 spip::UDPSocketReceive::~UDPSocketReceive ()
@@ -32,6 +35,13 @@ spip::UDPSocketReceive::~UDPSocketReceive ()
   if (buf)
     free (buf);
   buf = 0;
+}
+
+// ensure buf_ptr points to the buffer
+void spip::UDPSocketReceive::resize (size_t new_bufsz)
+{
+  spip::Socket::resize (new_bufsz);
+  buf_ptr = buf;
 }
 
 void spip::UDPSocketReceive::open (string ip_address, int port)
@@ -55,12 +65,18 @@ void spip::UDPSocketReceive::open (string ip_address, int port)
   {
     throw runtime_error ("could not bind to UDP socket");
   }
+  set_nonblock();
 }
 
 void spip::UDPSocketReceive::open_multicast (string ip_address, string group, int port)
 {
   // open the UDP socket on INADDR_ANY
   open ("any", port);
+
+#ifdef _DEBUG
+   cerr << "spip::UDPSocketReceive::open_multicast ip_address=" << ip_address 
+        << " group=" << group << " port=" << port << endl;
+#endif
 
   // if we have the XXX.XXX.XXX.XXX+Y notation, then open a sequence of multicast groups
   std::string delimiter = "+";
@@ -69,7 +85,6 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
   // if no + notation
   if (pos == std::string::npos)
   {
-
     num_multicast = 1;
     groups.resize(num_multicast);
     mreqs.resize(num_multicast);
@@ -83,6 +98,9 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
     std::string plus = group.substr(pos + delimiter.length());
     num_multicast = std::stoi (plus) + 1;
 
+#ifdef _DEBUG
+   cerr << "spip::UDPSocketReceive::open_multicast num_multicast=" << num_multicast << endl;
+#endif
     // build multicast addresses
     groups.resize(num_multicast);
     mreqs.resize(num_multicast);
@@ -111,10 +129,13 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
     // use setsockopt() to request that the kernel join a multicast group
     if (setsockopt(fd, IPPROTO_IP,IP_ADD_MEMBERSHIP,&(mreqs[i]),sizeof(mreqs[i])) < 0)
     { 
+      int perrno = errno;
+      cerr << "Error setsockopt: " << strerror(perrno) << endl;
       throw runtime_error ("could not subscribe to multicast address");
     }
   }
   multicast = true;
+  set_nonblock();
 }
 
 void spip::UDPSocketReceive::leave_multicast ()
@@ -215,6 +236,42 @@ size_t spip::UDPSocketReceive::recv ()
   }
 
   return received;
+}
+
+size_t spip::UDPSocketReceive::recv_from()
+{
+  size_t got = 0;
+  while (!have_packet && keep_receiving)
+  {
+    got = (int) recvfrom (fd, buf, bufsz, 0, NULL, NULL);
+    if (got > 32)
+    {
+      have_packet = true;
+    }
+    else if (got == -1)
+    {
+      nsleeps++;
+      if (nsleeps > 1000)
+      {
+        nsleeps -= 1000;
+      }
+    }
+    else
+    {
+      cerr << "spip::UDPSocketReceive error expected " << bufsz << " B, "
+           << "received " << got << " B" <<  endl;
+      have_packet = true;
+      got = 0;
+    }
+  }
+  return got;
+}
+
+uint64_t spip::UDPSocketReceive::process_sleeps ()
+{
+  uint64_t accumulated_sleeps = nsleeps;
+  nsleeps = 0;
+  return accumulated_sleeps;
 }
 
 
