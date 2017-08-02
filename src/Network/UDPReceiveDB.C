@@ -213,29 +213,18 @@ void spip::UDPReceiveDB::control_thread()
   while (control_cmd != Quit && fd < 0)
   {
     // accept with a 1 second timeout
-#ifdef _DEBUG
-    cerr << "control_thread : ctrl_sock->accept_client(1)" << endl;
-#endif
     fd = control_sock->accept_client (1);
-#ifdef _DEBUG
-    cerr << "control_thread : fd=" << fd << endl;
-#endif
     if (fd >= 0 )
     {
-      if (verbose > 1)
-        cerr << "control_thread : reading data from socket" << endl;
-      ssize_t bytes_read = read (fd, cmds, DEFAULT_HEADER_SIZE);
-
-      if (verbose)
-        cerr << "control_thread: bytes_read=" << bytes_read << endl;
-
+      string received = control_sock->read_client (DADA_DEFAULT_HEADER_SIZE);
+      const char * cmds = received.c_str();
       control_sock->close_client();
       fd = -1;
 
       // now check command in list of header commands
       if (spip::AsciiHeader::header_get (cmds, "COMMAND", "%s", cmd) != 1)
         throw invalid_argument ("COMMAND did not exist in header");
-      //if (verbose)
+      if (verbose)
         cerr << "control_thread: cmd=" << cmd << endl;
       if (strcmp (cmd, "START") == 0)
       {
@@ -249,19 +238,19 @@ void spip::UDPReceiveDB::control_thread()
         open ();
 
         // write header
-        //if (verbose)
+        if (verbose)
           cerr << "control_thread: control_cmd = Start" << endl;
         control_cmd = Start;
       }
       else if (strcmp (cmd, "STOP") == 0)
       {
-        //if (verbose)
+        if (verbose)
           cerr << "control_thread: control_cmd = Stop" << endl;
         control_cmd = Stop;
       }
       else if (strcmp (cmd, "QUIT") == 0)
       {
-        //if (verbose)
+        if (verbose)
           cerr << "control_thread: control_cmd = Quit" << endl;
         control_cmd = Quit;
       }

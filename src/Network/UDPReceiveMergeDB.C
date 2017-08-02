@@ -221,13 +221,8 @@ void spip::UDPReceiveMergeDB::control_thread()
 #endif
     if (fd >= 0 )
     {
-      if (verbose > 1)
-        cerr << "control_thread : reading data from socket" << endl;
-      ssize_t bytes_read = read (fd, cmds, DADA_DEFAULT_HEADER_SIZE);
-
-      if (verbose > 1)
-        cerr << "control_thread: bytes_read=" << bytes_read << endl;
-
+      string received = control_sock->read_client (DADA_DEFAULT_HEADER_SIZE);
+      const char * cmds = received.c_str();
       control_sock->close_client();
       fd = -1;
 
