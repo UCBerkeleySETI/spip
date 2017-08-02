@@ -32,7 +32,7 @@ class RecvSimDaemon(Daemon,StreamBased):
     db_prefix = self.cfg["DATA_BLOCK_PREFIX"]
     num_stream = self.cfg["NUM_STREAM"]
     self.db_key = SMRBDaemon.getDBKey (db_prefix, self.id, num_stream, db_id)
-    self.log(0, "db_key="+self.db_key)
+    self.log(2, "main: db_key="+self.db_key)
 
     # wait up to 10s for the SMRB to be created
     smrb_wait = 10
@@ -61,7 +61,7 @@ class RecvSimDaemon(Daemon,StreamBased):
 
       # write this config to file
       local_config_file = "/tmp/spip_stream_" + str(self.id) + ".cfg"
-      self.log(1, "main: creating " + local_config_file)
+      self.log(2, "main: creating " + local_config_file)
       Config.writeDictToCFGFile (local_config, local_config_file)
 
       env = self.getEnvironment()
@@ -83,9 +83,13 @@ class RecvSimDaemon(Daemon,StreamBased):
       self.log(3, "main: sleep(1)")
       sleep(1)
      
+      self.log(1, "START " + cmd)
+
       # this should be a persistent / blocking command 
       rval = self.system_piped (cmd, log_pipe.sock)
       self.binary_list.remove (cmd)
+
+      self.log(1, "END   " + cmd)
 
       if rval:
         self.log (-2, cmd + " failed with return value " + str(rval))
