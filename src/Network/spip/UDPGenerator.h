@@ -46,6 +46,8 @@ namespace spip {
 
       std::string data_host;
 
+      std::string local_host;
+
       int data_port;
 
       unsigned nchan;

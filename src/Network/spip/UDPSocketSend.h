@@ -17,7 +17,7 @@ namespace spip {
       ~UDPSocketSend ();
 
       // open the socket
-      void open (std::string, int);
+      void open (std::string, int, std::string);
 
       // send the contents of buf (bufsz bytes)
       inline size_t send () { sendto(fd, buf, bufsz, 0, sock_addr, sock_size); };

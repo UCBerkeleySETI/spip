@@ -70,9 +70,14 @@ int spip::UDPGenerator::configure (const char * config)
   data_host = string (buffer);
   if (header.get ("DATA_PORT", "%d", &data_port) != 1)
     throw invalid_argument ("DATA_PORT did not exist in config");
+  if (header.get ("LOCAL_HOST", "%s", buffer) == 1)
+    local_host = string (buffer);
+  else
+    local_host = string("any");
   free (buffer);
 
-  cerr << "UDP dest " << data_host << ":" << data_port << endl;
+
+  cerr << "UDP dest " << data_host << ":" << data_port << " <- " << local_host << endl;
 
   bits_per_second  = (nchan * npol * ndim * nbit * 1000000) / tsamp;
   bytes_per_second = bits_per_second / 8;
@@ -113,7 +118,7 @@ void spip::UDPGenerator::prepare ()
 {
   // create and open a UDP sending socket
   sock = new UDPSocketSend();
-  sock->open (data_host, data_port);
+  sock->open (data_host, data_port, local_host);
 
   char * buffer = (char *) malloc (128);
   if (header.get ("UTC_START", "%s", buffer) == -1)
