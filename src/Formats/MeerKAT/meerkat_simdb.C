@@ -48,8 +48,6 @@ int main(int argc, char *argv[])
   opterr = 0;
   int c;
 
-  cerr << "Parsing command line arguments" << endl;
-
   while ((c = getopt(argc, argv, "b:c:hk:t:v")) != EOF) 
   {
     switch(c) 
@@ -129,7 +127,8 @@ int main(int argc, char *argv[])
   if (control_port > 0)
   {
     // open a listening socket for observation parameters
-    cerr << "meerkat_dbsim: start_control_thread (" << control_port << ")" << endl;
+    if (verbose)
+      cerr << "meerkat_dbsim: start_control_thread (" << control_port << ")" << endl;
     simdb->start_control_thread (control_port);
 
     bool keep_receiving = true;
