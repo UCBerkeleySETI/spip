@@ -2,16 +2,20 @@
 #ifndef __UDPReceiver_h
 #define __UDPReceiver_h
 
+#include "config.h"
+
 #include "spip/AsciiHeader.h"
-#include "spip/UDPSocketReceive.h"
 #include "spip/UDPFormat.h"
 #include "spip/UDPStats.h"
 
-#include <cstdlib>
-
-#ifdef  HAVE_VMA
-#include <mellanox/vma_extra.h>
+#ifdef HAVE_VMA
+#include "spip/UDPSocketReceiveVMA.h"
+#else
+#include "spip/UDPSocketReceive.h"
 #endif
+
+
+#include <cstdlib>
 
 namespace spip {
 
@@ -40,7 +44,11 @@ namespace spip {
 
     protected:
 
+#ifdef HAVE_VMA
+      UDPSocketReceiveVMA * sock;
+#else
       UDPSocketReceive * sock;
+#endif
 
       UDPFormat * format;
 
@@ -53,14 +61,6 @@ namespace spip {
       int data_port;
 
       AsciiHeader header;
-
-#ifdef HAVE_VMA
-      struct vma_api_t *vma_api;
-
-      struct vma_packets_t* pkts;
-#else
-      char vma_api;
-#endif
 
       unsigned nchan;
 

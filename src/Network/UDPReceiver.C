@@ -13,7 +13,6 @@
 #include "sys/time.h"
 
 #include <unistd.h>
-
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
@@ -27,15 +26,6 @@ spip::UDPReceiver::UDPReceiver()
   have_utc_start = false;
   format = NULL;
   verbose = 1;
-
-#ifdef HAVE_VMA
-  vma_api = vma_get_api();
-  if (!vma_api)
-    cerr << "spip::UDPReceiver::UDPReceiver VMA support compiled, but VMA not available" << endl;
-  pkts = NULL;
-#else
-  vma_api = 0;
-#endif
 }
 
 spip::UDPReceiver::~UDPReceiver()
@@ -100,7 +90,11 @@ void spip::UDPReceiver::prepare ()
     cerr << "spip::UDPReceiver::prepare()" << endl;
 
   // create and open a UDP receiving socket
+#ifdef HAVE_VMA
+  sock = new UDPSocketReceiveVMA ();
+#else
   sock = new UDPSocketReceive ();
+#endif
 
   if (data_mcast.size() > 0)
   {
@@ -114,12 +108,8 @@ void spip::UDPReceiver::prepare ()
     sock->open (data_host, data_port);
   }
   
-  if (vma_api)
-    sock->set_block ();
-  else
-    sock->set_nonblock ();
-
-  size_t sock_size = (format->get_header_size() + format->get_data_size()) * 2;
+  size_t packet_size = format->get_header_size() + format->get_data_size();
+  size_t sock_size = packet_size * 2;
   if (verbose)
     cerr << "spip::UDPReceiver::prepare sock->resize(" << sock_size << ")" << endl;
   sock->resize (sock_size);
@@ -162,20 +152,11 @@ void spip::UDPReceiver::receive ()
   if (verbose)
     cerr << "spip::UDPReceiver::receive()" << endl;
 
-  int fd = sock->get_fd();
-  char * buf = sock->get_buf();
-  char * buf_ptr = buf;
-  size_t sock_bufsz = sock->get_bufsz();
-  if (verbose)
-    cerr << "spip::UDPReceiver::receive sock_bufsz=" << sock_bufsz << endl;
-
-  bool have_packet = false;
   int got;
   uint64_t nsleeps = 0;
 
-  struct sockaddr_in client_addr;
-  struct sockaddr * addr = (struct sockaddr *) &client_addr;
-  socklen_t addr_size = sizeof(struct sockaddr);
+  // expected size of a UDP packet
+  size_t packet_size = format->get_header_size() + format->get_data_size();
 
   // virtual block
   size_t data_bufsz = 32768l * nchan * ndim * npol;
@@ -203,85 +184,21 @@ void spip::UDPReceiver::receive ()
   int64_t byte_offset;
   unsigned bytes_received;
 
-#ifdef HAVE_VMA
-  int flags;
-#endif
-
   if (verbose)
     cerr << "spip::UDPReceiver::receive starting main loop" << endl;
 
-  while (keep_receiving)
+  while (sock->still_receiving())
   {
-    if (vma_api)
+    // get a packet from the socket
+    got = sock->recv_from();
+
+    // received a bad packet, brutal exit
+    if (got != packet_size)
     {
-#ifdef HAVE_VMA
-      if (pkts)
-      {
-        vma_api->free_packets(fd, pkts->pkts, pkts->n_packet_num);
-        pkts = NULL;
-      }
-      while (!have_packet && keep_receiving)
-      {
-        flags = 0;
-        got = (int) vma_api->recvfrom_zcopy(fd, buf, sock_bufsz, &flags, addr, &addr_size);
-        if (got  > 32)
-        {
-          if (flags == MSG_VMA_ZCOPY)
-          {
-            pkts = (vma_packets_t*) buf;
-            if (pkts->n_packet_num == 1)
-            {
-              buf_ptr = (char *) pkts->pkts[0].iov[0].iov_base;
-              int * ptr_val = (int *) buf_ptr;
-              if ((*ptr_val) != 1)
-                have_packet = true;
-            }
-          }
-          else
-          {
-            have_packet = true;
-          }
-        }
-        // since we are blocking on UDP socket
-        else if (got == -1)
-        {
-          keep_receiving = false;
-        }
-        else
-        {
-          keep_receiving = false;
-        }
-      }
-#endif
+      cerr << "Received UDP packet of " << got << " bytes, expected " << packet_size << endl;
+      spip::UDPSocketReceive::keep_receiving = false;
     }
     else
-    {
-      while (!have_packet && keep_receiving)
-      {
-        got = (int) recvfrom (fd, buf, sock_bufsz, 0, addr, &addr_size);
-        if (got > 32)
-        {
-          have_packet = true;
-        }
-        else if (got == -1)
-        {
-          nsleeps++;
-          if (nsleeps > 1000)
-          {
-            stats->sleeps(1000);
-            nsleeps -= 1000;
-          }
-        }
-        else
-        {
-          cerr << "spip::UDPReceiver::receive error expected " << sock_bufsz
-               << " B, received " << got << " B" <<  endl;
-          keep_receiving = false;
-        }
-      }
-    }
-
-    if (have_packet)
     {
       if (need_next_block)
       {
@@ -308,10 +225,14 @@ void spip::UDPReceiver::receive ()
         }
         else
           bytes_this_buf = 0;
+
+        // update stats for any sleeps
+        nsleeps = sock->process_sleeps();
+        stats->sleeps(nsleeps);
       }
 
       // decode the header so that the format knows what to do with the packet
-      byte_offset = format->decode_packet (buf_ptr, &bytes_received);
+      byte_offset = format->decode_packet (sock->buf_ptr, &bytes_received);
 
       // if we do not yet have a UTC start, get it from the format
       if (!have_utc_start)
@@ -327,19 +248,19 @@ void spip::UDPReceiver::receive ()
         stats->increment_bytes (bytes_received);
         format->insert_last_packet (block + (byte_offset - curr_byte_offset));
         bytes_this_buf += bytes_received;
-        have_packet = false;
+        sock->consume_packet();
       }
       else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
       {
         format->insert_last_packet (overflow + (byte_offset - next_byte_offset));
         overflow_lastbyte = std::max((byte_offset - next_byte_offset) + bytes_received, overflow_lastbyte);
         overflowed_bytes += bytes_received;
-        have_packet = false;
+        sock->consume_packet();
       }
+      // ignore
       else if (byte_offset < curr_byte_offset)
       {
-        // ignore
-        have_packet = false;
+        sock->consume_packet();
       }
       else
       {
@@ -347,7 +268,6 @@ void spip::UDPReceiver::receive ()
         cerr << "ELSE byte_offset=" << byte_offset << " [" << curr_byte_offset <<" - " << next_byte_offset << " - " << overflow_maxbyte << "] bytes_received=" << bytes_received << " bytes_this_buf=" << bytes_this_buf << endl; 
 #endif
         need_next_block = true;
-        have_packet = true;
       }
 
       if (bytes_this_buf >= data_bufsz || need_next_block)
@@ -361,7 +281,7 @@ void spip::UDPReceiver::receive ()
 
 void spip::UDPReceiver::stop_receiving ()
 {
-  keep_receiving = false;
+  //keep_receiving = false;
   if (format)
     format->conclude();
 }
