@@ -346,8 +346,6 @@ void spip::UDPReceiveMergeDB::close ()
 
 void spip::UDPReceiveMergeDB::start_threads (int c1, int c2)
 {
-  spip::UDPSocketReceive::keep_receiving = true;
-
   // cpu cores on which to bind each recv thread
   cores[0] = c1;
   cores[1] = c2;
