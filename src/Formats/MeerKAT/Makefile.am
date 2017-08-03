@@ -16,7 +16,10 @@ AM_CXXFLAGS = -I. \
 	-I$(top_builddir)/src/Util
 
 LDADD = libmeerkat.la \
-	$(top_builddir)/src/libspip.la -lpthread 
+  $(top_builddir)/src/Network/libspipnet.la \
+  $(top_builddir)/src/Util/libspiputil.la \
+  $(top_builddir)/src/libspip.la \
+  -lpthread
 
 if HAVE_PSRDADA
 
