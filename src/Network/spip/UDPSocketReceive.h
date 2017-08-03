@@ -14,6 +14,7 @@ namespace spip {
 
     public:
 
+      //! Global flag to cease receiving
       static bool keep_receiving;
 
       UDPSocketReceive ();
@@ -24,10 +25,10 @@ namespace spip {
       void resize (size_t new_bufsz);
 
       // open the socket
-      void open (std::string, int);
+      virtual void open (std::string, int);
 
       // open the socket and bind to a multicast group
-      void open_multicast (std::string, std::string, int port);
+      virtual void open_multicast (std::string, std::string, int port);
 
       // leave a multicast group on socket
       void leave_multicast ();
@@ -54,6 +55,8 @@ namespace spip {
 
       // flag for whether bufsz contains a packet
       bool have_packet;
+
+      size_t pkt_size;
 
     private:
 

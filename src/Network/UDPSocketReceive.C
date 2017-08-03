@@ -18,6 +18,9 @@
 
 using namespace std;
 
+//! Global flag for receiving function
+bool spip::UDPSocketReceive::keep_receiving = true;
+
 spip::UDPSocketReceive::UDPSocketReceive ()
 {
   have_packet = 0;
@@ -240,15 +243,14 @@ size_t spip::UDPSocketReceive::recv ()
 
 size_t spip::UDPSocketReceive::recv_from()
 {
-  size_t got = 0;
   while (!have_packet && keep_receiving)
   {
-    got = (int) recvfrom (fd, buf, bufsz, 0, NULL, NULL);
-    if (got > 32)
+    pkt_size = (int) recvfrom (fd, buf, bufsz, 0, NULL, NULL);
+    if (pkt_size > 32)
     {
       have_packet = true;
     }
-    else if (got == -1)
+    else if (pkt_size == -1)
     {
       nsleeps++;
       if (nsleeps > 1000)
@@ -259,12 +261,12 @@ size_t spip::UDPSocketReceive::recv_from()
     else
     {
       cerr << "spip::UDPSocketReceive error expected " << bufsz << " B, "
-           << "received " << got << " B" <<  endl;
+           << "received " << pkt_size << " B" <<  endl;
       have_packet = true;
-      got = 0;
+      pkt_size = 0;
     }
   }
-  return got;
+  return pkt_size;
 }
 
 uint64_t spip::UDPSocketReceive::process_sleeps ()
