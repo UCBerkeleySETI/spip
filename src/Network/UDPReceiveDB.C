@@ -421,7 +421,6 @@ bool spip::UDPReceiveDB::receive ()
   cerr << "spip::UDPReceiveDB::receive ()" << endl;
 #endif
 
-  keep_receiving = true;
   prev.tv_sec = 0;
   prev.tv_usec = 0;
 
@@ -473,7 +472,6 @@ bool spip::UDPReceiveDB::receive ()
 #endif
 
   control_state = Idle;
-  spip::UDPSocketReceive::keep_receiving = true;
 
   while (sock->still_receiving())
   {
@@ -507,7 +505,7 @@ bool spip::UDPReceiveDB::receive ()
           if (bytes_this_buf == 0 && curr_byte_offset > 0)
           {
             cerr << "spip::UDPReceiveDB::receive received 0 packets this buf" << endl;
-            keep_receiving = false;
+            spip::UDPSocketReceive::keep_receiving = false;
           }
 
           // update absolute limits
