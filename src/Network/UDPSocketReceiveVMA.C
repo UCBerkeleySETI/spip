@@ -21,7 +21,7 @@ using namespace std;
 spip::UDPSocketReceiveVMA::UDPSocketReceiveVMA ()
 {
   vma_api = vma_get_api();
-  pkt = NULL;
+  pkts = NULL;
   if (!vma_api)
   {
     cerr << "WARNING: VMA support compiled, but VMA not available" << endl;
@@ -42,10 +42,10 @@ void spip::UDPSocketReceiveVMA::open (string ip_address, int port)
   spip::UDPSocketReceive::open (ip_address, port);
 
   // VMA sockets are non blocking
-  set_nonblock ();
+  set_block ();
 }
 
-void spip::UDPSocketReceive::open_multicast (string ip_address, string group, int port)
+void spip::UDPSocketReceiveVMA::open_multicast (string ip_address, string group, int port)
 {
 #ifdef _DEBUG
   cerr << "spip::UDPSocketReceiveVMA::open_multicast(" << ip_address << "," << group << ", " << port << ")" << endl;
@@ -54,8 +54,8 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
   // open the socket FD
   spip::UDPSocketReceive::open_multicast (ip_address, group, port);
 
-  // VMA sockets are non blocking
-  set_nonblock ();
+  // VMA sockets are blocking
+  set_block ();
 }
 
 
@@ -63,39 +63,44 @@ size_t spip::UDPSocketReceiveVMA::recv_from()
 {
   if (vma_api)
   {
-    int got = 0;
-    if (pkt)
+    if (pkts)
     {
-      vma_api->free_packets(fd, pkt->pkts, pkt->n_packet_num);
-      pkt = NULL;
+      vma_api->free_packets(fd, pkts->pkts, pkts->n_packet_num);
+      pkts = NULL;
     }
     while (!have_packet && keep_receiving)
     {
       int flags = 0;
-      //got = (int) vma_api->recvfrom_zcopy(fd, buf, bufsz, &flags, addr, &addr_size);
-      got = (int) vma_api->recvfrom_zcopy(fd, buf, bufsz, &flags, NULL, NULL);
-      if (got  > 32)
+      pkt_size = (int) vma_api->recvfrom_zcopy(fd, buf, bufsz, &flags, NULL, NULL);
+      
+      // largest useful sized packet
+      if (pkt_size > 32)
       {
         if (flags == MSG_VMA_ZCOPY)
         {
-          pkt = (vma_packets_t*) buf;
-          buf_ptr = (char *) pkt->pkts[0].iov[0].iov_base;
+          pkts = (vma_packets_t*) buf;
+          if (pkts->n_packet_num == 1)
+          {
+            buf_ptr = (char *) pkts->pkts[0].iov[0].iov_base;
+            have_packet = true;
+          }
         }
-        have_packet = true;
+        else
+          buf_ptr = buf;
       }
-      else if (got == -1)
+      else if (pkt_size == -1)
       {
         throw runtime_error ("UDPSocketReceiveVMA requires non blocking sockets");
       }
       else
       {
         cerr << "spip::UDPReceiveSocketVMA error expected " << bufsz
-             << " B, received " << got << " B" <<  endl;
+             << " B, received " << pkt_size << " B" <<  endl;
         keep_receiving = false;
-        got = 0;
+        pkt_size = 0;
       }
     }
-    return got;
+    return pkt_size;
   }
   else
     return spip::UDPSocketReceive::recv_from();
