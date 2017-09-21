@@ -416,8 +416,8 @@ class TCSBeamDaemon (TCSDaemon, BeamBased):
   def __init__ (self, name, id):
     TCSDaemon.__init__(self, name, str(id))
     BeamBased.__init__(self, str(id), self.cfg)
-    self.interface_port = int(self.cfg["TCS_INTERFACE_PORT"]) + int(id)
-    self.report_port = int(self.cfg["TCS_REPORT_PORT"]) + int(id)
+    self.interface_port = int(self.cfg["TCS_INTERFACE_PORT_" + str(id)])
+    self.report_port = int(self.cfg["TCS_REPORT_PORT_" + str(id)])
 
     b = self.cfg["BEAM_"+str(id)]
     self.beam_states[b] = {}
