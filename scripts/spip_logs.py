@@ -137,9 +137,9 @@ class LogsDaemon(Daemon):
       line = prefix + line
 
     if id == "-1":
-      file = self.log_dir + "/spip_" + dest + ".log"
+      file = self.log_dir + "/" + dest + ".log"
     else:
-      file = self.log_dir + "/spip_" + dest + "_" + id + ".log"
+      file = self.log_dir + "/" + dest + "_" + id + ".log"
     fptr = open(file, 'a')
     fptr.write(source + ": " + line + "\n")
     fptr.close()
