@@ -121,10 +121,10 @@ class timing extends spip_webpage
                 document.getElementById(beam_name + "_elapsed").innerHTML = elapsed;
                 document.getElementById(beam_name + "_tobs").innerHTML = tobs;
 
-                if (beam_state == "Recording")
+                //if (beam_state == "Recording")
                   tcs_utcs[beam_name] = start
-                else
-                  tcs_utcs[beam_name] = ""
+                //else
+                //  tcs_utcs[beam_name] = ""
               }
             }
 
@@ -142,7 +142,7 @@ class timing extends spip_webpage
 
                 var plots = Array();
 
-                if (active == "True")
+                //if (active == "True")
                 {
                   observation = beam.getElementsByTagName("observation")[0]
                   start = observation.getElementsByTagName("start")[0].childNodes[0].nodeValue;
@@ -181,6 +181,7 @@ class timing extends spip_webpage
                       //}
 
                       url = "/spip/timing/index.php?update=true&beam_name="+beam_name+"&type=plot&pol=0&plot="+plot_type+"&ts="+plot_timestamp;
+                      //alert (url);
                       document.getElementById(plot_id).src = url;
                       document.getElementById(plot_ts).value = plot_timestamp;
                     }
