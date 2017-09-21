@@ -70,7 +70,7 @@ class LogSocket(object):
             if self.connected and self.sock:
               self.sock.send (prefix + message + "\n")
         except socket.error as e:
-          if e.errno == errno.EPIPE:
+          if e.errno == errno.EPIPE or errno.ECONNRESET:
             if self.connected:
               self.close()
           else:
