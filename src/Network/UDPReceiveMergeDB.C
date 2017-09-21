@@ -200,12 +200,12 @@ void spip::UDPReceiveMergeDB::send_terminal_packets()
     if (data_mcasts[i].size() > 0)
     {
       cerr << "spip::UDPReceiveMergeDB::send_terminal_packets i=" << i << " opening " << data_mcasts[i] << ":" << data_ports[i] << endl;
-      sock->open_multicast(data_mcasts[i], data_ports[i]);
+      sock->open_multicast(data_mcasts[i], data_ports[i], data_hosts[i]);
     }
     else
     {
       cerr << "spip::UDPReceiveMergeDB::send_terminal_packets i=" << i << " opening " << data_hosts[i] << ":" << data_ports[i] << endl;
-      sock->open (data_hosts[i], data_ports[i]);
+      sock->open (data_hosts[i], data_ports[i], data_hosts[i]);
     }
     cerr << "spip::UDPReceiveMergeDB::send_terminal_packets i=" << i << " sock->resize(32)" << endl;
     sock->resize (32);

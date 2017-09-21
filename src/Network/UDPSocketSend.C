@@ -53,7 +53,7 @@ void spip::UDPSocketSend::open (string ip_address, int port, string local_ip_add
 
 }
 
-void spip::UDPSocketSend::open_multicast (string group_address, int port)
+void spip::UDPSocketSend::open_multicast (string group_address, int port, string local_ip_address)
 {
   // if we have the XXX.XXX.XXX.XXX+Y notation, then open a sequence of multicast groups
   std::string delimiter = "+";
@@ -84,7 +84,7 @@ void spip::UDPSocketSend::open_multicast (string group_address, int port)
   }
 
   cerr << "spip::UDPSocketSend::open_multicast open(" << group << ", " << port << ")" << endl;
-  open (group, port);
+  open (group, port, local_ip_address);
 }
 
 

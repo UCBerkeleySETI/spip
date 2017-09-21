@@ -20,7 +20,7 @@ namespace spip {
       void open (std::string, int, std::string);
 
       // open the socket and bind to a multicast group
-      void open_multicast (std::string, int);
+      void open_multicast (std::string, int, std::string);
 
       // send the contents of buf (bufsz bytes)
       inline size_t send () { sendto(fd, buf, bufsz, 0, sock_addr, sock_size); };
