@@ -16,6 +16,7 @@
 #endif
 
 #include "spip/TCPSocketServer.h"
+#include "spip/UDPSocketSend.h"
 #include "spip/UDPReceiveMergeDB.h"
 #include "spip/Time.h"
 
@@ -183,6 +184,38 @@ void spip::UDPReceiveMergeDB::set_control_cmd (spip::ControlCmd cmd)
     spip::UDPSocketReceive::keep_receiving = false;
   pthread_cond_signal (&cond_db);
   pthread_mutex_unlock (&mutex_db);
+
+  //if ((cmd == Stop) || (cmd == Quit))
+  //  send_terminal_packets();
+}
+
+void spip::UDPReceiveMergeDB::send_terminal_packets()
+{
+  cerr << "spip::UDPReceiveMergeDB::send_terminal_packets()" << endl;
+  // create and open a UDP sending socket
+  for (unsigned i=0; i<2; i++)
+  { 
+    cerr << "spip::UDPReceiveMergeDB::send_terminal_packets i=" << i << " creating sock" << endl;
+    UDPSocketSend * sock = new UDPSocketSend();
+    if (data_mcasts[i].size() > 0)
+    {
+      cerr << "spip::UDPReceiveMergeDB::send_terminal_packets i=" << i << " opening " << data_mcasts[i] << ":" << data_ports[i] << endl;
+      sock->open_multicast(data_mcasts[i], data_ports[i], data_hosts[i]);
+    }
+    else
+    {
+      cerr << "spip::UDPReceiveMergeDB::send_terminal_packets i=" << i << " opening " << data_hosts[i] << ":" << data_ports[i] << endl;
+      sock->open (data_hosts[i], data_ports[i], data_hosts[i]);
+    }
+    cerr << "spip::UDPReceiveMergeDB::send_terminal_packets i=" << i << " sock->resize(32)" << endl;
+    sock->resize (32);
+    cerr << "spip::UDPReceiveMergeDB::send_terminal_packets i=" << i << " sock->send()" << endl;
+    sock->send();
+    cerr << "spip::UDPReceiveMergeDB::send_terminal_packets i=" << i << " sock->close_me()" << endl;
+    sock->close_me();
+    cerr << "spip::UDPReceiveMergeDB::send_terminal_packets i=" << i << " delete sock" << endl;
+    delete sock;
+  }
 }
 
 // start a control thread that will receive commands from the TCS/LMC

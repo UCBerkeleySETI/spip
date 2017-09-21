@@ -95,7 +95,10 @@ class result extends spip_webpage
             {
               var param = obs_header.childNodes[i];
               var name = param.tagName;
-              html += "<tr><td width='40%'>"+name+"</td><td>"+get_node_value(param)+"</td></tr>"
+              var value = get_node_value(param);
+              if (value.length > 22)
+                value = value.substr(0,22) + "..."
+              html += "<tr><td width='40%'>"+name+"</td><td>"+value+"</td></tr>"
             }
             html += "</table>"
             document.getElementById('results_obs_header').innerHTML = html;
@@ -137,11 +140,11 @@ class result extends spip_webpage
 ?>
 <h1>Observation Result</h1>
 
-<table cellpadding='3px' border=0 cellspacing=2px width='100%'>
+<table cellpadding='3px' border=0 cellspacing=2px width='1018px'>
   <tr>
-    <td valign=top width='50%'>
+    <td valign=top width='365px'>
 
-      <table width='100%'>
+      <table>
         <tr><th colspan='2'>Summary</th></tr>
 <?php
         $this->printInfoRow("UTC START", 'utc_start');
@@ -165,7 +168,7 @@ class result extends spip_webpage
 
     </td>
 
-    <td valign=top>
+    <td valign=top width='650'>
       <table>
 <?php
         $this->printImgRow("Flux vs Phase", "flux_vs_phase");
@@ -184,8 +187,8 @@ class result extends spip_webpage
   function printInfoRow($name, $id)
   { 
     echo "        <tr>\n";
-    echo "          <th style='text-align:left;' width='40%'>".$name."</th>\n";
-    echo "          <td><span id='".$id."'></span></td>\n";
+    echo "          <th style='text-align:left;' width='60px'>".$name."</th>\n";
+    echo "          <td><span id='".$id."' width='140px'></span></td>\n";
     echo "        </tr>\n";
   }
 

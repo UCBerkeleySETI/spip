@@ -978,6 +978,58 @@ class KATCPServer (DeviceServer):
         default=0)
       self.add_sensor(self._beam_sensors[b]["integrated"])
 
+    def change_state (self, data_product_id, beam, command):
+
+      state = self._data_products[data_product_id]["state"]
+
+      reply = "ok"
+      message = ""
+
+      if command == "configure":
+        if state != "unconfigured":
+          message = "received " + command + " command when in " + state + " state"
+        else:
+          new_state = "configured"
+
+      elif command == "capture_init":
+        if state != "configured":
+          message = "received " + command + " command when in " + state + " state"
+        else:
+          new_state = "ready"
+
+      elif command == "target_start":
+        if state != "ready":
+          message = "received " + command + " command when in " + state + " state"
+        else:
+          new_state = "recording"
+
+      elif command == "target_stop":
+        if state != "recording":
+          message = "received " + command + " command when in " + state + " state"
+        else:
+          new_state = "ready"
+
+      elif command == "capture_done":
+        if state != "ready":
+          message = "received " + command + " command when in " + state + " state"
+        else:
+          new_state = "configured"
+
+      elif command == "deconfigure":
+        if state != "configured":
+          message = "received " + command + " command when in " + state + " state"
+        else:
+          new_state = "unconfigured"
+
+      if message == "":
+        self.script.log (1, "change_state: " + self._data_products[data_product_id]["state"] + " -> " + new_state)
+        self._data_products[data_product_id]["state"] = new_state
+      else:
+        self.script.log (-1, "change_state: " + message)
+        reply = "fail"
+
+      return (reply, message)
+
     @request()
     @return_reply(Str())
     def request_beam_list(self, req):
@@ -1081,7 +1133,12 @@ class KATCPServer (DeviceServer):
       if self.script.beam_configs[beam_id]["ADC_SYNC_TIME"] == "0":
         self.script.log (-1, "ADC Synchronisation Time for beam "+beam_id+" was not valid "+self.script.beam_configs[beam_id]["ADC_SYNC_TIME"])
         return ("fail", "ADC Synchronisation Time for beam "+beam_id+" was not valid "+self.script.beam_configs[beam_id]["ADC_SYNC_TIME"])
-    
+ 
+      (result, message) = self.change_state (data_product_id, beam_id, "target_start")
+      if result != "ok":
+        self.script.log (-1, "target_start: change_state failed: " + message)
+        return (result, message)
+   
       # set the pulsar name, this should include a check if the pulsar is in the catalog
       self.script.beam_configs[beam_id]["lock"].acquire()
       self.script.beam_configs[beam_id]["SOURCE"] = target_name
@@ -1101,7 +1158,11 @@ class KATCPServer (DeviceServer):
         sock.send(xml + "\r\n")
         reply = sock.recv (65536)
 
+        self.script.beam_configs[beam_id]["lock"].acquire()
+        self.script.beam_configs[beam_id]["STATE"] = "STARTED"
+        self.script.beam_configs[beam_id]["lock"].release()
         sock.close()
+
         return ("ok", "")
       else:
         return ("fail", "could not connect to TCS")
@@ -1114,6 +1175,11 @@ class KATCPServer (DeviceServer):
 
       (result, message) = self.test_beam_valid (data_product_id, beam_id)
       if result == "fail":
+        return (result, message)
+
+      (result, message) = self.change_state (data_product_id, beam_id, "target_stop")
+      if result != "ok":
+        self.script.log (-1, "target_stop: change_state failed: " + message)
         return (result, message)
 
       # reset the beam configuration now that the observation has ended
@@ -1139,7 +1205,13 @@ class KATCPServer (DeviceServer):
       self.script.log (1, "request_capture_init: " + str(data_product_id) )
       if not data_product_id in self._data_products.keys():
         return ("fail", "data product " + str (data_product_id) + " was not configured")
-      return ("ok", "")
+
+      # assume beam 0 is the valid beam for now
+      beam = self._data_products[data_product_id]['beams'][0]
+      (result, message) = self.change_state (data_product_id, beam, "capture_init")
+      if result != "ok":
+        self.script.log (-1, "capture_init: change_state failed: " + message) 
+      return (result, message)
 
     @request(Str())
     @return_reply(Str())
@@ -1148,7 +1220,13 @@ class KATCPServer (DeviceServer):
       self.script.log (1, "request_capture_done: " + str(data_product_id))
       if not data_product_id in self._data_products.keys():
         return ("fail", "data product " + str (data_product_id) + " was not configured")
-      return ("ok", "")
+
+      # assume beam 0 is the valid beam for now
+      beam = self._data_products[data_product_id]['beams'][0]
+      (result, message) = self.change_state (data_product_id, beam, "capture_done")
+      if result != "ok":
+        self.script.log (-1, "capture_done: change_state failed: " + message) 
+      return (result, message)
 
     @return_reply(Str())
     def request_data_product_configure(self, req, msg):
@@ -1254,6 +1332,14 @@ class KATCPServer (DeviceServer):
           self._data_products[data_product_id]['dump_rate'] = dump_rate
           self._data_products[data_product_id]['n_beams'] = str(n_beams)
           self._data_products[data_product_id]['cbf_source'] = cbf_source
+          self._data_products[data_product_id]['state'] = "unconfigured"
+
+          # assume beam 0 is the valid beam for now
+          beam = self._data_products[data_product_id]['beams'][0]
+          (result, message) = self.change_state (data_product_id, beam, "configure")
+          if result != "ok":
+            self.script.log (-1, "data_product_configure: change_state failed: " + message)  
+            return (result, message)
 
           cbf_source_pols = re.split(';|,', cbf_source)
           
@@ -1471,7 +1557,13 @@ class KATCPServer (DeviceServer):
         self.script.log (-1, "deconfigure_data_product: " + response)
         return ("fail", response)
 
+      (result, message) = self.change_state (data_product_id, "", "deconfigure")
+      if result != "ok":
+        self.script.log (-1, "deconfigure_data_product: change_state failed: " + message)
+        return ("fail", message)
+
       # update config file for beams to match the cbf_source
+      beam = "none"
       for ibeam in self._data_products[data_product_id]['beams']:
         b = self.script.beams[ibeam]
         for istream in range(int(self.script.cfg["NUM_STREAM"])):
@@ -1505,9 +1597,7 @@ class KATCPServer (DeviceServer):
         self._data_products.pop(data_product_id, None)
         self.script.log (1, "deconfigure_data_product: keys=" + str(self._data_products))
 
-      response = "data product " + str(data_product_id) + " deconfigured"
-      self.script.log (1, "deconfigure_data_product: " + response)
-      return ("ok", response)
+      return ("ok", "")
 
 
 ###############################################################################
