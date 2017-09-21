@@ -25,8 +25,8 @@ class results extends spip_webpage
     $this->plot_width = 160;
     $this->plot_height = 120;
 
-    $this->index = isset($get["index"]) ? $get["index"] : 0;
-    $this->count = isset($get["count"]) ? $get["count"] : 20;
+    $this->index = isset($_GET["index"]) ? $_GET["index"] : 0;
+    $this->count = isset($_GET["count"]) ? $_GET["count"] : 20;
     $this->result_url = "";
 
     for ($istream=0; $istream<$this->config["NUM_STREAM"]; $istream++)
@@ -133,7 +133,7 @@ class results extends spip_webpage
 
       function results_request() 
       {
-        var url = "?update=true";
+        var url = "?update=true&index=<?php echo $this->index?>&count=<?php echo $this->count?>";
 
         if (window.XMLHttpRequest)
           r_xml_request = new XMLHttpRequest();
@@ -249,6 +249,10 @@ class results extends spip_webpage
       $this->renderImage($get);
       return;
     }
+
+    $index = isset($get["index"]) ? $get["index"] : 0;
+    $count = isset($get["count"]) ? $get["count"] : 20;
+
     $xml = "<results_update>";
 
     foreach ($this->streams as $istream => $stream)
@@ -263,8 +267,8 @@ class results extends spip_webpage
       $xml_req .= "<results_request>";
       $xml_req .= "<requestor>results page</requestor>";
       $xml_req .= "<type>obs_list</type>";
-      $xml_req .= "<index>0</index>";
-      $xml_req .= "<count>20</count>";
+      $xml_req .= "<index>".$index."</index>";
+      $xml_req .= "<count>".$count."</count>";
       $xml_req .= "</results_request>";
 
       if ($results_socket->open ($host, $port, 0) == 0)

@@ -73,3 +73,4 @@ src/Formats/VDIF/vdif_udpgen
 src/Formats/VDIF/vdif_udprecv
 src/SignalProcessing/delay_pipeline
 src/SignalProcessing/filterbank_pipeline
+src/Util/test_AsciiHeader

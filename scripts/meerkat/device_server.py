@@ -12,7 +12,7 @@ from katcp.kattypes import (Str, Int, Float, Bool, Timestamp, Discrete,
                             request, return_reply)
 
 import os, threading, sys, socket, select, signal, traceback, xmltodict, re
-import errno
+import errno, json, time
 
 from xmltodict import parse
 from xml.parsers.expat import ExpatError
@@ -295,11 +295,24 @@ class KATCPServer (DeviceServer):
 
   @request(Str(), Str())
   @return_reply(Str())
+  def request_proposal_id(self, req, data_product_id, proposal_id):
+    """Set the PROPOSAL_ID for the specified data product."""
+
+    self.script.beam_config["lock"].acquire()
+    self.script.beam_config["PROPOSAL_ID"] = proposal_id
+    self.script.beam_config["lock"].release()
+
+    return ("ok", "")
+
+
+  @request(Str(), Str())
+  @return_reply(Str())
   def request_target_start (self, req, data_product_id, target_name):
     """Commence data processing on specific data product and beam using target."""
     self.script.log (1, "request_target_start(" + data_product_id + "," + target_name+")")
 
     self.script.beam_config["lock"].acquire()
+    self.script.beam_config["TARGET"] = self.script.cam_config["TARGET"]
     self.script.beam_config["ADC_SYNC_TIME"] = self.script.cam_config["ADC_SYNC_TIME"]
     self.script.beam_config["OBSERVER"] = self.script.cam_config["OBSERVER"]
     self.script.beam_config["ANTENNAE"] = self.script.cam_config["ANTENNAE"]
@@ -319,8 +332,6 @@ class KATCPServer (DeviceServer):
   
     # set the pulsar name, this should include a check if the pulsar is in the catalog
     self.script.beam_config["lock"].acquire()
-    if self.script.beam_config["MODE"] == "CAL":
-      target_name = target_name + "_R"
     self.script.beam_config["SOURCE"] = target_name
     self.script.beam_config["lock"].release()
 
@@ -398,14 +409,15 @@ class KATCPServer (DeviceServer):
         configuration = str(data_product_id) + " " + \
                         str(self._data_product['antennas']) + " " + \
                         str(self._data_product['n_channels']) + " " + \
-                        str(self._data_product['cbf_source'])
+                        str(self._data_product['cbf_source']) + " " + \
+                        str(self._data_product['proxy_name'])
         self.script.log (1, "request_configure: configuration of " + str(data_product_id) + "=" + configuration)
         return ("ok", configuration)
       else:
         self.script.log (-1, "request_configure: no configuration existed for " + str(data_product_id))
         return ("fail", "no configuration existed for " + str(data_product_id))
 
-    if len(msg.arguments) == 4:
+    if len(msg.arguments) == 5:
       # if the configuration for the specified data product matches extactly the 
       # previous specification for that data product, then no action is required
       self.script.log (1, "configure: configuring " + str(data_product_id))
@@ -413,7 +425,8 @@ class KATCPServer (DeviceServer):
       if data_product_id == self._data_product["id"] and \
           self._data_product['antennas'] == msg.arguments[1] and \
           self._data_product['n_channels'] == msg.arguments[2] and \
-          self._data_product['cbf_source'] == str(msg.arguments[3]):
+          self._data_product['cbf_source'] == str(msg.arguments[3]) and \
+          self._data_product['proxy_name'] == str(msg.arguments[4]):
         response = "configuration for " + str(data_product_id) + " matched previous"
         self.script.log (1, "configure: " + response)
         return ("ok", response)
@@ -421,6 +434,8 @@ class KATCPServer (DeviceServer):
       # the data product requires configuration
       else:
         self.script.log (1, "configure: new data product " + data_product_id)
+
+        # TODO decide what to do regarding preconfigured params (e.g. FREQ, BW) vs CAM supplied values
 
         # determine which sub-array we are matched against
         the_sub_array = -1
@@ -435,7 +450,11 @@ class KATCPServer (DeviceServer):
 
         antennas = msg.arguments[1]
         n_channels = msg.arguments[2]
-        streams = json.loads(msg.arguments[3])
+        cbf_source = str(msg.arguments[3])
+        streams = json.loads (msg.arguments[3])
+        proxy_name = str(msg.arguments[4])
+
+        self.script.log (2, "configure: streams="+str(streams))
 
         # check if the number of existing + new beams > available
         (cfreq, bwd, nchan) = self.script.cfg["SUBBAND_CONFIG_0"].split(":")
@@ -448,19 +467,41 @@ class KATCPServer (DeviceServer):
         self._data_product['id'] = data_product_id
         self._data_product['antennas'] = antennas
         self._data_product['n_channels'] = n_channels
+        self._data_product['cbf_source'] = cbf_source
         self._data_product['streams'] = str(streams)
+        self._data_product['proxy_name'] = proxy_name
 
         # determine the CAM metadata server and update pubsub
-        if 'cam.http' in streams.keys() and 'camdata' in streams['cam.http']:
-          self.script.pubsub.set_metadata_server (streams['cam.http']['camdata'])
+        cam_server = "None"
+        fengine_stream = "None"
+        polh_stream = "None"
+        polv_stream = "None"
+      
+        self.script.log (2, "configure: streams.keys()=" + str(streams.keys()))
+        self.script.log (2, "configure: streams['cam.http'].keys()=" + str(streams['cam.http'].keys()))
+
+        if 'cam.http' in streams.keys() and 'camdata' in streams['cam.http'].keys():
+          cam_server = streams['cam.http']['camdata']
+          self.script.log (2,"configure: cam_server="+str(cam_server))
+        if 'cbf.antenna_channelised_voltage' in streams.keys():
+          stream_name = streams['cbf.antenna_channelised_voltage'].keys()[0]
+          fengine_stream = stream_name.split(".")[0]
+          self.script.log (2,"configure: fengine_stream="+str(fengine_stream))
+        if 'cbf.tied_array_channelised_voltage' in streams.keys() and \
+          len(streams['cbf.tied_array_channelised_voltage'].keys()) == 2:
+          polh_stream = streams['cbf.tied_array_channelised_voltage'].keys()[0]
+          polv_stream = streams['cbf.tied_array_channelised_voltage'].keys()[1]
+          self.script.log (2,"configure: polh_stream="+str(polh_stream))
+
+        if cam_server != "None" and fengine_stream != "None" and polh_stream != "None":
+          self.script.pubsub.update_cam (cam_server, fengine_stream, polh_stream)
         else:
           response = "Could not extract streams[cam.http][camdata]"
           self.script.log (-1, "configure: " + response)
           return ("fail", response)
         
         # restart the pubsub service
-        self.script.log (1, "configure: restarting pubsub for subarray " + str(the_sub_array))
-        self.script.pubsub.set_sub_array (the_sub_array, self.script.beam_name)
+        self.script.log (1, "configure: restarting pubsub for new meta-data")
         self.script.pubsub.restart()
 
         # determine the X and Y tied array channelised voltage streams
@@ -526,12 +567,12 @@ class KATCPServer (DeviceServer):
       return ("ok", "data product " + str (data_product_id) + " configured")
 
     else:
-      response = "expected 0, 1 or 4 arguments"
+      response = "expected 0, 1 or 5 arguments, received " + str(len(msg.arguments))
       self.script.log (-1, "configure: " + response)
       return ("fail", response)
 
   # parse address of from spead://AAA.BBB.CCC.DDD+NN:PORT into 
-  def parseStreamAddress (self, stream)
+  def parseStreamAddress (self, stream):
 
     self.script.log (2, "parseStreamAddress: parsing " + stream)
     (prefix, spead_address) = stream.split("//")
@@ -545,7 +586,7 @@ class KATCPServer (DeviceServer):
     """Deconfigure for the data_product."""
 
     if len(msg.arguments) == 0:
-      self.script.log (-1, "request_configure: no arguments provided")
+      self.script.log (-1, "request_deconfigure: no arguments provided")
       return ("fail", "expected 1 argument")
 
     # the sub-array identifier
@@ -597,7 +638,9 @@ class KATCPServer (DeviceServer):
       return ("fail", "number of channels not a power of two")
     if nchannels < 64 or nchannels > 4096:
       return ("fail", "number of channels not within range 64 - 2048")
+    self.script.beam_config["lock"].acquire()
     self.script.beam_config["OUTNCHAN"] = str(nchannels)
+    self.script.beam_config["lock"].release()
     return ("ok", "")
 
   @request(Int())
@@ -608,7 +651,9 @@ class KATCPServer (DeviceServer):
       return ("fail", "nbin not a power of two")
     if nbin < 64 or nbin > 2048:
       return ("fail", "nbin not within range 64 - 2048")
+    self.script.beam_config["lock"].acquire()
     self.script.beam_config["OUTNBIN"] = str(nbin)
+    self.script.beam_config["lock"].release()
     return ("ok", "")
 
   @request(Int())
@@ -617,7 +662,9 @@ class KATCPServer (DeviceServer):
     """Set the length of output sub-integrations."""
     if tsubint < 10 or tsubint > 60:
       return ("fail", "length of output subints must be between 10 and 600 seconds")
+    self.script.beam_config["lock"].acquire()
     self.script.beam_config["OUTTSUBINT"] = str(tsubint)
+    self.script.beam_config["lock"].release()
     return ("ok", "")
 
   @request(Float())
@@ -626,7 +673,9 @@ class KATCPServer (DeviceServer):
     """Set the value of dispersion measure to be removed"""
     if dm < 0 or dm > 2000:
       return ("fail", "dm not within range 0 - 2000")
+    self.script.beam_config["lock"].acquire()
     self.script.beam_config["DM"] = str(dm)
+    self.script.beam_config["lock"].release()
     return ("ok", "")
 
   @request(Float())
@@ -635,11 +684,13 @@ class KATCPServer (DeviceServer):
     """Set the value of noise diode firing frequecny in Hz."""
     if cal_freq < 0 or cal_freq > 1000:
       return ("fail", "CAL freq not within range 0 - 1000")
+    self.script.beam_config["lock"].acquire()
     self.script.beam_config["CALFREQ"] = str(cal_freq)
     if cal_freq == 0:
       self.script.beam_config["MODE"] = "PSR"
     else:
       self.script.beam_config["MODE"] = "CAL"
+    self.script.beam_config["lock"].release()
     return ("ok", "")
 
   # test if a number is a power of two
@@ -648,6 +699,25 @@ class KATCPServer (DeviceServer):
 
   # test whether the specified target exists in the pulsar catalog
   def test_pulsar_valid (self, target):
+
+    self.script.log (2, "test_pulsar_valid: target='["+ target +"]")
+
+    # remove the _R suffix
+    if target.endswith('_R'):
+      target = target[:-2]
+
+    # check if the target matches the fluxcal.on file
+    cmd = "grep " + target + " " + self.script.cfg["CONFIG_DIR"] + "/fluxcal.on | wc -l"
+    rval, lines = self.script.system (cmd, 3)
+    if rval == 0 and len(lines) == 1 and int(lines[0]) > 0:
+      return ("ok", "")
+
+    # check if the target matches the fluxcal.off file
+    cmd = "grep " + target + " " + self.script.cfg["CONFIG_DIR"] + "/fluxcal.off | wc -l"
+    rval, lines = self.script.system (cmd, 3)
+    if rval == 0 and len(lines) == 1 and int(lines[0]) > 0:
+      return ("ok", "")
+
 
     self.script.log (2, "test_pulsar_valid: get_psrcat_param (" + target + ", jname)")
     (reply, message) = self.get_psrcat_param (target, "jname")
@@ -661,6 +731,11 @@ class KATCPServer (DeviceServer):
       return ("fail", "pulsar " + target + " did not exist in catalog")
 
   def get_psrcat_param (self, target, param):
+
+    # remove the _R suffix
+    if target.endswith('_R'):
+      target = target[:-2]
+
     cmd = "psrcat -all " + target + " -c " + param + " -nohead -o short"
     rval, lines = self.script.system (cmd, 3)
     if rval != 0 or len(lines) <= 0:

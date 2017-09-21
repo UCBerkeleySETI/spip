@@ -23,7 +23,7 @@ from spip.threads.socketed_thread import SocketedThread
 from meerkat.pubsub import PubSubThread
 from meerkat.device_server import KATCPServer
 
-DAEMONIZE = False
+DAEMONIZE = True
 DL = 1
 
 ###############################################################
@@ -87,6 +87,7 @@ class KATCPDaemon(Daemon):
 
   def reset_cam_config (self):
     self.cam_config["ADC_SYNC_TIME"] = "0"
+    self.cam_config["TARGET"] = "None"
     self.cam_config["RA"] = "None"
     self.cam_config["DEC"] = "None"
     self.cam_config["OBSERVER"] = "None"
@@ -160,8 +161,9 @@ class KATCPDaemon(Daemon):
       if self.quit_event.isSet():
         return
       (host, port) = self.lmc.split(":")
-      self.log(2, "KATCPDaemon::main openSocket("+host+","+port+")")
+      self.log(3, "KATCPDaemon::main updating sensors from LMC")
       try:
+        self.log(3, "KATCPDaemon::main openSocket("+host+","+port+")")
         sock = sockets.openSocket (DL, host, int(port), 1)
         if sock:
           sock.send(self.lmc_cmd)
@@ -182,6 +184,7 @@ class KATCPDaemon(Daemon):
       # connect to SPIP_REPACK to retrieve Pulsar SNR performance
       if self.quit_event.isSet():
         return
+      self.log(3, "KATCPDaemon::main pulsar SNR sensor from REPACK")
       (host, port) = self.repack.split(":")
       try:
         sock = sockets.openSocket (DL, host, int(port), 1)
@@ -303,7 +306,7 @@ class KATCPDaemon(Daemon):
     self.katcp._host_sensors["load5"].set_value (float(xml["lmc_reply"]["system_load"]["load5"]))
     self.katcp._host_sensors["load15"].set_value (float(xml["lmc_reply"]["system_load"]["load15"]))
 
-    self.katcp._host_sensors["local_time_synced"].set_value (boolean(xml["lmc_reply"]["local_time_synced"]))
+    self.katcp._host_sensors["local_time_synced"].set_value (bool(xml["lmc_reply"]["local_time_synced"]))
 
     if not xml["lmc_reply"]["sensors"] == None:
       for sensor in xml["lmc_reply"]["sensors"]["metric"]:
@@ -413,12 +416,13 @@ if __name__ == "__main__":
 
     script.log(1, "STARTING SCRIPT")
    
+    script.log(1, "quit_file="+str(script.quit_file))
     script.log(2, "__main__: server.start()")
     server.start()
 
     pubsub = PubSubThread (script, beam_id)
-    script.log(2, "__main__: pubsub.set_sub_array()")
-    pubsub.set_sub_array (script.beam_name, script.beam_name)
+    script.log(2, "__main__: pubsub.set_beam_name()")
+    pubsub.set_beam_name (script.beam_name)
     script.log(2, "__main__: pubsub.start()")
     pubsub.start()
     script.set_pubsub (pubsub)

@@ -9,7 +9,7 @@
 
 import logging
 import tornado.gen
-from katportalclient import KATPortalClient
+from katportalclient import KATPortalClient,SensorLookupError
 
 import os, threading, sys, socket, select, signal, traceback
 import errno, time, random
@@ -31,52 +31,93 @@ class PubSubThread (threading.Thread):
 
     self.curr_utc = times.getUTCTime()
     self.prev_utc = self.curr_utc
-   
-    self.metadata_server = self.script.cfg["PUBSUB_ADDRESS"]
-    self.logger = logging.getLogger('katportalclient.example') 
+
+    self.cam_server    = self.script.cfg["CAM_ADDRESS"]
+
+    self.fengine_stream = 'i0'
+    self.polh_stream = 'i0.tied-array-channelised-voltage.0x'
+
+    self.logger = logging.getLogger('pubsub') 
     self.logger.setLevel(logging.INFO)
     self.beam = -1
     self.sub_array = -1
-    self.subs = []
+    self.mappings = {}
     self.io_loop = []
-    self.policy = "event-rate 1.0 300.0"
+    self.policy = "event-rate 5.0 300.0"
     self.title  = "ptuse_unconfigured"
     self.running = False
+
     self.restart_io_loop = True
 
+  # get the KATCP sensor  names for the meta-data server
+  @tornado.gen.coroutine
   def configure (self):
 
-    self.subs = []
+    self.mapping = {}
 
-    dp_prefix = self.data_product_prefix.replace("_", ".")
-    sa_prefix = self.sub_array_prefix.replace("_", ".")
+    sensors = {}
+    sensors["TARGET"]            = {"comp": "cbf", "sensor": "target"}
+    sensors["RA"]                = {"comp": "cbf", "sensor": "pos.request-base-ra"}
+    sensors["BMAJ"]              = {"comp": "cbf", "sensor": "beam-major-axis"}
+    sensors["BMIN"]              = {"comp": "cbf", "sensor": "beam-minor-axis"}
+    sensors["BPA"]               = {"comp": "cbf", "sensor": "beam-position-axis"}
+    sensors["NCHAN"]             = {"comp": "cbf", "sensor": self.fengine_stream + '.antenna-channelised-voltage-n-chans'}
+    sensors["ADC_SYNC_TIME"]     = {"comp": "cbf", "sensor": self.fengine_stream + '.synchronisation-epoch'}
+    sensors["ITRF"]              = {"comp": "sub", "sensor": "reference-location-itrf"}
+    sensors["SCHEDULE_BLOCK_ID"] = {"comp": "sub", "sensor": "active-sbs"}
+    sensors["FREQ"]              = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.centre-frequency'}
+    sensors["BW"]                = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.bandwidth'}
+    sensors["SIDEBAND"]          = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.sideband'}
+    sensors["EXPERIMENT_ID"]     = {"comp": "sub", "sensor": 'observation.script-experiment-id'}
+    sensors["OBSERVER"]          = {"comp": "sub", "sensor": "observation.script-observer"}
+    sensors["PROPOSAL_ID"]       = {"comp": "sub", "sensor": "observation.script-proposal-id"}
 
-    self.subs.append ( dp_prefix + ".cbf.synchronisation.epoch")
-    self.subs.append ( sa_prefix +".state")
-    self.subs.append ( sa_prefix +".pool.resources")
-    self.subs.append ( sa_prefix +".script.target")
-    self.subs.append ( sa_prefix +".script.ra")
-    self.subs.append ( sa_prefix +".script.dec")
-    self.subs.append ( sa_prefix +".script.ants")
-    self.subs.append ( sa_prefix +".script.observer")
-    self.subs.append ( sa_prefix +".script.tsubint")
-    self.subs.append ( sa_prefix +".script.experiment.id")
-    self.subs.append ( sa_prefix +".script.active.sbs")
-    self.subs.append ( sa_prefix +".script.description")
+    # TODO CAM ICD mandates observation.script-proposal-id
+
+    self.script.log(3, "PubSubThread::configure sensors=" + str(sensors))
+
+    for key in sensors.keys():
+
+      comp = sensors[key]["comp"]
+      sens = sensors[key]["sensor"]
+      try:
+        name = yield self.ws_client.sensor_subarray_lookup (component=comp, sensor=sens, return_katcp_name=False)
+        self.script.log(2, "PubSubThread::configure " + key + " -> " + name)
+
+        self.script.log(2, "PubSubThread::configure mappings["+name+"]=" + key)
+        self.mappings[name] = key 
+
+        # instruct the web socket to sample this sensor
+        try:
+          self.script.log(2, "PubSubThread::configure set_sampling_strategy(" + name + ")")
+          result = yield self.ws_client.set_sampling_strategy (self.title, name, self.policy)
+          self.script.log(2, "PubSubThread::configure set_sampling_strategy result="+str(result))
+
+        except Exception, e:
+          print 'PubSubThread::configure failed to set sampling stratey: ', e
+
+      except SensorLookupError as exc:
+        self.script.log(0, "PubSubThread::configure failed to find " + comp + "." + sens)
+
+    self.script.log(2, "PubSubThread::configure added sensors")
 
   # configure a new metadata server 
-  def set metadata_server (self, server):
-    self.metadata_server = server
+  def update_cam (self, server, fengine_stream, polh_stream):
+
+    self.script.log(2, "PubSubThread::update_cam("+server+","+fengine_stream+","+polh_stream+")")
+    # server name is configured with the following schema
+    # http://{host}/api/client/{subarray_number}
+    self.cam_server = server
+
+    self.fengine_stream = fengine_stream
+    self.polh_stream = polh_stream
+    self.sub_array = server.split('/')[-1]
 
   # configure the pub/sub instance to 
-  def set_sub_array (self, sub_array, beam):
-    self.script.log(2, "PubSubThread::set_sub_array sub_array="+ str(sub_array) + " beam=" + str(beam))
-    self.sub_array = str(sub_array)
-    self.beam = str(beam )
-    self.data_product_prefix = "data_" + self.sub_array
-    self.sub_array_prefix = "subarray_" + self.sub_array
-    self.title = "ptuse_beam_" + str(beam)
-    self.configure()
+  def set_beam_name (self, beam):
+    self.script.log(2, "PubSubThread::set_beam_name (" + str(beam) + ")")
+    self.beam = str(beam)
+    self.script.log(2, "PubSubThread::set_beam_name done")
 
   def run (self):
     self.script.log(1, "PubSubThread::run starting while")
@@ -107,6 +148,7 @@ class PubSubThread (threading.Thread):
     if self.running:
       self.script.log(2, "PubSubThread::stop io_loop.stop()")
       self.io_loop.stop()
+    time.sleep(0.1)
     return
 
   def restart (self):
@@ -119,17 +161,17 @@ class PubSubThread (threading.Thread):
 
   @tornado.gen.coroutine
   def connect (self, logger):
-    self.script.log(2, "PubSubThread::connect()")
-    self.ws_client = KATPortalClient(self.metadata_server, self.on_update_callback, logger=logger)
+
+    self.script.log(2, "PubSubThread::connect(" + self.cam_server + ")")
+    self.ws_client = KATPortalClient(self.cam_server, self.on_update_callback, logger=logger)
     self.script.log(2, "PubSubThread::connect self.ws_client.connect()")
     yield self.ws_client.connect()
+
     self.script.log(2, "PubSubThread::connect self.ws_client.subscribe(" + self.title + ")")
     result = yield self.ws_client.subscribe(self.title)
-    self.script.log(2, "PubSubThread::connect self.ws_client.set_sampling_strategies (" + self.title + ", " + str(self.subs) + ", " + self.policy + ")")
-    results = yield self.ws_client.set_sampling_strategies( self.title, self.subs, self.policy) 
+    self.script.log(2, "PubSubThread::connect self.ws_client.subscribe result="+str(result))
 
-    for result in results:
-      self.script.log(2, "PubSubThread::connect subscribed to " + str(result))
+    self.configure()
 
   def on_update_callback (self, msg):
 
@@ -141,8 +183,16 @@ class PubSubThread (threading.Thread):
     self.update_config (msg)
 
   def update_cam_config (self, key, name, value):
-    if self.script.cam_config[key] != value:
-      self.script.log(1, "PubSubThread::update_cam_config " + key + "=" + value + " from " + name)
+    if key in self.script.cam_config.keys():
+      if self.script.cam_config[key] != value:
+        self.script.log(1, key + "=" + value)
+        self.script.log(2, "PubSubThread::update_cam_config " + key + "=" + value + " from " + name)
+        self.script.cam_config[key] = value
+      else:
+        self.script.log(2, "PubSubThread::update_cam_config no update on " + key + "=" + value + " from " + name)
+    else:
+      self.script.log(1, key + "=" + value)
+      self.script.log(2, "PubSubThread::update_cam_config " + key + "=" + value + " from " + name)
       self.script.cam_config[key] = value
 
   def update_config (self, msg):
@@ -151,50 +201,19 @@ class PubSubThread (threading.Thread):
     if msg == []: 
       return
 
+    self.script.log(3, "PubSubThread::update_config msg="+str(msg))
     status = msg["msg_data"]["status"]
     value = msg["msg_data"]["value"]
     name = msg["msg_data"]["name"]
 
-    self.script.log(2, "PubSubThread::update_config " + name + "=" + str(value))
-   
-    if name == self.sub_array_prefix + "_script_target":
-      self.update_cam_config("SOURCE", name, str(value))
+    #self.script.log(2, "PubSubThread::update_config " + name + "=" + str(value))
+    #self.script.log(2, "PubSubThread::update_config name="+name+"  mapping.keys()=" + str(self.mappings.keys()))
 
-    elif name == self.sub_array_prefix + "_script_ra":
-      self.update_cam_config("RA", name, str(value))
-
-    elif name == self.sub_array_prefix + "_script_dec":
-      self.update_cam_config("DEC", name, str(value))
-
-    elif name == self.data_product_prefix + "_cbf_synchronisation_epoch":
-      self.update_cam_config("ADC_SYNC_TIME", name, str(value))
-
-    elif name == self.sub_array_prefix + "_script_observer":
-      self.update_cam_config("OBSERVER", name, str(value))
-
-    elif name == self.sub_array_prefix + "_script_tsubint":
-      self.update_cam_config("TSUBINT", name, str(value))
-
-    elif name == self.sub_array_prefix + "_script_ants":
-      self.update_cam_config("ANTENNAE", name, str(value))
-
-    elif name == self.sub_array_prefix + "_active_sbs":
-      self.update_cam_config("SCHEDULE_BLOCK_ID", name, str(value))
-
-    elif name == self.sub_array_prefix + "_script_experiment_id":
-      self.update_cam_config("EXPERIMENT_ID", name, str(value))
-
-    elif name == self.sub_array_prefix + "_pool_resources":
-      self.update_cam_config("POOL_RESOURCES", name, str(value))
-
-    elif name == self.sub_array_prefix + "_script_description":
-      self.update_cam_config("DESCRIPTION", name, str(value))
-
-    elif name == self.sub_array_prefix + "_state":
-      self.update_cam_config("SUBARRAY_STATE", name, str(value))
-
+    if name in self.mappings.keys():
+      key = self.mappings[name]
+      self.update_cam_config(key, name, str(value))
     else:
-      self.script.log(1, "PubSubThread::update_config no match on " + name)
+      self.script.log(2, "PubSubThread::update_config no match on " + name)
 
     self.script.log(3, "PubSubThread::update_config done")
 

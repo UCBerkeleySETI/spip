@@ -577,8 +577,8 @@ bool spip::UDPReceiveMerge2DB::receive_thread (int p)
   int64_t next_byte_offset = 0;
 
   // sub-band accounting
-  const int64_t half_data_bufsz = data_bufsz / 2;
-  const int64_t subband_stride = pol_bufsz / 2;
+  const int64_t pol_stride = chunk_size / 2;
+  const int64_t subband_stride = pol_stride / 2;
 
   // overflow buffer
   const int64_t overflow_bufsz = chunk_size;
@@ -586,8 +586,8 @@ bool spip::UDPReceiveMerge2DB::receive_thread (int p)
   int64_t overflowed_bytes = 0;
 
   uint64_t bytes_this_buf = 0;
-  int64_t byte_offset;
-  uint64_t pol_offset = p * (chunk_size / 2);
+  int64_t byte_offset, subband_offset;
+  uint64_t pol_offset = p * pol_stride;
 
   bool filled_this_buffer = false;
   unsigned bytes_received, bytes_dropped;
@@ -737,7 +737,7 @@ bool spip::UDPReceiveMerge2DB::receive_thread (int p)
         else
         {
           // determine which sub-band this byte_offset resides in
-          subband = format->get_subband (byte_offset, nsubband);
+          subband = format->get_subband (byte_offset, 2);
 
           // adjust byte offset from single pol to dual pol
           byte_offset += pol_offset;
@@ -748,7 +748,11 @@ bool spip::UDPReceiveMerge2DB::receive_thread (int p)
             bytes_this_buf += bytes_received;
             stat->increment_bytes (bytes_received);
 
-            block_offset = (byte_offset - curr_byte_offset) / nsubband;
+            // modify the byte_offset for the subband
+            block_offset = (byte_offset - curr_byte_offset) / 2 + 
+                           ((byte_offset % pol_stride) / 2) -
+                           (subband * subband_stride);
+
             // determine which block this packet resides in
             if (subband == 0)
               format1->insert_last_packet (block1 + block_offset);
@@ -759,6 +763,11 @@ bool spip::UDPReceiveMerge2DB::receive_thread (int p)
           // packet fits in the overflow buffer
           else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
           {
+
+                        block_offset = (byte_offset - curr_byte_offset) / 2 +
+                           ((byte_offset % pol_stride) / 2) -
+                           (subband * subband_stride);
+
             format->insert_last_packet (overflow + (byte_offset - next_byte_offset));
 
             overflow_lastbytes[p] = std::max((byte_offset - next_byte_offset) + bytes_received, overflow_lastbytes[p]);

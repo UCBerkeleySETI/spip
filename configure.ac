@@ -56,6 +56,7 @@ AC_CONFIG_FILES([Makefile
   src/Telescope/Makefile
   src/Util/Makefile
   scripts/Makefile
+  scripts/meerkat/Makefile
   scripts/spip/Makefile
   scripts/spip/threads/Makefile
   scripts/spip/utils/Makefile
