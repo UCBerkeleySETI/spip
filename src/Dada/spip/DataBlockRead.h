@@ -24,6 +24,8 @@ namespace spip {
 
       void * open_block ();
 
+      uint64_t get_buf_bytes (); 
+
       ssize_t close_block (uint64_t nbytes);
 
       size_t read (void * ptr, size_t bytes);
