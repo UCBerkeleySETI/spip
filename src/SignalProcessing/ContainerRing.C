@@ -6,16 +6,17 @@
  ***************************************************************************/
 
 #include "spip/ContainerRing.h"
+#include "spip/AsciiHeader.h"
 
+#include <iostream>
 #include <cstring>
 #include <stdexcept>
 
 using namespace std;
 
-spip::ContainerRing::ContainerRing (uint64_t _size)
+spip::ContainerRing::ContainerRing ()
 {
   buffer_valid = false;
-  size = _size;
 }
 
 spip::ContainerRing::~ContainerRing ()
@@ -25,6 +26,8 @@ spip::ContainerRing::~ContainerRing ()
 void spip::ContainerRing::resize ()
 {
   uint64_t required_size = calculate_buffer_size ();
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerRing::resize size=" << size << " required_size=" << required_size << endl;
   if (required_size > size)
   {
     throw runtime_error ("required size for container not equal to ring buffer size");

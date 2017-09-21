@@ -12,3 +12,14 @@ libspiputil_la_SOURCES = AsciiHeader.C  \
 	tostring.C \
 	Time.C
 
+#if HAVE_CUFFT
+
+libspiputil_headers += spip/CUFFTError.h
+
+libspiputil_la_SOURCES += CUFFTError.C
+
+#endif
+
+AM_CPPFLAGS = @CUFFT_CFLAGS@
+
+LDADD = @CUFFT_LIBS@

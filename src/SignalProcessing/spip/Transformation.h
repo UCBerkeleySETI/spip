@@ -32,13 +32,13 @@ namespace spip {
 
       void set_output (Out * output);
 
+      void set_verbose (bool _verbose) { verbose = _verbose; };
+
       //! Return the unique name of this operation
       std::string get_name() const { return operation_name; }
 
       std::string name (const std::string& function)
       { return "spip::Transformation["+get_name()+"]::" + function; }
-
-      static bool verbose;
 
     protected:
 
@@ -51,6 +51,16 @@ namespace spip {
       //! Declare that sub-classes must define a transformation method
       virtual void transformation () = 0;
 
+      //! Configures transformation once, when input is known
+      virtual void configure () = 0;
+
+      //! Prepares each call to transformation, called just prior
+      virtual void prepare () = 0;
+
+      //! Ensure meta-data is correct in output
+      virtual void prepare_output () = 0;
+
+      bool verbose;
 
     private:
 
@@ -59,6 +69,7 @@ namespace spip {
 
       //! Behaviour of Transformation
       Behaviour type;
+
   };
 }
 
@@ -66,8 +77,7 @@ namespace spip {
 template<class In, class Out>
 spip::Transformation<In,Out>::Transformation (const char* _name, Behaviour _type)
 {
-  //if (Transformation::verbose)
-    std::cerr << name("ctor") << std::endl;
+  verbose = false;
   type = _type;
 }
 
@@ -84,7 +94,7 @@ bool spip::Transformation<In,Out>::can_operate()
 template <class In, class Out>
 void spip::Transformation<In, Out>::set_input (const In* _input)
 {
-  //if (Transformation::verbose)
+  if (verbose)
     std::cerr << "spip::Transformation["+this->get_name()+"]::set_input ("<<_input<<")"<<std::endl;
 
   this->input = _input;
@@ -101,7 +111,7 @@ void spip::Transformation<In, Out>::set_input (const In* _input)
 template <class In, class Out>
 void spip::Transformation<In, Out>::set_output (Out* _output)
 {
-  //if (Transformation::verbose)
+  if (verbose)
     std::cerr << "spip::Transformation["+this->get_name()+"]::set_output ("<<_output<<")"<<std::endl;
 
   if (type == inplace && this->input
@@ -124,7 +134,7 @@ void spip::Transformation<In, Out>::set_output (Out* _output)
 template <class In, class Out>
 spip::Transformation<In,Out>::~Transformation()
 {
-  //if (Transformation::verbose)
+  if (verbose)
     std::cerr << name("dtor") << std::endl;
 }
 

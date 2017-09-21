@@ -37,6 +37,13 @@ namespace spip {
 
       void compute_fir_coeffs ();
 
+      void configure () { ; } ;
+
+      void prepare () { ; } ;
+
+      void prepare_output () { ; } ;
+
+
       //! Perform the integer delay transformation from input to output
       void transformation ();
 

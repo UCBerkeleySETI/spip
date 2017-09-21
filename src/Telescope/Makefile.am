@@ -11,9 +11,15 @@ libspiptelescope_la_SOURCES = Antenna.C \
   Channel.C \
   Delays.C
 
-AM_CXXFLAGS = -I$(top_builddir)/src/SignalProcessing
 
-LDADD = $(top_builddir)/src/Util/libspipdsp.la
+AM_CXXFLAGS = \
+  -I$(top_builddir)/src/Affinity \
+  -I$(top_builddir)/src/SignalProcessing \ 
+  -I$(top_builddir)/src/Util
 
+LDADD = \
+  $(top_builddir)/src/Affinity/libspipaffinity.la \
+  $(top_builddir)/src/SignalProcessing/libspipdsp.la \
+  $(top_builddir)/src/Util/libspiputil.la
 
 

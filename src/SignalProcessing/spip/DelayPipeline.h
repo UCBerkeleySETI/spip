@@ -14,7 +14,8 @@
 #include "spip/DataBlockWrite.h"
 #include "spip/IntegerDelay.h"
 #include "spip/FractionalDelay.h"
-#include "spip/ContainerRing.h"
+#include "spip/ContainerRingWrite.h"
+#include "spip/ContainerRingRead.h"
 #include "spip/ContainerRAM.h"
 
 #include <vector>
@@ -59,11 +60,11 @@ namespace spip {
 
       FractionalDelay * fractional_delay;
 
-      ContainerRing * input;
+      ContainerRingRead * input;
 
       ContainerRAM * buffered;
 
-      ContainerRing * output;
+      ContainerRingWrite * output;
 
       unsigned ntap;
 

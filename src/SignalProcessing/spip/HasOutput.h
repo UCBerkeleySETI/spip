@@ -27,7 +27,7 @@ namespace spip
     virtual Out* get_output () const { return output; }
 
     //! Returns true if output is set
-    bool has_output() const { return output.ptr(); }
+    bool has_output() const { return output; }
 
   protected:
 

@@ -8,6 +8,7 @@
 #include "spip/ContainerRAM.h"
 
 #include <cstring>
+#include <iostream>
 
 using namespace std;
 
@@ -27,6 +28,9 @@ void spip::ContainerRAM::resize ()
   uint64_t required_size = calculate_buffer_size ();
   if (required_size > size)
   {
+#ifdef _DEBUG
+    cerr << "spip::ContainerRAM::resize resizing from " << size << " to " << required_size << " bytes" << endl;
+#endif
     if (buffer)
       free (buffer);
     buffer = (unsigned char *) malloc (required_size);

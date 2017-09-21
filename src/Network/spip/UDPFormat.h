@@ -22,7 +22,7 @@ namespace spip {
 
       UDPFormat();
 
-      ~UDPFormat();
+      virtual ~UDPFormat();
 
       virtual void configure (const AsciiHeader& config, const char* suffix) = 0;
 

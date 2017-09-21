@@ -5,7 +5,12 @@
  *
  ***************************************************************************/
 
+#ifndef __ContainerCUDA_h
+#define __ContainerCUDA_h
+
 #include "spip/Container.h"
+
+#include <cuda_runtime.h>
 
 namespace spip {
 
@@ -49,3 +54,5 @@ namespace spip {
     private:
   };
 }
+
+#endif

@@ -4,8 +4,10 @@
  *   Licensed under the Academic Free License version 2.1
  *
  ***************************************************************************/
-
+#include "config.h"
 #include "spip/Container.h"
+#include "spip/DataBlockRead.h"
+#include "spip/DataBlockWrite.h"
 
 #ifndef __ContainerRing_h
 #define __ContainerRing_h
@@ -17,9 +19,11 @@ namespace spip {
     public:
 
       //! Null constructor
-      ContainerRing (uint64_t _size);
+      ContainerRing ();
 
       ~ContainerRing();
+
+      virtual void process_header () = 0;
 
       //! resize the buffer to match the input dimensions
       void resize ();

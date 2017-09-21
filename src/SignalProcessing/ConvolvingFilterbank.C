@@ -5,7 +5,7 @@
  *
  ***************************************************************************/
 
-#include "spip/DelayPipeline.h"
+#include "spip/ConvolvingFilterbank.h"
 
 #include <signal.h>
 #include <unistd.h>
@@ -18,7 +18,7 @@
 
 using namespace std;
 
-spip::DelayPipeline::DelayPipeline (const char * in_key_string, const char * out_key_string)
+spip::ConvolvingFilterbank::ConvolvingFilterbank (const char * in_key_string, const char * out_key_string)
 {
   in_db  = new DataBlockRead (in_key_string);
   out_db = new DataBlockWrite (out_key_string);
@@ -33,7 +33,7 @@ spip::DelayPipeline::DelayPipeline (const char * in_key_string, const char * out
   out_db->lock();
 }
 
-spip::DelayPipeline::~DelayPipeline()
+spip::ConvolvingFilterbank::~ConvolvingFilterbank()
 {
   in_db->unlock();
   in_db->disconnect();
@@ -44,7 +44,7 @@ spip::DelayPipeline::~DelayPipeline()
   delete out_db;
 }
 
-int spip::DelayPipeline::configure ()
+int spip::ConvolvingFilterbank::configure ()
 {
   char * header_str = in_db->read_header();
 
@@ -96,11 +96,11 @@ int spip::DelayPipeline::configure ()
   return 0;
 }
 
-void spip::DelayPipeline::prepare ()
+void spip::ConvolvingFilterbank::prepare ()
 {
   // input container
   uint64_t in_bufsz = in_db->get_data_bufsz();
-  input = new spip::ContainerRingRead (in_db);
+  input = new spip::ContainerRing (in_bufsz);
   input->set_nchan (nchan);
   input->set_nsignal (nsignal);
   input->set_nbit (nbit);
@@ -127,7 +127,7 @@ void spip::DelayPipeline::prepare ()
   integer_delay->prepare (nsignal);
 
   uint64_t out_bufsz = out_db->get_data_bufsz ();
-  output = new spip::ContainerRingWrite (out_db);
+  output = new spip::ContainerRing (out_db->get_data_bufsz());
   output->set_nchan (nchan);
   output->set_nsignal (nsignal);
   output->set_nbit (nbit);
@@ -143,13 +143,13 @@ void spip::DelayPipeline::prepare ()
   
 }
 
-void spip::DelayPipeline::open ()
+void spip::ConvolvingFilterbank::open ()
 {
   open (header.raw());
 }
 
 // write the ascii header to the output datablock
-void spip::DelayPipeline::open (const char * header_str)
+void spip::ConvolvingFilterbank::open (const char * header_str)
 {
   // open the data block for writing  
   out_db->open();
@@ -158,21 +158,21 @@ void spip::DelayPipeline::open (const char * header_str)
   out_db->write_header (header_str);
 }
 
-void spip::DelayPipeline::close ()
+void spip::ConvolvingFilterbank::close ()
 {
 #ifdef _DEBUG
-  cerr << "spip::DelayPipeline::close()" << endl;
+  cerr << "spip::ConvolvingFilterbank::close()" << endl;
 #endif
 
   if (out_db->is_block_open())
   {
-    cerr << "spip::DelayPipeline::close out_db->close_block(" << out_db->get_data_bufsz() << ")" << endl;
+    cerr << "spip::ConvolvingFilterbank::close out_db->close_block(" << out_db->get_data_bufsz() << ")" << endl;
     out_db->close_block (out_db->get_data_bufsz());
   }
 
   if (in_db->is_block_open())
   {
-    cerr << "spip::DelayPipeline::close in_db->close_block(" << in_db->get_data_bufsz() << ")" << endl;
+    cerr << "spip::ConvolvingFilterbank::close in_db->close_block(" << in_db->get_data_bufsz() << ")" << endl;
     in_db->close_block (in_db->get_data_bufsz());
   }
 
@@ -181,7 +181,7 @@ void spip::DelayPipeline::close ()
   out_db->close();
 }
 
-void spip::DelayPipeline::compute_delays ( spip::ContainerRAM * int_delays,
+void spip::ConvolvingFilterbank::compute_delays ( spip::ContainerRAM * int_delays,
                                            spip::ContainerRAM * frac_delays,
                                            spip::ContainerRAM * phases )
 {
@@ -189,9 +189,9 @@ void spip::DelayPipeline::compute_delays ( spip::ContainerRAM * int_delays,
 }
 
 // process blocks of input data until the end of the data stream
-bool spip::DelayPipeline::process ()
+bool spip::ConvolvingFilterbank::process ()
 {
-  cerr << "spip::DelayPipeline::process ()" << endl;
+  cerr << "spip::ConvolvingFilterbank::process ()" << endl;
 
   bool keep_processing = true;
 

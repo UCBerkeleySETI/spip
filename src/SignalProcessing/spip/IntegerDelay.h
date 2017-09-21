@@ -34,6 +34,12 @@ namespace spip {
 
       void compute_delta_delays ();
 
+      void configure () { ; } ;
+
+      void prepare () { ; } ;
+
+      void prepare_output () { ; } ;
+
       template <typename T>
       void transform (T * in, T* buf, T * out)
       {
