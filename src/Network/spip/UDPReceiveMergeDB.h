@@ -39,6 +39,8 @@ namespace spip {
 
       void set_control_cmd (ControlCmd cmd);
 
+      void send_terminal_packets();
+
       void start_control_thread (int port);
       void stop_control_thread ();
 
