@@ -52,6 +52,28 @@ AC_DEFUN([SWIN_LIB_CUDA],
 
     AC_DEFINE([HAVE_CUDA],[1],[Define if the CUDA library is present])
 
+    with_cufft_include_dir=${with_cuda_include_dir}
+    with_cufft_lib_dir=${with_cuda_lib_dir}
+
+    AC_MSG_CHECKING([for CUDA FFT installation])
+
+    SWIN_PACKAGE_FIND([cufft],[cufft.h])
+    SWIN_PACKAGE_TRY_COMPILE([cufft],[#include <cufft.h>])
+
+    SWIN_PACKAGE_FIND([cufft],[libcufft.*])
+    SWIN_PACKAGE_TRY_LINK([cufft],[#include <cufft.h>],
+                          [cufftPlan1d (0, 1024, CUFFT_C2C, 1);],[-lcufft])
+
+    AC_MSG_RESULT([$have_cufft])
+
+    if test "$have_cufft" = "yes"; then
+      AC_DEFINE([HAVE_CUFFT],[1],[Define if the CUFFT library is present])
+      [$1]
+    else
+      AC_MSG_WARN([psrdada will not run on GPU])
+      [$2]
+    fi
+
   else
 
     if test "$have_cuda" = "not found"; then
@@ -72,5 +94,12 @@ AC_DEFUN([SWIN_LIB_CUDA],
   AC_SUBST(CUDA_LIBS)
   AC_SUBST(CUDA_CFLAGS)
   AM_CONDITIONAL(HAVE_CUDA,[test "$have_cuda" = "yes"])
+
+  CUFFT_LIBS="$cufft_LIBS"
+  CUFFT_CFLAGS="$cufft_CFLAGS"
+  AC_SUBST(CUFFT_LIBS)
+  AC_SUBST(CUFFT_CFLAGS)
+  AM_CONDITIONAL(HAVE_CUFFT,[test "$have_cufft" = "yes"])
+
 
 ])
