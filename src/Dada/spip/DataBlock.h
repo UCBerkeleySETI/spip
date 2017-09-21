@@ -4,11 +4,13 @@
 
 #include "ipcio.h"
 #include "ipcbuf.h"
+#include "dada_def.h"
+
+#include "config.h"
 
 #include <cstddef>
 #include <string>
 
-#include "dada_def.h"
 
 namespace spip
 {
@@ -18,7 +20,7 @@ namespace spip
 
       DataBlock (const char * key);
 
-      ~DataBlock ();
+      virtual ~DataBlock ();
 
       void connect ();
 
@@ -41,6 +43,13 @@ namespace spip
       inline const bool is_block_full () { return (curr_buf_bytes == data_bufsz); };
 
       const char * get_header() { return reinterpret_cast<const char *>(header); } ;
+
+#ifdef HAVE_CUDA
+      void register_cuda();
+
+      void unregister_cuda();
+#endif
+
 
     protected:
 
@@ -73,7 +82,6 @@ namespace spip
       key_t data_block_key;
 
       key_t header_block_key;
-
 
   };
 

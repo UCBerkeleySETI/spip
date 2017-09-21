@@ -12,6 +12,11 @@
 #include <cstdlib>
 #include <stdexcept>
 
+#ifdef HAVE_CUDA
+#include <cuda_runtime.h>
+#endif
+
+
 using namespace std;
 
 spip::DataBlock::DataBlock (const char * key_string)
@@ -102,3 +107,41 @@ void spip::DataBlock::disconnect ()
     free(header);
   header = 0;
 }
+
+#ifdef HAVE_CUDA
+void spip::DataBlock::register_cuda()
+{
+  ipcbuf_t * db = (ipcbuf_t *) data_block;
+
+  // ensure that the data blocks are SHM locked
+  if (ipcbuf_lock (db) < 0)
+    throw runtime_error("failed to lock buffers into RAM");
+
+  unsigned int flags = 0;
+  cudaError_t rval;
+  size_t bufsz = db->sync->bufsz;
+
+  // lock each data block buffer as cuda memory
+  for (uint64_t ibuf = 0; ibuf < db->sync->nbufs; ibuf++)
+  {
+    rval = cudaHostRegister ((void *) db->buffer[ibuf], bufsz, flags);
+    if (rval != cudaSuccess)
+      throw runtime_error ("cudaHostRegister failed");
+  }
+}
+
+void spip::DataBlock::unregister_cuda()
+{
+  ipcbuf_t * db = (ipcbuf_t *) data_block;
+  cudaError_t rval;
+
+  // lock each data block buffer as cuda memory
+  for (uint64_t ibuf = 0; ibuf < db->sync->nbufs; ibuf++)
+  {
+    rval = cudaHostUnregister ((void *) db->buffer[ibuf]);
+    if (rval != cudaSuccess)
+      throw runtime_error ("cudaHostUnRegister failed");
+  }
+}
+
+#endif
