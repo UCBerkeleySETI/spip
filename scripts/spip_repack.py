@@ -54,24 +54,25 @@ class RepackReportingThread(ReportingThread):
 
         self.script.log (3, "RepackReportingThread::parse_message: keys="+str(self.script.results[beam].keys()))
 
+        # always show the most recent result
         if self.script.results[beam]["valid"]:
-
           self.script.log (3, "RepackReportingThread::parse_message: beam " + str(beam) + " is valid!")
-          xml += "<source>"
-          xml += "<name epoch='J2000'>" + self.script.results[beam]["source"] + "</name>"
-          xml += "</source>"
 
-          xml += "<observation>"
-          xml += "<start units='datetime'>" + self.script.results[beam]["utc_start"] + "</start>"
-          xml += "<integrated units='seconds'>" + self.script.results[beam]["length"] + "</integrated>"
-          xml += "<snr>" + self.script.results[beam]["snr"] + "</snr>"
-          xml += "</observation>"
+        xml += "<source>"
+        xml += "<name epoch='J2000'>" + self.script.results[beam]["source"] + "</name>"
+        xml += "</source>"
 
-          xml += "<plot type='flux_vs_phase' timestamp='" + self.script.results[beam]["timestamp"] + "'/>"
-          xml += "<plot type='freq_vs_phase' timestamp='" + self.script.results[beam]["timestamp"] + "'/>"
-          xml += "<plot type='time_vs_phase' timestamp='" + self.script.results[beam]["timestamp"] + "'/>"
-          xml += "<plot type='bandpass' timestamp='" + self.script.results[beam]["timestamp"] + "'/>"
-          xml += "<plot type='snr_vs_time' timestamp='" + self.script.results[beam]["timestamp"] + "'/>"
+        xml += "<observation>"
+        xml += "<start units='datetime'>" + self.script.results[beam]["utc_start"] + "</start>"
+        xml += "<integrated units='seconds'>" + self.script.results[beam]["length"] + "</integrated>"
+        xml += "<snr>" + self.script.results[beam]["snr"] + "</snr>"
+        xml += "</observation>"
+
+        xml += "<plot type='flux_vs_phase' timestamp='" + self.script.results[beam]["timestamp"] + "'/>"
+        xml += "<plot type='freq_vs_phase' timestamp='" + self.script.results[beam]["timestamp"] + "'/>"
+        xml += "<plot type='time_vs_phase' timestamp='" + self.script.results[beam]["timestamp"] + "'/>"
+        xml += "<plot type='bandpass' timestamp='" + self.script.results[beam]["timestamp"] + "'/>"
+        xml += "<plot type='snr_vs_time' timestamp='" + self.script.results[beam]["timestamp"] + "'/>"
 
         xml += "</beam>"
 
@@ -90,12 +91,18 @@ class RepackReportingThread(ReportingThread):
         self.script.log (2, "RepackReportingThread::parse_message: beam=" + \
                           req["beam"] + " plot=" + req["plot"]) 
 
-        if self.script.results[req["beam"]]["valid"]:
+        #if self.script.results[req["beam"]]["valid"]:
+        if req["plot"] in self.script.results[req["beam"]].keys() and len(self.script.results[req["beam"]][req["plot"]]) > 32:
           bin_data = copy.deepcopy(self.script.results[req["beam"]][req["plot"]])
           self.script.log (2, "RepackReportingThread::parse_message: beam=" + req["beam"] + " valid, image len=" + str(len(bin_data)))
           self.script.results[req["beam"]]["lock"].release()
           return False, bin_data
         else:
+          if not req["plot"] in self.script.results[req["beam"]].keys():
+            self.script.log (1, "RepackReportingThread::parse_message " + req["plot"] + " did not exist in results[" + req["beam"] + "].keys()")
+          else:
+            self.script.log (1, "RepackReportingThread::parse_message len(plot)= " + str(len(self.script.results[req["beam"]][req["plot"]])))
+           
           self.script.log (2, "RepackReportingThread::parse_message beam was not valid")
 
           self.script.results[req["beam"]]["lock"].release()
@@ -146,6 +153,8 @@ class RepackDaemon(Daemon):
       os.makedirs(self.archived_dir, 0755) 
 
     self.log (2, "main: stream_id=" + str(self.id))
+
+    self.load_finished ()
 
     while (not self.quit_event.isSet()):
 
@@ -305,6 +314,107 @@ class RepackDaemon(Daemon):
       if processed_this_loop == 0:
         self.log (3, "time.sleep(1)")
         time.sleep(1)
+
+  def load_finished (self):
+
+    # read the most recently finished observations
+    for beam in self.beams:
+      beam_dir = self.finished_dir + "/" + beam
+
+      cmd = "find " + beam_dir + " -mindepth 2 -maxdepth 2 -type d | sort | tail -n 1"
+      rval, observation = self.system (cmd, 3)
+
+      # strip prefix 
+      observation = observation[0][(len(beam_dir)+1):]
+
+      self.log (2, "load_finished: " + observation)
+      (utc, source) = observation.split("/")
+
+      obs_dir = self.finished_dir + "/" + beam + "/" + utc + "/" + source
+
+      time_file = obs_dir + "/time.sum"
+      freq_file = obs_dir + "/freq.sum"
+
+      cmd = "find  " + obs_dir + " -mindepth 1 -maxdepth 1 -type f -name '????-??-??-??:??:??.*.png' | sort"
+      rval, pngs = self.system (cmd, 3)
+
+      flux_vs_phase = ""
+      freq_vs_phase = ""
+      time_vs_phase = ""
+      snr_vs_time = ""
+      bandpass = ""
+      timestamp = ""
+
+      for png in pngs:
+        self.log (2, "load_finished: evaluating png=" + png)
+        if png.find("flux") >= 0:
+          flux_vs_phase = png
+        if png.find("freq") >= 0:
+          freq_vs_phase = png
+        if png.find("time") >= 0:
+          time_vs_phase = png
+        if png.find("snrt") >= 0:
+          snr_vs_time = png
+        if png.find("band") >= 0:
+          bandpass = png
+        if timestamp == "":
+          filename = png.split("/")[-1]
+          timestamp = filename.split(".")[0]
+          self.log (2, "load_finished: png=" + png + " filename=" + filename + " timestamp=" + timestamp)
+      
+      self.results[beam]["lock"].acquire()
+
+      self.results[beam]["utc_start"] = utc
+      self.results[beam]["source"] = source
+      self.log (1, "load_finished: utc_start=" + utc + " source=" + source)
+    
+      if os.path.exists(flux_vs_phase):
+        fptr = open (flux_vs_phase, "rb")
+        self.results[beam]["flux_vs_phase"] = fptr.read()
+        fptr.close()
+
+      if os.path.exists(freq_vs_phase):
+        fptr = open (freq_vs_phase, "rb")
+        self.results[beam]["freq_vs_phase"] = fptr.read()
+        fptr.close()
+
+      if os.path.exists(time_vs_phase):
+        fptr = open (time_vs_phase, "rb")
+        self.results[beam]["time_vs_phase"] = fptr.read()
+        fptr.close()
+
+      if os.path.exists(snr_vs_time):
+        fptr = open (snr_vs_time, "rb")
+        self.results[beam]["snr_vs_time"] = fptr.read()
+        fptr.close()
+
+      if os.path.exists(bandpass):
+        fptr = open (bandpass, "rb")
+        self.results[beam]["bandpass"] = fptr.read()
+        fptr.close()
+
+
+      cmd = "psrstat -jFDp -c snr " + freq_file + " | awk -F= '{printf(\"%f\",$2)}'"
+      rval, lines = self.system (cmd, 3)
+      if rval < 0:
+        return (rval, "failed to extract snr from freq.sum")
+      snr = lines[0]
+
+      cmd = "psrstat -c length " + time_file + " | awk -F= '{printf(\"%f\",$2)}'"
+      rval, lines = self.system (cmd, 3)
+      if rval < 0:
+        return (rval, "failed to extract time from time.sum")
+      length = lines[0]
+
+      self.results[beam]["timestamp"] = timestamp
+      self.results[beam]["snr"] = snr
+      self.results[beam]["length"] = length
+      self.results[beam]["valid"] = False 
+
+      self.results[beam]["lock"].release()
+
+    return 0, ""
+
 
   # 
   # patch missing information into the PSRFITS header 
@@ -627,6 +737,7 @@ class RepackDaemon(Daemon):
       flux_vs_phase = obs_dir + "/" + timestamp + ".flux.png"
       freq_vs_phase = obs_dir + "/" + timestamp + ".freq.png"
       time_vs_phase = obs_dir + "/" + timestamp + ".time.png"
+      snr_vs_time = obs_dir + "/" + timestamp + ".snrt.png"
       bandpass = obs_dir + "/" + timestamp + ".band.png"
 
       fptr = open (flux_vs_phase, "wb")
@@ -639,6 +750,10 @@ class RepackDaemon(Daemon):
 
       fptr = open (time_vs_phase, "wb")
       fptr.write(self.results[beam]["time_vs_phase"])
+      fptr.close()
+
+      fptr = open (snr_vs_time, "wb")
+      fptr.write(self.results[beam]["snr_vs_time"])
       fptr.close()
 
       fptr = open (bandpass, "wb")
