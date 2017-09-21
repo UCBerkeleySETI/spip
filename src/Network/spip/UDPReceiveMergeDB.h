@@ -51,6 +51,7 @@ namespace spip {
         vma_api->thread_offload (0, id);
 #endif
         ((UDPReceiveMergeDB*) obj )->control_thread ();
+        pthread_exit (NULL);
       }
 
       void start_threads (int core1, int core2);
