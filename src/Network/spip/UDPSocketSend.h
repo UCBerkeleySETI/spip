@@ -19,6 +19,9 @@ namespace spip {
       // open the socket
       void open (std::string, int);
 
+      // open the socket and bind to a multicast group
+      void open_multicast (std::string, int);
+
       // send the contents of buf (bufsz bytes)
       inline size_t send () { sendto(fd, buf, bufsz, 0, sock_addr, sock_size); };
 
@@ -29,6 +32,8 @@ namespace spip {
       struct sockaddr * sock_addr;
 
       size_t sock_size;
+
+      std::string group;
 
   };
 
