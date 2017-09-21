@@ -24,7 +24,7 @@ namespace spip {
 
       SimReceiveDB (const char * key_string);
 
-      ~SimReceiveDB ();
+      virtual ~SimReceiveDB ();
 
       int configure (const char * config);
 
