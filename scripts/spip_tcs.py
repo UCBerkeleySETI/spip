@@ -56,11 +56,18 @@ class TCSReportingThread (ReportingThread):
         utc_start = self.beam_states[beam]["utc_start"]
         self.script.log (2, "TCSReportingThread::parse_message: utc_start=" + str(self.beam_states[beam]["utc_start"]))
         elapsed_time = str(times.diffUTCTime(self.beam_states[beam]["utc_start"]))
+        if self.beam_states[beam]["utc_stop"] != None:
+          utc_stop = self.beam_states[beam]["utc_stop"]
+          elapsed_time = str(times.diffUTCTimes(utc_start, utc_stop))
+        else:
+          utc_stop = ""
       else:
         utc_start = ""
+        utc_stop = ""
         elapsed_time = ""
-  
+
       xml += "<utc_start>" + utc_start + "</utc_start>"
+      xml += "<utc_stop>" + utc_stop + "</utc_stop>"
       xml += "<elapsed_time units='seconds'>" + elapsed_time + "</elapsed_time>"
       xml += "<expected_length units='seconds'>" + self.beam_states[beam]["tobs"] + "</expected_length>"
       xml += "</observation_parameters>"
@@ -84,8 +91,51 @@ class TCSDaemon(Daemon):
     self.beam_states = {}
     self.host = sockets.getHostNameShort()
 
+  def load_finished (self):
+
+    # read the most recently finished observations
+    for b in self.beam_states.keys():
+
+      # TODO check this for SERVER / BEAM
+      beam_dir = self.cfg["CLIENT_FOLD_DIR"] + "/finished/" + b
+
+      cmd = "find " + beam_dir + " -mindepth 2 -maxdepth 2 -type d | sort | tail -n 1"
+      rval, observation = self.system (cmd, 3)
+
+      # strip prefix 
+      observation = observation[0][(len(beam_dir)+1):]
+
+      self.log (1, "main: " + observation)
+      (utc, source) = observation.split("/")
+
+      obs_dir = beam_dir + "/" + utc + "/" + source
+
+      self.log(2, "load_finished: reading configuration for " + b + "/" + utc + "/" + source)
+
+      if os.path.exists (obs_dir + "/obs.header"):
+        header = Config.readCFGFileIntoDict(obs_dir + "/obs.header")
+        self.beam_states[b]["lock"].acquire()
+
+        self.beam_states[b]["source"] = header["SOURCE"]
+        self.beam_states[b]["ra"]     = header["RA"]
+        self.beam_states[b]["dec"]    = header["DEC"]
+
+        self.beam_states[b]["observer"] = header["OBSERVER"]
+        self.beam_states[b]["pid"] = header["PID"]
+        self.beam_states[b]["mode"] = header["MODE"]
+        self.beam_states[b]["calfreq"] = header["CALFREQ"]
+        self.beam_states[b]["proc_file"] = "None"
+
+        self.beam_states[b]["tobs"] = header["TOBS"]
+        self.beam_states[b]["utc_start"] = header["UTC_START"]
+        self.beam_states[b]["adc_sync_time"] = header["ADC_SYNC_TIME"]
+        self.beam_states[b]["state"] = "Idle"
+
+        self.beam_states[b]["lock"].release()
 
   def main (self, id):
+
+    self.load_finished()
 
     self.log(2, "main: TCS listening on " + self.host + ":" + str(self.interface_port))
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
