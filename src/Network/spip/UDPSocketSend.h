@@ -17,7 +17,7 @@ namespace spip {
       ~UDPSocketSend ();
 
       // open the socket
-      void open (std::string, int);
+      void open (std::string, int, std::string);
 
       // open the socket and bind to a multicast group
       void open_multicast (std::string, int);

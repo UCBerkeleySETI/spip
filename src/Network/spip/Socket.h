@@ -26,7 +26,7 @@ namespace spip {
       void close_me ();
 
       // resize the socket buffer
-      void resize (size_t new_bufsz);
+      virtual void resize (size_t new_bufsz);
 
       int set_nonblock();
 
