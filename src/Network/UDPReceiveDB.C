@@ -107,7 +107,11 @@ int spip::UDPReceiveDB::configure (const char * config)
     throw invalid_argument ("failed to write RESOLUTION to header");
 
   if (db->get_data_bufsz() % resolution != 0)
+  {
+    cerr << "db->get_data_bufsz=" << db->get_data_bufsz () << endl;
+    cerr << "RESOLUTION=" << resolution << endl;
     throw invalid_argument ("Data block buffer size must be multiple of RESOLUTION");
+  }
 
 }
 
@@ -129,10 +133,10 @@ void spip::UDPReceiveDB::prepare ()
   else
     sock->open (data_host, data_port);
   
-  size_t sock_bufsz = format->get_header_size() + format->get_data_size();
+  size_t sock_bufsz = format->get_packet_size();
   cerr << "spip::UDPReceiveDB::prepare resize(" << sock_bufsz << ")" << endl;
   sock->resize (sock_bufsz);
-  sock->resize_kernel_buffer (32*1024*1024);
+  sock->resize_kernel_buffer (64*1024*1024);
 
   stats = new UDPStats (format->get_header_size(), format->get_data_size());
 }
@@ -460,6 +464,7 @@ bool spip::UDPReceiveDB::receive ()
   int64_t byte_offset;
 
   unsigned bytes_received, bytes_dropped;
+  ssize_t packet_size = format->get_packet_size();
 
 #ifdef _DEBUG
   cerr << "spip::UDPReceiveDB::receive sock_bufsz=" << sock_bufsz << endl;
@@ -468,7 +473,6 @@ bool spip::UDPReceiveDB::receive ()
 
 #ifdef HAVE_VMA
   int flags;
-  cerr << "spip::UDPReceiveDB::receive beginning acquisition loop" << endl;
 #endif
 
   control_state = Idle;
@@ -479,8 +483,9 @@ bool spip::UDPReceiveDB::receive ()
     got = sock->recv_from();
 
     // received a bad packet, brutal exit
-    if (got == 0)
+    if (got != packet_size)
     {
+      cerr << "Received small packet, got " << got << ", expected " << packet_size << " bytes " << endl;
       set_control_cmd(Stop);
       control_state = Stopping;
     }
@@ -513,10 +518,10 @@ bool spip::UDPReceiveDB::receive ()
           next_byte_offset += data_bufsz;
           overflow_maxbyte = next_byte_offset + overflow_bufsz;
 
-  #ifdef _DEBUG
+#ifdef _DEBUG
           cerr << "spip::UDPReceiveDB::receive [" << curr_byte_offset << " - " 
                << next_byte_offset << "] (" << bytes_this_buf << ")" << endl;
-  #endif
+#endif
 
           if (overflow_lastbyte > 0)
           {
@@ -575,9 +580,11 @@ bool spip::UDPReceiveDB::receive ()
       }
     }
 
+#ifndef HAVE_VMA
     // update stats for any sleeps
     nsleeps = sock->process_sleeps();
     stats->sleeps(nsleeps);
+#endif
 
     if (control_cmd == Stop || control_cmd == Quit)
     {

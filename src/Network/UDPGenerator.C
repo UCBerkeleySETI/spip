@@ -134,12 +134,11 @@ void spip::UDPGenerator::prepare ()
   }
 
   format->prepare (header, "");
-  
+ 
   unsigned header_size = format->get_header_size();
-  unsigned data_size   = format->get_data_size();
-
-  cerr << "header_size=" << header_size << " data_size=" << data_size << endl;
-  sock->resize (header_size + data_size);
+  unsigned data_size = format->get_data_size();
+  unsigned packet_size = format->get_packet_size();
+  sock->resize (packet_size);
 
   // initialize a stats class
   stats = new UDPStats(header_size, data_size);
@@ -158,6 +157,7 @@ void spip::UDPGenerator::transmit (unsigned tobs, float data_rate)
 
   cerr << "spip::UDPGenerator::transmit bytes_to_send=" << bytes_to_send << endl;
 
+  unsigned packet_size = format->get_packet_size();
   uint64_t packets_to_send = bytes_to_send / format->get_data_size();
 
   uint64_t packets_per_second = 0;
@@ -201,6 +201,7 @@ void spip::UDPGenerator::transmit (unsigned tobs, float data_rate)
   cerr << "spip::UDPGenerator::transmit start_second=" << start_second<< endl;
   cerr << "spip::UDPGenerator::transmit payload_size=" << payload_size << endl;
   cerr << "spip::UDPGenerator::transmit bufsz=" << bufsz << endl;
+  cerr << "spip::UDPGenerator::transmit packet_size=" << packet_size<< endl;
 
   keep_transmitting = true;
 
