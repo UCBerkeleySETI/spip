@@ -24,7 +24,7 @@ from meerkat.pubsub import PubSubThread
 from meerkat.device_server import KATCPServer
 
 DAEMONIZE = True
-DL = 1
+DL = 2
 
 ###############################################################
 # KATCP daemon
@@ -204,6 +204,11 @@ class KATCPDaemon(Daemon):
           self.log(1, "repack connection was unexpectedly closed")
           sock.close()
 
+      # connect to STAT (TBD) to retrieve beam-former power levels
+      host = "None"
+      xml = "None"
+      self.update_stat_sensors (host, xml)
+
       to_sleep = 5
       while not self.quit_event.isSet() and to_sleep > 0:
         to_sleep -= 1
@@ -255,9 +260,21 @@ class KATCPDaemon(Daemon):
     xml +=     "<utc_stop></utc_stop>"
     xml +=   "</observation_parameters>"
 
-    xml +=   "<instrument_parameters>"
+    #xml +=   "<instrument_parameters>"
+    #xml +=     "<adc_sync_time>" + self.beam_config["ADC_SYNC_TIME"] + "</adc_sync_time>"
+    #xml +=   "</instrument_parameters>"
+
+    xml +=   "<custom_parameters>"
+    xml +=     "<fields>adc_sync_time antennae description experiment_id proposal_id program_block_id schedule_block_id</fields>"
     xml +=     "<adc_sync_time>" + self.beam_config["ADC_SYNC_TIME"] + "</adc_sync_time>"
-    xml +=   "</instrument_parameters>"
+    xml +=     "<antennae>" + self.beam_config["ANTENNAE"] + "</antennae>"
+    xml +=     "<schedule_block_id>" + self.beam_config["SCHEDULE_BLOCK_ID"] + "</schedule_block_id>"
+    xml +=     "<experiment_id>" + self.beam_config["EXPERIMENT_ID"] + "</experiment_id>"
+    xml +=     "<proposal_id>" + self.beam_config["PROPOSAL_ID"] + "</proposal_id>"
+    xml +=     "<program_block_id>" + "TBD" + "</program_block_id>"
+    xml +=     "<description>" + self.beam_config["DESCRIPTION"] + "</description>"
+    xml +=   "</custom_parameters>"
+
 
     xml += "</obs_cmd>"
 
@@ -267,8 +284,7 @@ class KATCPDaemon(Daemon):
 
     xml  = "<?xml version='1.0' encoding='ISO-8859-1'?>"
     xml += "<obs_cmd>"
-    xml += "<command>start</command>"
-    xml +=   "<beam_configuration>"
+    xml +=   "<command>start</command>"
     xml +=   "<beam_configuration>"
     xml +=     "<nbeam>1</nbeam>"
     xml +=     "<beam_state_0 name='" + self.beam_name + "'>on</beam_state_0>"
@@ -349,6 +365,14 @@ class KATCPDaemon(Daemon):
         self.katcp._beam_sensors["observing"].set_value (0)
         self.katcp._beam_sensors["snr"].set_value (0)
         self.katcp._beam_sensors["integrated"].set_value (0)
+
+    return ("ok")
+
+  def update_stat_sensors (self, host, xml):
+
+    # hack for now
+    self.katcp._beam_sensors["beamformer_stddev_polh"].set_value (0)
+    self.katcp._beam_sensors["beamformer_stddev_polv"].set_value (0)
 
     return ("ok")
 

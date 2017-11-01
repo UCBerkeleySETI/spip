@@ -291,7 +291,7 @@ class timing extends spip_webpage
     {
       foreach ($this->beams as $ibeam => $beam)
       {
-        array_push ($tcses, $beam["host"].":".($this->config["TCS_REPORT_PORT"] + $ibeam));
+        array_push ($tcses, $beam["host"].":".($this->config["TCS_REPORT_PORT_".$ibeam]));
       }
     }
     else
