@@ -17,7 +17,7 @@
 namespace spip {
 
   //! All Data Containers have a sample ordering 
-  typedef enum { SFPT, TFPS, FSTP, Custom } Ordering;
+  typedef enum { SFPT, TFPS, TSPF, Custom } Ordering;
 
   class Container
   {

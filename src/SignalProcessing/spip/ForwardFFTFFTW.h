@@ -27,12 +27,16 @@ namespace spip {
       
       void configure ();
 
+      void configure_plan ();
+
       void prepare ();
       
       void reserve ();
       
-      void transform ();
-      
+      void transform_SFPT_to_TFPS ();
+
+      void transform_SFPT_to_TSPF ();
+
     protected:
     
     private:

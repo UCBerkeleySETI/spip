@@ -6,40 +6,42 @@
  *
  ***************************************************************************/
 
-#ifndef __ForwardFFTCUDA_h
-#define __ForwardFFTCUDA_h
+#ifndef __BackwardFFTCUDA_h
+#define __BackwardFFTCUDA_h
 
 #include "config.h"
 
-#include "spip/ForwardFFT.h"
+#include "spip/BackwardFFT.h"
 
 #include <cuda_runtime.h>
 #include <cufft.h>
 
 namespace spip {
 
-  class ForwardFFTCUDA: public ForwardFFT
+  class BackwardFFTCUDA: public BackwardFFT
   {
     public:
     
-      ForwardFFTCUDA (cudaStream_t);
+      BackwardFFTCUDA (cudaStream_t);
       
-      ~ForwardFFTCUDA ();
+      ~BackwardFFTCUDA ();
       
-      void prepare ();
+      void configure ();
 
       void configure_plan ();
+
+      void prepare ();
       
       void reserve ();
       
-      void transform_SFPT_to_TFPS ();
+      void transform_TFPS_to_SFPT ();
 
-      void transform_SFPT_to_TSPF ();
+      void transform_TSPF_to_SFPT ();
 
     protected:
     
     private:
- 
+
       cudaStream_t stream;
 
       cufftHandle plan;
@@ -49,7 +51,8 @@ namespace spip {
       size_t work_area_size;
 
       bool auto_allocate;
-
+  
+      
   };
 }
 

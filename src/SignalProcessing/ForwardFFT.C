@@ -15,6 +15,7 @@ using namespace std;
 spip::ForwardFFT::ForwardFFT () : Transformation<Container,Container>("ForwardFFT", outofplace)
 {
   nfft = 0;
+  nbatch = 0;
 }
 
 spip::ForwardFFT::~ForwardFFT ()
@@ -64,7 +65,7 @@ void spip::ForwardFFT::configure ()
   // update the parameters that this transformation will affect
   output->set_nchan (nchan * nfft);
   output->set_tsamp (tsamp / nfft);
-  output->set_order (spip::Ordering::TFPS);
+  output->set_order (spip::Ordering::TSPF);
 
   if (verbose)
   {
@@ -83,16 +84,63 @@ void spip::ForwardFFT::configure ()
   // TODO change the UTC_START to be related to the new time resolution
 }
 
+void spip::ForwardFFT::configure_plan_dimensions()
+{
+  // batch over multiple time samples for a given input channel, antenna and pol
+  // each batch produces 1 out time sample, nfft channels 
+  nbatch = ndat / nfft;
+  nchan_out = nchan * nfft;
+
+  rank = 1;                 // 1D transform
+  n[0] = nfft;              // of length nfft
+  howmany = nbatch;
+
+  inembed[0] = nfft;
+  onembed[0] = nfft;
+
+  if (verbose)
+    cerr << "spip::ForwardFFT::configure_plan_dimensions ndat=" << ndat  << " nfft=" << nfft << " nbatch=" << nbatch << endl;
+
+  if ((input->get_order() == SFPT) && (output->get_order() == TFPS))
+  {
+    istride = 1 ;                 // stride between samples
+    idist = nfft * istride;       // stride between FFT blocks
+    ostride = npol * nsignal;     // stride between samples
+    odist = nchan_out * ostride;  // stride between FFT blocks
+  }
+  else if ((input->get_order() == SFPT) && (output->get_order() == TSPF))
+  { 
+    istride = 1;                 // stride between samples
+    idist = nfft * istride;       // stride between FFT blocks
+    ostride = npol * nsignal;     // stride between samples
+    odist = nchan_out * ostride;  // stride between FFT blocks
+  }
+  else
+  {
+    throw invalid_argument ("ForwardFFT::configure_plan_dimensions input/output order not supported");
+  }
+}
+
 //! prepare prior to each transformation call
 void spip::ForwardFFT::prepare ()
 {
   ndat = input->get_ndat();
+
+  // check that ndat is a multiple of nfft
   uint64_t remainder = ndat % nfft;
   if (remainder != 0)
   {
     if (verbose)
       cerr << "spip::ForwardFFT::prepare truncating ndat from " << ndat << " to " << ndat - remainder << endl;
     ndat -= remainder;
+  }
+
+  // check that the batching length is correct
+  if (nbatch != ndat / nfft)
+  {
+    if (verbose)
+      cerr << "spip::ForwardFFT::prepare reconfiguring FFT plan" << endl;
+    configure_plan ();
   }
 }
 
@@ -120,8 +168,22 @@ void spip::ForwardFFT::transformation ()
     cerr << "spip::ForwardFFT::transformation ndat==0, ignoring" << endl;
     return;
   }
+
+  if (verbose)
+    cerr << "spip::ForwardFFT::transform nfft=" << nfft << endl;
     
   // apply data transformation
-  transform ();
+  if ((input->get_order() == SFPT) && (output->get_order() == TFPS))
+  {
+    transform_SFPT_to_TFPS ();
+  }
+  else if ((input->get_order() == SFPT) && (output->get_order() == TSPF))
+  {
+    transform_SFPT_to_TSPF ();
+  }
+  else
+  {
+    throw runtime_error ("ForwardFFT::transform unsupport input to output conversion");
+  }
 }
 
