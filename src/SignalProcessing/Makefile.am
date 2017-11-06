@@ -15,15 +15,20 @@ libspipdsp_la_SOURCES = Container.C \
 	DelayPipeline.C \
 	FractionalDelay.C \
 	Filterbank.C \
+	AdaptiveFilter.C \
+	AdaptiveFilterRAM.C \
+	AdaptiveFilterPipeline.C \
   BatchedBackwardFFT.C \
   ForwardFFT.C \
+  BackwardFFT.C \
 	IntegerDelay.C \
   UnpackFloat.C UnpackFloatRAM.C
 
-bin_PROGRAMS = delay_pipeline filterbank_pipeline
+bin_PROGRAMS = delay_pipeline filterbank_pipeline adaptive_filter_pipeline
 
 delay_pipeline_SOURCES = delay_pipeline.C
 filterbank_pipeline_SOURCES = filterbank_pipeline.C
+adaptive_filter_pipeline_SOURCES = adaptive_filter_pipeline.C
 
 AM_CXXFLAGS = @PSRDADA_CFLAGS@ \
 	-I$(top_builddir)/src/Affinity\
@@ -39,6 +44,7 @@ LDADD = libspipdsp.la \
 if HAVE_FFTW3
 
 libspipdsp_la_SOURCES += ForwardFFTFFTW.C \
+  BackwardFFTFFTW.C \
   BatchedBackwardFFTFFTW.C
 
 AM_CXXFLAGS += @FFTW_CFLAGS@
@@ -50,6 +56,7 @@ endif
 if HAVE_CUFFT
 
 libspipdsp_la_SOURCES += ForwardFFTCUDA.C \
+  BackwardFFTCUDA.C \
   BatchedBackwardFFTCUDA.C
 
 AM_CXXFLAGS += @CUFFT_CFLAGS@
@@ -63,7 +70,8 @@ if HAVE_CUDA
 libspipdsp_la_SOURCES += CUDAtoRAMTransfer.C \
   RAMtoCUDATransfer.C \
   ContainerCUDA.C \
-  UnpackFloatCUDA.cu
+  UnpackFloatCUDA.cu \
+	AdaptiveFilterCUDA.cu
 
 AM_CXXFLAGS += @CUDA_CFLAGS@
 LDADD += @CUDA_LIBS@
