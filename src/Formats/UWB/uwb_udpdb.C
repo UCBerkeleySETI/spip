@@ -108,10 +108,10 @@ int main(int argc, char *argv[]) try
     return (EXIT_FAILURE);
   }
 
-  uint64_t data_bufsz = udpdb->get_data_bufsz();
-  if (config.set("RESOLUTION", "%lu", data_bufsz) < 0)
+  unsigned resolution = 16384;
+  if (config.set("RESOLUTION", "%u", resolution) < 0)
   {
-    fprintf (stderr, "ERROR: could not write RESOLUTION=%lu to config\n", data_bufsz);
+    fprintf (stderr, "ERROR: could not write RESOLUTION=%lu to config\n", resolution);
     return (EXIT_FAILURE);
   }
 

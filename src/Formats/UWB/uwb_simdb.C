@@ -107,6 +107,13 @@ int main(int argc, char *argv[])
     return (EXIT_FAILURE);
   }
 
+  unsigned resolution = 16384;
+  if (config.set("RESOLUTION", "%u", resolution) < 0)
+  {
+    fprintf (stderr, "ERROR: could not write RESOLUTION=%lu to config\n", resolution);
+    return (EXIT_FAILURE);
+  }
+
   if (verbose)
     cerr << "uwb_simdb: configuring based on header" << endl;
   simdb->configure (config.raw());
