@@ -20,6 +20,14 @@ spip::AdaptiveFilterCUDA::~AdaptiveFilterCUDA ()
 {
 }
 
+void spip::AdaptiveFilterCUDA::set_input_rfi (Container * _input_rfi)
+{
+  input_rfi = dynamic_cast<spip::ContainerCUDADevice *>(_input_rfi);
+  if (!input_rfi)
+    throw Error (InvalidState, "spip::AdaptiveFilterCUDA::set_input_rfi",
+                 "RFI input was not castable to spip::ContainerCUDADevice *");
+}
+
 // configure the pipeline prior to runtime
 void spip::AdaptiveFilterCUDA::configure ()
 {
@@ -37,5 +45,11 @@ void spip::AdaptiveFilterCUDA::transform_TSPF()
 {
   if (verbose)
     cerr << "spip::AdaptiveFilterCUDA::transform_TSPF ()" << endl;
-
 }
+
+void spip::AdaptiveFilterCUDA::transform_SFPT()
+{
+  if (verbose)
+    cerr << "spip::AdaptiveFilterCUDA::transform_SFPT ()" << endl;
+}
+

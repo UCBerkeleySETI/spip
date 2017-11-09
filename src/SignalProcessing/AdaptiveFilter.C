@@ -40,8 +40,8 @@ void spip::AdaptiveFilter::configure ()
   if (nbit != 32)
     throw invalid_argument ("AdaptiveFilter::configure input nbit != 32");
 
-  if (input->get_order() != spip::Ordering::TSPF)
-    throw invalid_argument ("AdaptiveFilter::configure input order must be TSPF");
+  if ((input->get_order() != spip::Ordering::TSPF) && (input->get_order() != spip::Ordering::SFPT))
+    throw invalid_argument ("AdaptiveFilter::configure input order must be TSPF or SFPT");
 
   // copy input header to output
   output->clone_header (input->get_header());
@@ -50,7 +50,7 @@ void spip::AdaptiveFilter::configure ()
   output->read_header ();
 
   // adjust the required parameters
-  output->set_order (spip::Ordering::TSPF);
+  output->set_order (input->get_order());
 
   // update the output header parameters with the new details
   output->write_header ();
@@ -106,6 +106,12 @@ void spip::AdaptiveFilter::transformation ()
     if (verbose)
       cerr << "spip::AdaptiveFilter::transformation transform_TSPF()" << endl;
     transform_TSPF ();
+  }
+  else if ((input->get_order() == SFPT) && (output->get_order() == SFPT))
+  {
+    if (verbose)
+      cerr << "spip::AdaptiveFilter::transformation transform_SFPT()" << endl;
+    transform_SFPT ();
   }
   else
   {

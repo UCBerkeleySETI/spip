@@ -18,17 +18,19 @@ libspipdsp_la_SOURCES = Container.C \
 	AdaptiveFilter.C \
 	AdaptiveFilterRAM.C \
 	AdaptiveFilterPipeline.C \
+	AdaptiveFilterTest.C \
   BatchedBackwardFFT.C \
   ForwardFFT.C \
   BackwardFFT.C \
 	IntegerDelay.C \
   UnpackFloat.C UnpackFloatRAM.C
 
-bin_PROGRAMS = delay_pipeline filterbank_pipeline adaptive_filter_pipeline
+bin_PROGRAMS = delay_pipeline filterbank_pipeline adaptive_filter_pipeline adaptive_filter_test
 
 delay_pipeline_SOURCES = delay_pipeline.C
 filterbank_pipeline_SOURCES = filterbank_pipeline.C
 adaptive_filter_pipeline_SOURCES = adaptive_filter_pipeline.C
+adaptive_filter_test_SOURCES = adaptive_filter_test.C
 
 AM_CXXFLAGS = @PSRDADA_CFLAGS@ \
 	-I$(top_builddir)/src/Affinity\

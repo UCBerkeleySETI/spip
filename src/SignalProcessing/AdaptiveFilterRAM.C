@@ -20,6 +20,14 @@ spip::AdaptiveFilterRAM::~AdaptiveFilterRAM ()
 {
 }
 
+void spip::AdaptiveFilterRAM::set_input_rfi (Container * _input_rfi)
+{
+  input_rfi = dynamic_cast<spip::ContainerRAM *>(_input_rfi);
+  if (!input_rfi)
+    throw Error (InvalidState, "spip::AdaptiveFilterRAM::set_input_rfi", 
+                 "RFI input was not castable to spip::ContainerRAM *");
+}
+
 // configure the pipeline prior to runtime
 void spip::AdaptiveFilterRAM::configure ()
 {
@@ -32,10 +40,15 @@ void spip::AdaptiveFilterRAM::prepare ()
   spip::AdaptiveFilter::prepare();
 }
 
-// convert to antenna minor order
 void spip::AdaptiveFilterRAM::transform_TSPF()
 {
   if (verbose)
     cerr << "spip::AdaptiveFilterRAM::transform_TSPF ()" << endl;
-
 }
+
+void spip::AdaptiveFilterRAM::transform_SFPT()
+{
+  if (verbose)
+    cerr << "spip::AdaptiveFilterRAM::transform_SFPT ()" << endl;
+}
+

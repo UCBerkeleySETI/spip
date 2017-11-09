@@ -12,6 +12,7 @@
 #include "config.h"
 
 #include "spip/AdaptiveFilter.h"
+#include "spip/ContainerCUDA.h"
 
 namespace spip {
 
@@ -22,6 +23,8 @@ namespace spip {
       AdaptiveFilterCUDA ();
       
       ~AdaptiveFilterCUDA ();
+
+      void set_input_rfi (Container *);
       
       void configure ();
 
@@ -30,6 +33,8 @@ namespace spip {
       void reserve ();
       
       void transform_TSPF ();
+
+      void transform_SFPT ();
 
     protected:
     

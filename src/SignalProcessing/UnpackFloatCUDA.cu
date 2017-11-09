@@ -66,10 +66,10 @@ void spip::UnpackFloatCUDA::prepare ()
   spip::UnpackFloat::prepare ();
 }
 
-void spip::UnpackFloatCUDA::transform ()
+void spip::UnpackFloatCUDA::transform_SFPT_to_SFPT ()
 {
   if (verbose)
-    cerr << "spip::UnpackFloatCUDA::transform" << endl;
+    cerr << "spip::UnpackFloatCUDA::transform_SFPT_to_SFPT" << endl;
 
   size_t nbytes = input->calculate_buffer_size();
 

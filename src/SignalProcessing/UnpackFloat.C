@@ -78,7 +78,7 @@ void spip::UnpackFloat::transformation ()
   prepare_output ();
 
   // apply data transformation
-  transform ();
+  transform_SFPT_to_SFPT ();
 }
 
 void spip::UnpackFloat::prepare_output ()

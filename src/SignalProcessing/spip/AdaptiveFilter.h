@@ -9,7 +9,7 @@
 #ifndef __AdaptiveFilter_h
 #define __AdaptiveFilter_h
 
-#include "spip/ContainerRAM.h"
+#include "spip/Container.h"
 #include "spip/Transformation.h"
 
 namespace spip {
@@ -24,7 +24,7 @@ namespace spip {
 
       void configure ();
 
-      //virtual void set_rfi_input (Container) = 0;
+      virtual void set_input_rfi (Container *) = 0;
 
       void prepare ();
 
@@ -35,10 +35,14 @@ namespace spip {
       //! Perform 
       void transformation ();
 
-      //! Required data transformation
+      //! Required data transformations 
       virtual void transform_TSPF () = 0;
 
+      virtual void transform_SFPT () = 0;
+
     protected:
+
+      Container * input_rfi;
 
       unsigned nchan;
 

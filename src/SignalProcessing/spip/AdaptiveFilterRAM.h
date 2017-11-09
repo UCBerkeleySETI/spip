@@ -12,6 +12,7 @@
 #include "config.h"
 
 #include "spip/AdaptiveFilter.h"
+#include "spip/ContainerRAM.h"
 
 namespace spip {
 
@@ -22,6 +23,8 @@ namespace spip {
       AdaptiveFilterRAM ();
       
       ~AdaptiveFilterRAM ();
+
+      void set_input_rfi (Container *);
       
       void configure ();
 
@@ -31,6 +34,7 @@ namespace spip {
       
       void transform_TSPF ();
 
+      void transform_SFPT ();
     protected:
     
     private:
