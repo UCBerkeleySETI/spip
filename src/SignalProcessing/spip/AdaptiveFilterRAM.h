@@ -14,6 +14,9 @@
 #include "spip/AdaptiveFilter.h"
 #include "spip/ContainerRAM.h"
 
+//#include <float.h>
+//#include <complex.h>
+
 namespace spip {
 
   class AdaptiveFilterRAM: public AdaptiveFilter
@@ -35,10 +38,11 @@ namespace spip {
       void transform_TSPF ();
 
       void transform_SFPT ();
+
     protected:
     
     private:
-      
+
   };
 }
 

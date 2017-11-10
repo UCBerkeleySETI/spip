@@ -58,6 +58,15 @@ namespace spip {
 
       double tsamp;
 
+      // generic container to store the gains
+      Container * gains;
+
+      // from Nuer's simulation and Adaptive Filter paper
+      float epsilon;
+
+      // number of samples to integrate into the filter
+      unsigned filter_update_time;
+
     private:
 
   };

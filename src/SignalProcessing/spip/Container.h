@@ -80,6 +80,9 @@ namespace spip {
       virtual unsigned char * get_buffer() { return buffer; }
       virtual unsigned char * get_buffer() const { return buffer; }
 
+      //! zero the contents of the buffer
+      virtual void zero () = 0;
+
       // copy the meta-data from the supplied header
       void clone_header (const spip::AsciiHeader &obj);
 

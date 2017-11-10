@@ -13,6 +13,7 @@
 
 #include "spip/AdaptiveFilter.h"
 #include "spip/ContainerCUDA.h"
+#include <cuda_runtime.h>
 
 namespace spip {
 
@@ -39,6 +40,9 @@ namespace spip {
     protected:
     
     private:
+
+      // the current gain for each channel and polarisation
+      ContainerCUDADevice * gains;
       
   };
 }

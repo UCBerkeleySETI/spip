@@ -14,6 +14,10 @@ using namespace std;
 
 spip::AdaptiveFilter::AdaptiveFilter () : Transformation<Container,Container>("AdaptiveFilter", outofplace)
 {
+  // default, should be configured [TODO]
+  filter_update_time = 1000;
+  epsilon = 1E-4;
+  gains = NULL;
 }
 
 spip::AdaptiveFilter::~AdaptiveFilter ()
@@ -43,6 +47,9 @@ void spip::AdaptiveFilter::configure ()
   if ((input->get_order() != spip::Ordering::TSPF) && (input->get_order() != spip::Ordering::SFPT))
     throw invalid_argument ("AdaptiveFilter::configure input order must be TSPF or SFPT");
 
+  if (!gains)
+    throw invalid_argument ("AdaptiveFilter::configure gains has not been allocated");
+
   // copy input header to output
   output->clone_header (input->get_header());
 
@@ -57,6 +64,22 @@ void spip::AdaptiveFilter::configure ()
 
   // ensure the output is appropriately sized
   prepare_output();
+
+  // also prepare the gains
+  gains->clone_header (input->get_header());
+  gains->read_header ();
+
+  // update the parameters that this transformation will affect
+  gains->set_nbit (32);
+  gains->set_ndim (2);
+  gains->set_order (spip::Ordering::TSPF);
+
+  gains->write_header();
+  gains->set_ndat (1);
+
+  // allocate memory of the gains
+  gains->resize();
+  gains->zero();
 }
 
 //! prepare prior to each transformation call

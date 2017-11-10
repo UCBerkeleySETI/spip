@@ -9,6 +9,8 @@
 #include "spip/ContainerCUDA.h"
 
 #include <iostream>
+#include <cstring>
+
 
 using namespace std;
 
@@ -41,6 +43,14 @@ void spip::ContainerCUDADevice::resize ()
   }
 }
 
+void spip::ContainerCUDADevice::zero()
+{
+  cudaError_t err = cudaMemset(&buffer, 0, size);
+  if (err != cudaSuccess)
+    throw Error(InvalidState, "spip::ContainerCUDADevice::zero", cudaGetErrorString (err));
+
+}
+
 spip::ContainerCUDAPinned::ContainerCUDAPinned ()
 {
 }
@@ -66,4 +76,9 @@ void spip::ContainerCUDAPinned::resize ()
       throw Error(InvalidState, "spip::ContainerCUDAPinned::resize", cudaGetErrorString (err));
     size = required_size;
   }
+}
+
+void spip::ContainerCUDAPinned::zero()
+{
+  bzero (buffer, size);
 }
