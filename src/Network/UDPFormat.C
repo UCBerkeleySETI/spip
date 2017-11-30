@@ -32,6 +32,7 @@ spip::UDPFormat::UDPFormat()
 
   noise_buffer = 0;
   noise_buffer_size = 1048576;
+  noise_buffer_alignment = 1;
 
   prepared = false;
   configured = false;
@@ -84,7 +85,7 @@ void spip::UDPFormat::set_noise_buffer_size (unsigned nbytes)
   if (noise_buffer)
   {
     free (noise_buffer);
-    noise_buffer = (char *) malloc (noise_buffer_size);;
+    noise_buffer = (char *) malloc (noise_buffer_size);
   }
 }
 
@@ -94,9 +95,10 @@ void spip::UDPFormat::generate_noise_buffer (int nbits)
   if (!noise_buffer)
     noise_buffer = (char *) malloc (noise_buffer_size);
 
-  // generate noise with mean of 0 and stddev of 10
+  // generate noise with mean of 0 and stddev of 0.078125 (10 / 128)
+  noise_buffer_alignment = nbits / 8;
   const double mean = 0;
-  const double stddev = 10;
+  const double stddev = (10.0 / 128.0) * pow(2, (nbits-1));
   const unsigned size = (noise_buffer_size * 8) / nbits;
   int8_t * buffer8 = (int8_t *) noise_buffer;
   int16_t * buffer16 = (int16_t *) noise_buffer;
@@ -127,5 +129,10 @@ void spip::UDPFormat::fill_noise (char * buf, size_t nbytes)
   if (start_byte + nbytes > noise_buffer_size)
     start_byte -= nbytes;
 
+  // ensure correct alignment (for multi byte sampling)
+  int remainder = start_byte % noise_buffer_alignment;
+  start_byte -= remainder;
+
+  // copy from the buffer
   memcpy (buf, noise_buffer + start_byte, nbytes);
 }

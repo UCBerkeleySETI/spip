@@ -129,6 +129,8 @@ namespace spip {
 
       size_t noise_buffer_size;
 
+      unsigned noise_buffer_alignment;
+
       bool configured;
 
       bool prepared;
