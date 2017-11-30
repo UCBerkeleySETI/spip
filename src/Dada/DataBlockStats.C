@@ -94,6 +94,8 @@ int spip::DataBlockStats::configure (const char * config)
 
   // save the header for use on the first open block
   strncpy (header, config, strlen(config)+1);
+
+  return 0;
 }
 
 void spip::DataBlockStats::prepare ()
@@ -250,7 +252,7 @@ bool spip::DataBlockStats::monitor (std::string stats_dir, unsigned stream_id)
   if (verbose)
     cerr << "spip::DataBlockStats::monitor db->read (" << (void *) buffer << ", " << bufsz << ")" << endl;
 
-  int64_t bytes_read = db->read (buffer, bufsz);
+  db->read (buffer, bufsz);
 
   char local_time[32];
   char command[128];
@@ -290,7 +292,7 @@ bool spip::DataBlockStats::monitor (std::string stats_dir, unsigned stream_id)
 
       block_format->reset();
 
-      bytes_read = db->read (buffer, bufsz);
+      db->read (buffer, bufsz);
 
       block_format->unpack_hgft (buffer, bufsz);
       block_format->unpack_ms (buffer, bufsz);
