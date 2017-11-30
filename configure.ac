@@ -61,6 +61,7 @@ AC_CONFIG_FILES([Makefile
   scripts/spip/threads/Makefile
   scripts/spip/utils/Makefile
   scripts/spip/daemons/Makefile
+  scripts/uwb/Makefile
   web/Makefile
   web/controls/Makefile
   web/images/Makefile
