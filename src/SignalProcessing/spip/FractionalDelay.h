@@ -37,7 +37,7 @@ namespace spip {
 
       void compute_fir_coeffs ();
 
-      void configure () { ; } ;
+      void configure (Ordering output_order) { ; } ;
 
       void prepare () { ; } ;
 

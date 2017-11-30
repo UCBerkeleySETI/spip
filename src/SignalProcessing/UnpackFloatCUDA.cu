@@ -56,11 +56,6 @@ spip::UnpackFloatCUDA::~UnpackFloatCUDA ()
 {
 }
 
-void spip::UnpackFloatCUDA::configure ()
-{
-  spip::UnpackFloat::configure ();
-}
-
 void spip::UnpackFloatCUDA::prepare ()
 {
   spip::UnpackFloat::prepare ();

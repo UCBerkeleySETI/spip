@@ -29,12 +29,12 @@ spip::BackwardFFTCUDA::~BackwardFFTCUDA ()
   plan = 0;
 }
 
-void spip::BackwardFFTCUDA::configure ()
+void spip::BackwardFFTCUDA::configure (spip::Ordering output_order)
 {
   if (nfft == 0)
     throw runtime_error ("BackwardFFTCUDA::configure nfft not set");
 
-  spip::BackwardFFT::configure ();
+  spip::BackwardFFT::configure (output_order);
 
   configure_plan ();
 }
@@ -187,3 +187,42 @@ void spip::BackwardFFTCUDA::transform_TSPF_to_SFPT ()
   }
 }
 
+void spip::BackwardFFTCUDA::transform_SFPT_to_SFPT ()
+{
+  cufftComplex * in  = (cufftComplex *) input->get_buffer();
+  cufftComplex * out = (cufftComplex *) output->get_buffer();
+  cufftResult result;
+
+  const uint64_t ndat_out = ndat * nfft;
+  const uint64_t out_pol_stride = ndat_out;
+  const uint64_t in_pol_stride  = ndat;
+  const uint64_t out_chan_stride = npol * out_pol_stride;
+  const uint64_t in_chan_stride  = npol * in_pol_stride;
+  const uint64_t out_sig_stride = nchan_out * out_chan_stride;
+  const uint64_t in_sig_stride  = nchan * in_chan_stride;
+
+  for (unsigned isig=0; isig<nsignal; isig++)
+  {
+    const uint64_t in_sig_offset  = isig * in_sig_stride;
+    const uint64_t out_sig_offset = isig * out_sig_stride;
+
+    for (unsigned ochan=0; ochan<nchan_out; ochan++)
+    {
+      const uint64_t in_chan_offset  = ochan * in_chan_stride;
+      const uint64_t out_chan_offset = ochan * out_chan_stride;
+
+      for (unsigned ipol=0; ipol<npol; ipol++)
+      {
+        const uint64_t in_pol_offset  = ipol * in_pol_stride;
+        const uint64_t out_pol_offset = ipol * out_pol_stride;
+
+        const uint64_t in_offset  = in_chan_offset + in_sig_offset + in_pol_offset;
+        const uint64_t out_offset = out_chan_offset + out_sig_offset + out_pol_offset;
+
+        result = cufftExecC2C(plan, in + in_offset, out + out_offset, CUFFT_FORWARD);
+        if (result != CUFFT_SUCCESS)
+          throw CUFFTError (result, "spip::BackwardFFTCUDA::transform_SFPT_to_SFPT", "cufftExecC2C(plan)");
+      }
+    }
+  }
+}

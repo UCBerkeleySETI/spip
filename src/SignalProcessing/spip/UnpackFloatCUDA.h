@@ -26,8 +26,6 @@ namespace spip {
       
       ~UnpackFloatCUDA ();
  
-      void configure();
-
       void prepare ();
       
       void reserve ();

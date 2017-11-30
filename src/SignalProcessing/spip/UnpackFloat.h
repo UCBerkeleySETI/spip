@@ -22,7 +22,7 @@ namespace spip {
 
       ~UnpackFloat ();
 
-      void configure ();
+      void configure (Ordering output_order);
 
       void prepare ();
 

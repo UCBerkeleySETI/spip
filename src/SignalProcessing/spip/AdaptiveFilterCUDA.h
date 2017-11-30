@@ -25,9 +25,9 @@ namespace spip {
       
       ~AdaptiveFilterCUDA ();
 
-      void set_input_rfi (Container *);
+      void set_input_ref (Container *);
       
-      void configure ();
+      void configure (Ordering output_order);
 
       void prepare ();
       
@@ -41,9 +41,6 @@ namespace spip {
     
     private:
 
-      // the current gain for each channel and polarisation
-      ContainerCUDADevice * gains;
-      
   };
 }
 

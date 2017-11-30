@@ -24,12 +24,12 @@ spip::BackwardFFTFFTW::~BackwardFFTFFTW ()
   plan = 0;
 }
 
-void spip::BackwardFFTFFTW::configure ()
+void spip::BackwardFFTFFTW::configure (spip::Ordering output_order)
 {
   if (nfft == 0)
     throw runtime_error ("BackwardFFTFFTW::configure nfft not set");
 
-  spip::BackwardFFT::configure ();
+  spip::BackwardFFT::configure (output_order);
 
   configure_plan ();
 }
@@ -140,4 +140,42 @@ void spip::BackwardFFTFFTW::transform_TSPF_to_SFPT ()
     }
   }
 }
+
+//TODO fix this
+void spip::BackwardFFTFFTW::transform_SFPT_to_SFPT ()
+{
+  if (verbose)
+    cerr << "spip::BackwardFFTFFTW::transform_SFPT_to_SFPT()" << endl;
+  fftwf_complex * in  = (fftwf_complex *) input->get_buffer();
+  fftwf_complex * out = (fftwf_complex *) output->get_buffer();
+
+  const uint64_t in_chan_stride = nchan;
+  const uint64_t ndat_out = ndat * nfft;
+  const uint64_t out_pol_stride = ndat_out;
+  const uint64_t out_chan_stride = npol * out_pol_stride;
+  const uint64_t out_sig_stride = nchan_out * out_chan_stride;
+
+  // FFT batch is for input ndat
+  for (unsigned isig=0; isig<nsignal; isig++)
+  {
+    const uint64_t out_sig_offset = isig * out_sig_stride;
+    for (unsigned ipol=0; ipol<npol; ipol++)
+    {
+      const uint64_t out_pol_offset = ipol * out_pol_stride;
+      for (unsigned ochan=0; ochan<nchan_out; ochan++)
+      {
+        const uint64_t out_chan_offset = ochan * out_chan_stride;
+        const uint64_t out_offset = out_chan_offset + out_sig_offset + out_pol_offset;
+#ifdef _DEBUG
+        cerr << "ochan=" << ochan << " isig=" << isig << " ipol=" << ipol << " out_chan_offset="
+             << out_chan_offset << " out_sig_offset=" << out_sig_offset << " out_pol_offset="
+             << out_pol_offset << " out_offset=" << out_offset << endl;
+#endif
+        fftwf_execute_dft (plan, in, out + out_offset);
+        in += in_chan_stride;
+      }
+    }
+  }
+}
+
 

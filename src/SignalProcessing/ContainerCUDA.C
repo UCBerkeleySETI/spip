@@ -40,12 +40,17 @@ void spip::ContainerCUDADevice::resize ()
 
     // TODO check error
     size = required_size;
+
+    if (spip::Container::verbose)
+      cerr << "spip::ContainerCUDADevice::resize buffer=" << (void *) buffer << endl;
   }
 }
 
 void spip::ContainerCUDADevice::zero()
 {
-  cudaError_t err = cudaMemset(&buffer, 0, size);
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerCUDADevice::zero cudaMemset(" << (void *) buffer << ", 0, " << size << ")" << endl;
+  cudaError_t err = cudaMemset (buffer, 0, size);
   if (err != cudaSuccess)
     throw Error(InvalidState, "spip::ContainerCUDADevice::zero", cudaGetErrorString (err));
 

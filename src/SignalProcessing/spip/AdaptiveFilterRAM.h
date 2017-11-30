@@ -27,9 +27,9 @@ namespace spip {
       
       ~AdaptiveFilterRAM ();
 
-      void set_input_rfi (Container *);
+      void set_input_ref (Container *);
       
-      void configure ();
+      void configure (Ordering order);
 
       void prepare ();
       

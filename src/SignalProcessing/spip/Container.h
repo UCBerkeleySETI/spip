@@ -95,6 +95,9 @@ namespace spip {
       //! return const header
       AsciiHeader get_header () const { return header; } 
 
+      //! return a descriptive string regarding the ordering
+      static std::string get_order_string (Ordering o);
+
     protected:
 
       //! The data buffer 

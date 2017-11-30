@@ -127,3 +127,15 @@ void spip::Container::clone_header (const spip::AsciiHeader &obj)
   header.clone (obj);
 }
 
+std::string spip::Container::get_order_string (spip::Ordering o)
+{
+  if (o == spip::Ordering::SFPT)
+    return std::string("SFPT");
+  if (o == spip::Ordering::TFPS)
+    return std::string("TFPS");
+  if (o == spip::Ordering::TSPF)
+    return std::string("TSPF");
+  if (o == spip::Ordering::Custom)
+    return std::string("Custom");
+  return std::string("Unknown");
+}

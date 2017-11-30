@@ -25,7 +25,7 @@ namespace spip {
       
       ~ForwardFFTFFTW ();
       
-      void configure ();
+      void configure (Ordering output_order);
 
       void configure_plan ();
 
@@ -37,12 +37,14 @@ namespace spip {
 
       void transform_SFPT_to_TSPF ();
 
+      void transform_SFPT_to_SFPT ();
+
     protected:
     
     private:
     
       fftwf_plan plan;
-      
+
   };
 }
 

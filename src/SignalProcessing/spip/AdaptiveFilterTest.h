@@ -36,7 +36,7 @@ namespace spip {
 
     public:
 
-      AdaptiveFilterTest (const char * in_key_string, const char * rfi_key_string, const char * out_key_string);
+      AdaptiveFilterTest (const char * in_key_string, const char * ref_key_string, const char * out_key_string);
 
       ~AdaptiveFilterTest ();
 
@@ -64,23 +64,23 @@ namespace spip {
 
       DataBlockRead * in_db;
 
-      DataBlockRead * rfi_db;
+      DataBlockRead * ref_db;
 
       DataBlockWrite * out_db;
 
       UnpackFloat * unpack_float;
 
-      UnpackFloat * unpack_float_rfi;
+      UnpackFloat * unpack_float_ref;
 
       AdaptiveFilter * filter;
 
       ContainerRingRead * input;
 
-      ContainerRingRead * input_rfi;
+      ContainerRingRead * input_ref;
 
       Container * unpacked;
 
-      Container * unpacked_rfi;
+      Container * unpacked_ref;
 
       ContainerRingWrite * output;
 
@@ -95,11 +95,11 @@ namespace spip {
 
       RAMtoCUDATransfer * ram_to_cuda; 
 
-      RAMtoCUDATransfer * ram_to_cuda_rfi; 
+      RAMtoCUDATransfer * ram_to_cuda_ref; 
 
       ContainerCUDADevice * d_input;
 
-      ContainerCUDADevice * d_input_rfi; 
+      ContainerCUDADevice * d_input_ref; 
 
       ContainerCUDADevice * d_output; 
 

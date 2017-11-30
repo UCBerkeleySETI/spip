@@ -160,4 +160,40 @@ void spip::ForwardFFTCUDA::transform_SFPT_to_TSPF ()
   }
 }
 
+void spip::ForwardFFTCUDA::transform_SFPT_to_SFPT ()
+{
+  cufftComplex * in  = (cufftComplex *) input->get_buffer();
+  cufftComplex * out = (cufftComplex *) output->get_buffer();
+  cufftResult result;
+
+  const uint64_t nchan_out = nchan * nfft;
+  const uint64_t out_pol_stride = nbatch;
+  const uint64_t out_chan_stride = npol * out_pol_stride;
+  const uint64_t out_sig_stride = nchan_out * out_chan_stride;
+
+  // iterate over input ordering of SFPT -> SFPT
+  for (unsigned isig=0; isig<nsignal; isig++)
+  {
+    const uint64_t out_sig_offset = isig * out_sig_stride;
+    for (unsigned ichan=0; ichan<nchan; ichan++)
+    {
+      // output channel will be ichan * nfft
+      const uint64_t out_chan_offset = ichan * nfft * out_chan_stride;
+      for (unsigned ipol=0; ipol<npol; ipol++)
+      {
+        const uint64_t out_pol_offset = ipol * out_pol_stride;
+
+        // process ndat samples, in batches of nfft
+        const uint64_t out_offset = out_sig_offset + out_chan_offset + out_pol_offset;
+
+        result = cufftExecC2C(plan, in, out + out_offset, CUFFT_FORWARD);
+        if (result != CUFFT_SUCCESS)
+          throw runtime_error ("ForwardFFTCUDA::tranform cufftExecC2C failed");
+
+        in += ndat;
+      }
+    }
+  }
+}
+
 

@@ -52,7 +52,7 @@ namespace spip {
       virtual void transformation () = 0;
 
       //! Configures transformation once, when input is known
-      virtual void configure () = 0;
+      virtual void configure (Ordering output_order) = 0;
 
       //! Prepares each call to transformation, called just prior
       virtual void prepare () = 0;

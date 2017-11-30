@@ -33,7 +33,7 @@ void spip::ContainerRingRead::process_header ()
   header.load_from_str (header_str);
 
   if (header.get ("NANT", "%u", &nsignal) != 1)
-    throw invalid_argument ("NSIGNAL did not exist in header");
+    throw invalid_argument ("NANT did not exist in header");
 
   if (header.get ("NCHAN", "%u", &nchan) != 1)
     throw invalid_argument ("NCHAN did not exist in header");

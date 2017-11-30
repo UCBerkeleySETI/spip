@@ -36,6 +36,8 @@ namespace spip {
 
       void transform_SFPT_to_TSPF ();
 
+      void transform_SFPT_to_SFPT ();
+
     protected:
     
     private:

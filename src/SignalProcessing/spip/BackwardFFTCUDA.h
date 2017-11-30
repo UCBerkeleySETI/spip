@@ -26,7 +26,7 @@ namespace spip {
       
       ~BackwardFFTCUDA ();
       
-      void configure ();
+      void configure (Ordering output_order);
 
       void configure_plan ();
 
@@ -37,6 +37,8 @@ namespace spip {
       void transform_TFPS_to_SFPT ();
 
       void transform_TSPF_to_SFPT ();
+
+      void transform_SFPT_to_SFPT ();
 
     protected:
     

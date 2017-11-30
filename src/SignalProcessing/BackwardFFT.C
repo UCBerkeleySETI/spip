@@ -27,7 +27,7 @@ void spip::BackwardFFT::set_nfft (int _nfft)
 }
 
 //! configure parameters at the start of a data stream
-void spip::BackwardFFT::configure ()
+void spip::BackwardFFT::configure (spip::Ordering output_order)
 {
   // this transformation requires the following parameters
   ndat  = input->get_ndat ();
@@ -52,8 +52,16 @@ void spip::BackwardFFT::configure ()
     throw invalid_argument ("BackwardFFT::configure nchan must be divisible by nfft");
   }
 
-  if ((input->get_order() != spip::Ordering::TFPS) && (input->get_order() != spip::Ordering::TSPF))
-    throw invalid_argument ("BackwardFFT::configure input order must be TFPS or TSPF");
+  bool valid_transform = false;
+  if (input->get_order() == TFPS && output_order == SFPT)
+    valid_transform = true;
+  if (input->get_order() == TSPF && output_order == SFPT)
+    valid_transform = true;
+  if (input->get_order() == SFPT && output_order == SFPT)
+    valid_transform = true;
+
+  if (!valid_transform)
+    throw invalid_argument ("BackwardFFT::configure invalid ordering, allowed TFPS->SFPT, TSPF->SFPT or SFPT->SFPT");
 
   // copy input header to output
   output->clone_header (input->get_header());
@@ -114,6 +122,13 @@ void spip::BackwardFFT::configure_plan_dimensions ()
     ostride = 1;                  // stride between samples
     odist = nfft * ostride;       // stride between FFT blacks
   }
+  else if ((input->get_order() == SFPT) && (output->get_order() == SFPT))
+  {
+    istride = npol * nbatch;      // stride between channels
+    idist = 1;                    // stride between FFT blocks
+    ostride = 1;                  // stride between samples
+    odist = nfft * ostride;       // stride between FFT blocks
+  }
   else
     throw invalid_argument ("BackwardFFT::configure_plan_dimensions unsupported input/output ordering");
 }
@@ -159,6 +174,10 @@ void spip::BackwardFFT::transformation ()
   else if ((input->get_order() == TSPF) && (output->get_order() == SFPT))
   {
     transform_TSPF_to_SFPT ();
+  }
+  else if ((input->get_order() == SFPT) && (output->get_order() == SFPT))
+  {
+    transform_SFPT_to_SFPT ();
   }
   else
   {

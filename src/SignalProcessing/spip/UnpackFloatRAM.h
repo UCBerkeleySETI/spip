@@ -25,8 +25,6 @@ namespace spip {
       
       ~UnpackFloatRAM ();
  
-      void configure();
-
       void prepare ();
       
       void reserve ();

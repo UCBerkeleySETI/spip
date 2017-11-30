@@ -22,9 +22,9 @@ namespace spip {
 
       ~AdaptiveFilter ();
 
-      void configure ();
+      void configure (Ordering output_order);
 
-      virtual void set_input_rfi (Container *) = 0;
+      virtual void set_input_ref (Container *) = 0;
 
       void prepare ();
 
@@ -42,7 +42,7 @@ namespace spip {
 
     protected:
 
-      Container * input_rfi;
+      Container * input_ref;
 
       unsigned nchan;
 

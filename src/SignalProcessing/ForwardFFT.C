@@ -28,7 +28,7 @@ void spip::ForwardFFT::set_nfft (int _nfft)
 }
 
 //! configure parameters at the start of a data stream
-void spip::ForwardFFT::configure ()
+void spip::ForwardFFT::configure (spip::Ordering output_order)
 {
   // this transformation requires the following parameters
   ndat  = input->get_ndat ();
@@ -47,14 +47,26 @@ void spip::ForwardFFT::configure ()
   if (nbit != 32)
     throw invalid_argument ("ForwardFFT::configure input nbit != 32");
 
+  if (nchan != 1)
+    throw invalid_argument ("ForwardFFT::configure input nchan != 1");
+
   if (ndat % nfft != 0)
   {
     cerr << "spip::ForwardFFT::configure ndat=" << ndat << " nfft=" << nfft << endl;
     throw invalid_argument ("ForwardFFT::configure ndat must be divisible by nfft");
   }
 
-  if (input->get_order() != spip::Ordering::SFPT)
-    throw invalid_argument ("ForwardFFT::configure input order must be SFPT");
+  bool valid_transform = false;
+  if (input->get_order() == SFPT && output_order == TFPS)
+    valid_transform = true;
+  if (input->get_order() == SFPT && output_order == TSPF)
+    valid_transform = true;
+  if (input->get_order() == SFPT && output_order == SFPT)
+    valid_transform = true;
+
+  if (!valid_transform)
+    throw Error(InvalidState, "spip::ForwardFFT::configure", 
+                "invalid ordering, allowed SFPT->TFPS, SFPT->TSPF, SFPT->SFPT");
 
   // copy input header to output
   output->clone_header (input->get_header());
@@ -65,7 +77,7 @@ void spip::ForwardFFT::configure ()
   // update the parameters that this transformation will affect
   output->set_nchan (nchan * nfft);
   output->set_tsamp (tsamp / nfft);
-  output->set_order (spip::Ordering::TSPF);
+  output->set_order (output_order);
 
   if (verbose)
   {
@@ -93,7 +105,7 @@ void spip::ForwardFFT::configure_plan_dimensions()
 
   rank = 1;                 // 1D transform
   n[0] = nfft;              // of length nfft
-  howmany = nbatch;
+  howmany = nbatch;         // number of fft batches to perform
 
   inembed[0] = nfft;
   onembed[0] = nfft;
@@ -103,17 +115,24 @@ void spip::ForwardFFT::configure_plan_dimensions()
 
   if ((input->get_order() == SFPT) && (output->get_order() == TFPS))
   {
-    istride = 1 ;                 // stride between samples
+    istride = 1;                  // stride between samples
     idist = nfft * istride;       // stride between FFT blocks
-    ostride = npol * nsignal;     // stride between samples
+    ostride = npol * nsignal;     // stride between channels
     odist = nchan_out * ostride;  // stride between FFT blocks
   }
   else if ((input->get_order() == SFPT) && (output->get_order() == TSPF))
-  { 
-    istride = 1;                 // stride between samples
+  {
+    istride = 1;                  // stride between samples
     idist = nfft * istride;       // stride between FFT blocks
-    ostride = npol * nsignal;     // stride between samples
+    ostride = npol * nsignal;     // stride between channels
     odist = nchan_out * ostride;  // stride between FFT blocks
+  }
+  else if ((input->get_order() == SFPT) && (output->get_order() == SFPT))
+  {
+    istride = 1;                  // stride between samples
+    idist = nfft * istride;       // stride between FFT blocks
+    ostride = npol * nbatch;      // stride between channels
+    odist = 1;                    // stride between FFT blocks
   }
   else
   {
@@ -175,11 +194,21 @@ void spip::ForwardFFT::transformation ()
   // apply data transformation
   if ((input->get_order() == SFPT) && (output->get_order() == TFPS))
   {
+    if (verbose)
+      cerr << "spip::ForwardFFT::transform transform_SFPT_to_TFPS()" << endl;
     transform_SFPT_to_TFPS ();
   }
   else if ((input->get_order() == SFPT) && (output->get_order() == TSPF))
   {
+    if (verbose)
+      cerr << "spip::ForwardFFT::transform transform_SFPT_to_TSPF()" << endl;
     transform_SFPT_to_TSPF ();
+  }
+  else if ((input->get_order() == SFPT) && (output->get_order() == SFPT))
+  {
+    if (verbose)
+      cerr << "spip::ForwardFFT::transform transform_SFPT_to_SFPT()" << endl;
+    transform_SFPT_to_SFPT ();
   }
   else
   {

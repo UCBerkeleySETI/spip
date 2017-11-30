@@ -22,11 +22,6 @@ spip::UnpackFloatRAM::~UnpackFloatRAM ()
 {
 }
 
-void spip::UnpackFloatRAM::configure ()
-{
-  spip::UnpackFloat::configure ();
-}
-
 void spip::UnpackFloatRAM::prepare ()
 {
   spip::UnpackFloat::prepare ();

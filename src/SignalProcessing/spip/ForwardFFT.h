@@ -22,7 +22,7 @@ namespace spip {
 
       ~ForwardFFT ();
 
-      void configure ();
+      void configure (Ordering output_order);
 
       //! configure the FFT plan
       virtual void configure_plan () = 0;
@@ -43,6 +43,9 @@ namespace spip {
 
       //! Required data transformation
       virtual void transform_SFPT_to_TSPF () = 0 ;
+
+      //! Required data transformation
+      virtual void transform_SFPT_to_SFPT () = 0 ;
 
       void set_nfft (int);
 
