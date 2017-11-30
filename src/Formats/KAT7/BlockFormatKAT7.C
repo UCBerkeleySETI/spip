@@ -35,16 +35,13 @@ void spip::BlockFormatKAT7::unpack_hgft (char * buffer, uint64_t nbytes)
 {
   const unsigned nsamp = nbytes / bytes_per_sample;
   const unsigned nsamp_per_time = nsamp / ntime;
-  const unsigned nchan_per_freq = nchan / nfreq;
+  const unsigned nchan_per_freq_hg = nchan / nfreq_hg;
+  const unsigned nchan_per_freq_ft = nchan / nfreq_ft;
   const unsigned nblock = nsamp / nsamp_block;
 
-  //cerr << "spip::BlockFormatKAT7::unpack_hgft nsamp=" << nsamp << " nblock=" << nblock << endl;
-
   int8_t * in = (int8_t *) buffer;
-  int8_t val;
-
   uint64_t idat = 0;
-  unsigned ibin, ifreq, itime;
+  unsigned ibin, ifreq_hg, ifreq_ft, itime;
   int re, im;
   unsigned power;
 
@@ -54,7 +51,8 @@ void spip::BlockFormatKAT7::unpack_hgft (char * buffer, uint64_t nbytes)
     {
       for (unsigned ichan=0; ichan<nchan; ichan++)
       {
-        ifreq = ichan / nchan_per_freq;
+        ifreq_hg = ichan / nchan_per_freq_hg;
+        ifreq_ft = ichan / nchan_per_freq_ft;
 
         for (unsigned isamp=0; isamp<nsamp_block; isamp++)
         {
@@ -65,15 +63,15 @@ void spip::BlockFormatKAT7::unpack_hgft (char * buffer, uint64_t nbytes)
           sums[ipol*ndim + 1] += (float) im;
 
           ibin = re + 128;
-          hist[ipol][0][ifreq][ibin]++;
+          hist[ipol][0][ifreq_hg][ibin]++;
 
           ibin = im + 128;
-          hist[ipol][1][ifreq][ibin]++;
+          hist[ipol][1][ifreq_hg][ibin]++;
 
           // detect and average the timesamples into a NPOL sets of NCHAN * 512 waterfalls
           power = (unsigned) ((re * re) + (im * im));
           itime = ((iblock * nsamp_block) + isamp) / nsamp_per_time;
-          freq_time[ipol][ifreq][itime] += power;
+          freq_time[ipol][ifreq_ft][itime] += power;
 
           idat += 2;
         }
@@ -87,8 +85,6 @@ void spip::BlockFormatKAT7::unpack_hgft (char * buffer, uint64_t nbytes)
 void spip::BlockFormatKAT7::unpack_ms(char * buffer, uint64_t nbytes)
 {
   const unsigned nsamp = nbytes / bytes_per_sample;
-  const unsigned nsamp_per_time = nsamp / ntime;
-  const unsigned nchan_per_freq = nchan / nfreq;
   const unsigned nblock = nsamp / nsamp_block;
 
   float ndat = (float) (nsamp * nchan);
@@ -97,8 +93,6 @@ void spip::BlockFormatKAT7::unpack_ms(char * buffer, uint64_t nbytes)
     means[i] = sums[i] / ndat;
 
   int8_t * in = (int8_t *) buffer;
-  int8_t val;
-
   uint64_t idat = 0;
   float re, im;
   float diff;

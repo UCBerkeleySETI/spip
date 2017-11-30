@@ -40,6 +40,7 @@ namespace spip {
 
       unsigned npol;
 
+      // number of input channels in the data block
       unsigned nchan;
 
       unsigned nbit;
@@ -48,7 +49,10 @@ namespace spip {
 
       unsigned ntime;
 
-      unsigned nfreq;
+      // number of output channels
+      unsigned nfreq_hg;
+
+      unsigned nfreq_ft;
 
       unsigned bits_per_sample;
 
