@@ -52,6 +52,8 @@ AC_CONFIG_FILES([Makefile
   src/Formats/UWB/Makefile
   src/Formats/VDIF/Makefile
   src/Dada/Makefile
+  src/Instruments/Makefile
+  src/Instruments/MeerKAT/Makefile
   src/SignalProcessing/Makefile
   src/Telescope/Makefile
   src/Util/Makefile
