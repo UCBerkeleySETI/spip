@@ -132,3 +132,22 @@ ssize_t spip::DataBlockRead::close_block (uint64_t new_bytes)
   curr_buf_bytes = 0;
   return ipcio_close_block_read (data_block, new_bytes);
 }
+
+size_t spip::DataBlockRead::read (void * ptr, size_t bytes)
+{
+  size_t bytes_read = 0;
+  // check for EOD prior to reading
+  if (ipcbuf_eod((ipcbuf_t*) data_block))
+  {
+    if (verbose)
+      cerr << "spip::DataBlockRead::read EoD true on data block, returning 0" << endl;
+    return bytes_read;
+  }
+  
+  // read the specified number of bytes from the data block into the ptr
+  bytes_read = (size_t) ipcio_read (data_block, (char *) ptr, bytes);
+  if (bytes_read < 0)
+    throw runtime_error ("spip::DataBlockRead::read ipcio_read error");
+
+  return bytes_read;
+}
