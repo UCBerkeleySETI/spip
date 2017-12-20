@@ -5,18 +5,15 @@
  *
  ****************************************************************************/
 
-#include "dada_def.h"
-#include "futils.h"
-#include "dada_affinity.h"
-#include "ascii_header.h"
-
+#include "spip/AsciiHeader.h"
+#include "spip/HardwareAffinity.h"
 #include "spip/BlockFormatBPSR.h"
 #include "spip/DataBlockStats.h"
 #include "spip/TCPSocketServer.h"
 
-#include <unistd.h>
+//#include <unistd.h>
 #include <signal.h>
-#include <pthread.h>
+//#include <pthread.h>
 
 #include <cstdio>
 #include <cstring>
@@ -36,13 +33,16 @@ int main(int argc, char *argv[]) try
 {
   string key = "dada";
 
-  char * config_file = 0;
+  spip::AsciiHeader config;
 
   // tcp control port to receive configuration
   int control_port = -1;
 
   // control socket for the control port
   spip::TCPSocketServer * ctrl_sock = 0;
+
+  // for CPU and memory binding
+  spip::HardwareAffinity hw_affinity;
 
   // core on which to bind thread operations
   int core = -1;
@@ -100,7 +100,10 @@ int main(int argc, char *argv[]) try
 
   // bind CPU computation to specific core
   if (core >= 0)
-    dada_bind_thread_to_core (core);
+  {
+    hw_affinity.bind_process_to_cpu_core (core);
+    hw_affinity.bind_to_memory (core);
+  }
   
   // create a DataBlockStats processor to read from the DB
   if (verbose)
@@ -120,36 +123,19 @@ int main(int argc, char *argv[]) try
  
   signal(SIGINT, signal_handler);
 
-  // header the this data stream
-  config_file = strdup (argv[optind]);
-
-  char * config = (char *) malloc (DADA_DEFAULT_HEADER_SIZE);
-  if (config == NULL)
-  {
-    fprintf (stderr, "ERROR: could not allocate memory for config buffer\n");
-    return (EXIT_FAILURE);
-  }
-
-  if (verbose)
-    cerr << "bpsr_dbstats: reading config from " << config_file << endl;
-  if (fileread (config_file, config, DADA_DEFAULT_HEADER_SIZE) < 0)
-  {
-    free (config);
-    fprintf (stderr, "ERROR: could not read config from %s\n", config_file);
-    return (EXIT_FAILURE);
-  }
+  // config for the this data stream
+  config.load_from_file (argv[optind]);
 
   uint64_t data_bufsz = dbstats->get_data_bufsz();
-  if (ascii_header_set (config, "RESOLUTION", "%lu", data_bufsz) < 0)
+  if (config.set("RESOLUTION", "%lu", data_bufsz) < 0)
   {
-    free (config);
     fprintf (stderr, "ERROR: could not write RESOLUTION=%lu to config\n", data_bufsz);
     return (EXIT_FAILURE);
   }
 
   if (verbose)
     cerr << "bpsr_dbstats: configuring using fixed config" << endl;
-  dbstats->configure (config);
+  dbstats->configure (config.raw());
 
   dbstats->prepare();
 
