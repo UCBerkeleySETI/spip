@@ -93,6 +93,7 @@ int spip::SimReceiveDB::configure (const char * config_str)
 
   if (verbose)
     cerr << "spip::SimReceiveDB::configure configured" << endl;
+  return 0;
 }
 
 void spip::SimReceiveDB::prepare ()
@@ -151,7 +152,6 @@ void spip::SimReceiveDB::control_thread()
   int fd = -1;
   int verbose = 1;
 
-  char * cmds = (char *) malloc (DEFAULT_HEADER_SIZE);
   char * cmd  = (char *) malloc (32);
 
   // wait for a connection
@@ -302,7 +302,6 @@ void spip::SimReceiveDB::update_stats()
     double gb_recv_ps = (mb_recv_ps * 8)/1000;
 
     double mb_drop_ps = (double) bytes_drop_ps / 1000000;
-    double gb_drop_ps = (mb_drop_ps * 8)/1000;
 
     if (control_state == Active)
       cerr << "In: " << gb_recv_ps << "Gb/s\tDropped:" << mb_drop_ps << " Mb/s" << endl;

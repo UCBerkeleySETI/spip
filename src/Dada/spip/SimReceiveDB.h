@@ -51,6 +51,8 @@ namespace spip {
       static void * stats_thread_wrapper (void * obj)
       {
         ((SimReceiveDB*) obj )->stats_thread ();
+        void * result = NULL;
+        return  result;
       }
 
       void start_stats_thread ();
