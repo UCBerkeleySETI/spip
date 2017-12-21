@@ -18,6 +18,7 @@ libspipdada_headers += \
 	spip/ReadClient.h \
 	spip/ReadReadWriteBlockClient.h \
 	spip/ReadReadWriteClient.h \
+	spip/ReadWriteBlockClient.h \
 	spip/ReadWriteClient.h \
 	spip/WriteClient.h \
 	spip/WriteBlockClient.h \
@@ -33,6 +34,7 @@ libspipdada_la_SOURCES += \
   ReadClient.C \
   ReadReadWriteBlockClient.C \
   ReadReadWriteClient.C \
+  ReadWriteBlockClient.C \
   ReadWriteClient.C \
   WriteClient.C \
   WriteBlockClient.C \
