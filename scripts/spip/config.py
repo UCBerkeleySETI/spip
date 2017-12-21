@@ -125,7 +125,7 @@ class Config(object):
 
     header = h1
 
-    header["BYTES_PER_SECOND"] = str (int(h1["BYTES_PER_SECOND"]) + int(h2["BYTES_PER_SECOND"]))
+    header["BYTES_PER_SECOND"] = str (int(float(h1["BYTES_PER_SECOND"])) + int(float(h2["BYTES_PER_SECOND"])))
     header["NCHAN"] = str (int(h1["NCHAN"]) + int(h2["NCHAN"]))
     header["START_CHANNEL"] = str (min(int(h1["START_CHANNEL"]), int(h2["START_CHANNEL"])))
     header["END_CHANNEL"] = str (max(int(h1["END_CHANNEL"]), int(h2["END_CHANNEL"])))
