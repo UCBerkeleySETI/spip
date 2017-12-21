@@ -43,10 +43,19 @@ void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime, unsigned _nfre
   ntime = _ntime;
 
   // configure the number of channels in the FT
-  nfreq_ft = nchan;
-  while (_nfreq <= nfreq_ft)
+  if (_nfreq < nchan)
   {
-    nfreq_ft /= 2;
+    nfreq_ft = nchan;
+    while (_nfreq <= nfreq_ft)
+    {
+      nfreq_ft /= 2;
+    }
+  }
+  else
+  {
+    nfreq_ft = nchan;
+    while (_nfreq > nfreq_ft)
+      nfreq_ft *= 2;
   }
 
   // configure the number of channels in the HG 
