@@ -162,29 +162,93 @@ class Daemon(object):
         self.log_sock.connect(1)
       self.log_sock.log (level, message)
 
+  # check if any binaries exist
+  def checkBinaries (self):
 
-  def tryKill (self, signal):
+    self.log (2, "Daemon::checkBinaries")
     existed = False
+
     for binary in self.binary_list:
       cmd = "pgrep -f '^" + binary + "'"
       rval, lines = self.system (cmd, 3, quiet=True)
-      self.log (2, "tryKill: cmd="+cmd+ " rval=" + str(rval) + " lines=" + str(lines))
+      self.log (2, "Daemon::checkBinaries cmd="+cmd+ " rval=" + str(rval) + " lines=" + str(lines))
+
+      # if the binary exists, rval will be non zero
+      existed = not rval
+
+    return existed
+
+
+  def tryKill (self, signal):
+
+    self.log (2, "Daemon::tryKill signal="+signal)
+
+    existed = False
+
+    # check each binary in the list
+    for binary in self.binary_list:
+
+      # check if the binary is running
+      cmd = "pgrep -f '^" + binary + "'"
+      rval, lines = self.system (cmd, 3, quiet=True)
+      self.log (3, "Daemon::tryKill cmd="+cmd+ " rval=" + str(rval) + " lines=" + str(lines))
+
+      # if the binary exists, then kill with the specified signal
       if not rval:
-        existed = True
         cmd = "pkill -SIG" + signal + " -f '^" + binary + "'"
         rval, lines = self.system (cmd, 1)
+
+      # check if the binary is still running
+      cmd = "pgrep -f '^" + binary + "'"
+      rval, lines = self.system (cmd, 3, quiet=True)
+      self.log (2, "Daemon::tryKill cmd="+cmd+ " rval=" + str(rval) + " lines=" + str(lines))
+      if not rval:
+        existed = True
+
     return existed 
 
-    
+  def killBinaries(self):
+
+    signal_required = "None"
+
+    self.log (2, "Daemon::killBinaries checkBinaries()")
+    existed = self.checkBinaries()
+    self.log (3, "Daemon::killBinaries checkBinaries() existed=" + str(existed))
+
+    # if a binary is running
+    if existed:
+      signal_required = "INT"
+      self.log (3, "Daemon::killBinaries tryKill(INT)")
+      existed = self.tryKill ("INT")
+      self.log (3, "Daemon::killBinaries tryKill(INT) success=" + str(not existed))
+
+      # if a binary is running after SIGINT
+      if existed:
+        time.sleep(2)
+        signal_required = "TERM"
+        self.log (3, "Daemon::killBinaries tryKill(TERM)")
+        existed = self.tryKill ("TERM")
+        self.log (3, "Daemon::killBinaries tryKill(TERM) success=" + str(not existed))
+
+        # if a binary is running after SIGTERM
+        if existed:
+          time.sleep(2)
+          signal_required = "KILL"
+          self.log (3, "Daemon::killBinaries tryKill(KILL)")
+          existed = self.tryKill ("KILL")
+          self.log (3, "Daemon::killBinaries tryKill(KILL) success=" + str(not existed))
+
+    self.log (2, "Daemon::killBinaries signal_required=" + signal_required + \
+                 " success=" + str(not existed))
+
   def conclude (self):
+
+    self.log (2, "Daemon::conclude")
 
     self.quit_event.set()
 
-    if self.tryKill ("INT"):
-      time.sleep(2)
-      if self.tryKill ("TERM"):
-        time.sleep(2)
-        self.tryKill ("KILL")
+    self.log (2, "Daemon::conclude killBinaries")
+    self.killBinaries()
 
     if self.control_thread:
       self.control_thread.join()
