@@ -244,8 +244,8 @@ bool spip::DataBlockStats::monitor (std::string stats_dir, unsigned stream_id)
   keep_monitoring = true;
 
   unsigned nbin = 256;
-  unsigned ntime = 512;
-  unsigned nfreq = 512;
+  unsigned ntime = 256;
+  unsigned nfreq = 256;
 
   block_format->prepare (nbin, ntime, nfreq);
 
@@ -288,19 +288,27 @@ bool spip::DataBlockStats::monitor (std::string stats_dir, unsigned stream_id)
     else
     {
       if (verbose)
-        cerr << "spip::DataBlockStats::monitor reading data block" << endl;
-
+        cerr << "spip::DataBlockStats::monitor reset block_format" << endl;
       block_format->reset();
 
+      if (verbose)
+        cerr << "spip::DataBlockStats::monitor reading " << bufsz << "bytes into buffer" << endl;
       db->read (buffer, bufsz);
 
+      if (verbose)
+        cerr << "spip::DataBlockStats::monitor block_format->unpack_hgft()" << endl;
       block_format->unpack_hgft (buffer, bufsz);
+
+      if (verbose)
+        cerr << "spip::DataBlockStats::monitor block_format->unpack_ms()" << endl;
       block_format->unpack_ms (buffer, bufsz);
 
       // write the data files to disk 
       time_t now = time(0);
       strftime (local_time, 32, DADA_TIMESTR, localtime(&now));
 
+      if (verbose)
+        cerr << "spip::DataBlockStats::monitor generating output" << endl;
       ss.str("");
 
       ss << stats_dir << utc_start << "/" << local_time << "." << stream_id << ".hg.stats";
