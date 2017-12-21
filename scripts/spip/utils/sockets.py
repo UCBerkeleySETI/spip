@@ -32,21 +32,21 @@ def openSocket(dl, host, port, attempts=10, timeout=None):
 
   while (not connected and attempts > 0):
 
-    logMsg(3, dl, "openSocket: attempt " + str(11-attempts))
+    logMsg(3, dl, "spip.utils.openSocket: attempt " + str(11-attempts))
 
     try:
       sock.connect((host, port))
 
     except socket.error, e:
       if e.errno == errno.ECONNREFUSED:
-        logMsg(2, dl, "openSocket: connection to " + host + ":" + str(port) + " refused")
+        logMsg(2, dl, "spip.utils.openSocket: connection to " + host + ":" + str(port) + " refused")
         attempts -= 1
         if  attempts > 0:
           sleep(1)
       else:
         raise
     else:
-      logMsg(3, dl, "openSocket: connected")
+      logMsg(3, dl, "spip.utils.openSocket: connected")
       connected = True
   
   if connected:
