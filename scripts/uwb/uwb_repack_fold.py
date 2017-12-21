@@ -133,7 +133,7 @@ class RepackFoldDaemon(Daemon):
         if os.path.exists(filename):
           # if the file was created at least 20s ago, then there are unlikely to be
           # any more sub-ints to process
-          self.log (1, observation + " mtime=" + str(os.path.getmtime(filename)) + " time=" + str(time.time()))
+          self.log (2, observation + " mtime=" + str(os.path.getmtime(filename)) + " time=" + str(time.time()))
           if os.path.getmtime(filename) + 20 < time.time():
             self.log (1, observation + ": processing -> finished")
             self.log (2, "main: finalise_observation("+utc+","+source+")")
