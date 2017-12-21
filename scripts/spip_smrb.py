@@ -20,11 +20,79 @@ from json import dumps
 from spip.daemons.bases import StreamBased
 from spip.daemons.daemon import Daemon
 from spip.log_socket import LogSocket
-from spip.utils.core import system
+from spip.utils.core import system_piped,system
 
 DAEMONIZE = True
 DL        = 1
 
+# Instansiate a data block in this stream
+class smrbThread (threading.Thread):
+
+  def __init__ (self, key, db_id, stream_id, numa_node, pipe, script):
+    threading.Thread.__init__(self)
+    self.key = key
+    self.db_id = db_id 
+    self.stream_id = stream_id 
+    self.numa_node = numa_node
+    self.pipe = pipe
+    self.script = script
+
+    # configuration for this data block
+    self.nbufs = self.getBlockParam ("NBUFS")
+    if self.nbufs == False:
+      raise Exception ("SMRBDaemon BLOCK_NBUFS_" + str(self.db_id) + " was not defined")
+
+    self.bufsz = self.getBlockParam ("BUFSZ")
+    if self.nbufs == False:
+      raise Exception ("SMRBDaemon BLOCK_BUFSZ_" + str(self.db_id) + " was not defined")
+
+    self.nread = self.getBlockParam ("NREAD")
+    self.page  = self.getBlockParam ("PAGE")
+    self.gpuid = self.getBlockParam ("GPUID")
+
+  def getBlockParam (self, param):
+
+    key = "BLOCK_" + param + "_" + str(self.db_id) + "_" + str(self.stream_id)
+    if key in self.script.cfg.keys():
+      return self.script.cfg[key]
+
+    key = "BLOCK_" + param + "_" + str(self.db_id)
+    if key in self.script.cfg.keys():
+      return self.script.cfg[key]
+
+    return False
+
+
+  def run (self):
+
+    self.script.log(2, "smrbThread::run key=" + self.key + " nbufs=" + self.nbufs + \
+                       " bufsz=" + self.bufsz + " nread=" + self.nread + \
+                       " numa_node=" + self.numa_node + " page=" + self.page)
+
+    # command to establish the data block
+    cmd = "dada_db -k " + self.key + " -w -n " + self.nbufs + " -b " + self.bufsz
+
+    # number of readers is optional
+    if self.nread != False:
+      cmd = cmd + " -r " + self.nread
+
+    # numa node comes from the stream numa configuration
+    cmd = cmd + " -c " + self.numa_node
+
+    # page and lock the datablock
+    if self.page != False:
+      cmd += " -p -l"
+
+    # put the data block resident in GPU memory
+    if self.gpuid != False:
+      cmd += " -g " + self.gpuid
+
+    # run the command
+    self.script.log (1, "START " + cmd)
+    rval = system_piped (cmd, self.pipe, 1 <= DL)
+    self.script.log (1, "END   " + cmd)
+
+# Monitor the state of all data blocks in this stream
 class monThread (threading.Thread):
 
   def __init__ (self, keys, script):
@@ -43,13 +111,13 @@ class monThread (threading.Thread):
     script = self.script
 
     try:
-      script.log (2, "monThread: launching")
+      script.log (2, "monThread launching")
 
-      script.log(2, "monThread: opening mon socket")
+      script.log(2, "monThread::run opening mon socket")
       sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
       port = SMRBDaemon.getDBMonPort(self.id)
-      script.log(2, "monThread: binding to localhost:" + str(port))
+      script.log(2, "monThread::run binding to localhost:" + str(port))
       sock.bind(("localhost", port))
 
       sock.listen(2)
@@ -70,35 +138,35 @@ class monThread (threading.Thread):
         # from json
         serialized = dumps(smrb)
   
-        script.log(3, "monThread: calling select len(can_read)=" + 
+        script.log(3, "monThread::run calling select len(can_read)=" + 
                     str(len(can_read)))
         timeout = self.poll
         did_read, did_write, did_error = select.select(can_read, can_write, 
                                                        can_error, timeout)
-        script.log(3, "monThread: read="+str(len(did_read)) + 
+        script.log(3, "monThread::run read="+str(len(did_read)) + 
                     " write="+str(len(did_write))+" error="+str(len(did_error)))
 
         if (len(did_read) > 0):
           for handle in did_read:
             if (handle == sock):
               (new_conn, addr) = sock.accept()
-              script.log(2, "monThread: accept connection from " + 
+              script.log(2, "monThread::run accept connection from " + 
                           repr(addr))
               can_read.append(new_conn)
 
             else:
               message = handle.recv(4096)
               message = message.strip()
-              script.log(3, "monThread: message='" + message+"'")
+              script.log(3, "monThread::run message='" + message+"'")
               if (len(message) == 0):
-                script.log(2, "monThread: closing connection")
+                script.log(2, "monThread::run closing connection")
                 handle.close()
                 for i, x in enumerate(can_read):
                   if (x == handle):
                     del can_read[i]
               else:
                 if message == "smrb_status":
-                  script.log (3, "monThread: " + str(smrb))
+                  script.log (3, "monThread::run " + str(smrb))
                   handle.send(serialized)
           
       for i, x in enumerate(can_read):
@@ -107,7 +175,7 @@ class monThread (threading.Thread):
 
     except:
       self.quit_event.set()
-      script.log(1, "monThread: exception caught: " +
+      script.log(1, "monThread::run exception caught: " +
                   str(sys.exc_info()[0]))
       print '-'*60
       traceback.print_exc(file=sys.stdout)
@@ -138,7 +206,10 @@ class SMRBDaemon(Daemon,StreamBased):
 
   def main (self):
 
-    mon_threads = []
+    self.log (2, "SMRBDaemon::main()")
+
+    mon_thread = []
+    smrb_threads = {}
 
     # get a list of data block ids
     db_ids = self.cfg["DATA_BLOCK_IDS"].split(" ")
@@ -147,14 +218,17 @@ class SMRBDaemon(Daemon,StreamBased):
     numa_node = self.cfg["STREAM_NUMA_" + self.id]
     db_keys = []
 
-    for db_id in db_ids:
-      db_key = self.getDBKey (db_prefix, self.id, num_stream, db_id)
-      self.log (0, "main: db_key for " + db_id + " is " + db_key)
+    # log socket for output from SMRB instances
+    log_host = self.cfg["SERVER_HOST"]
+    log_port = int(self.cfg["SERVER_LOG_PORT"])
+    log_pipe = LogSocket ("smrb_src", "smrb_src", str(self.id), "stream",
+                          log_host, log_port, int(DL))
+    log_pipe.connect()
 
-      nbufs = self.cfg["BLOCK_NBUFS_" + db_id]
-      bufsz = self.cfg["BLOCK_BUFSZ_" + db_id]
-      nread = self.cfg["BLOCK_NREAD_" + db_id]
-      page  = self.cfg["BLOCK_PAGE_" + db_id]
+    for db_id in db_ids:
+
+      db_key = self.getDBKey (db_prefix, self.id, num_stream, db_id)
+      self.log (2, "SMRBDaemon::main db_key for " + db_id + " is " + db_key)
 
       # check if the datablock already exists
       cmd = "ipcs | grep 0x0000" + db_key + " | wc -l"
@@ -166,27 +240,39 @@ class SMRBDaemon(Daemon,StreamBased):
         if rval != 0:
           self.log (-2, "Could not destroy existing datablock")
 
-      cmd = "dada_db -k " + db_key + " -n " + nbufs + " -b " + bufsz + " -r " + nread + " -c " + numa_node 
-      if page:
-        cmd += " -p -l"
-      self.log (1, cmd)
-      rval, lines = self.system (cmd)
-      db_keys.append(db_key)
+      # start a thread to create a data block in persistence mode
+      self.log (2, "SMRBDaemon::main smrbThread("+db_key+","+db_id+","+numa_node+")")
+      smrb_threads[db_id] = smrbThread (db_key, db_id, self.id, numa_node, log_pipe.sock, script)
+      smrb_threads[db_id].start()
 
+      # append this command to the list of binaries that will be terminated
+      # on script shutdown
+      self.binary_list.append ("dada_db -k " + db_key)
+
+    # wait 1 second for threads to initialize
+    sleep(1)
+
+    self.log (2, "SMRBDaemon::main starting monThread")
     # after creation, launch thread to monitor smrb, maintaining state
     mon_thread = monThread (db_keys, self)
     mon_thread.start()
 
+    # wait for termination signal
     while (not self.quit_event.isSet()):
       sleep(1)
 
-    for db_key in db_keys:
-      cmd = "dada_db -k " + db_key + " -d"
-      rval, lines = self.system (cmd)
-
+    # join the monitoring thread
     if mon_thread:
-      self.log(2, "joining mon thread")
+      self.log(2, "SMRBDaemon::main joining mon thread")
       mon_thread.join()
+
+    # join the SMRB threads
+    for db_id in db_ids:
+      self.log(2, "SMRBDaemon::main joining smrb_threads["+db_id+"]")
+      smrb_threads[db_id].join()
+
+    log_pipe.close()
+
 
   @classmethod
   def getDBKey(self, inst_id, stream_id, num_stream, db_id):
