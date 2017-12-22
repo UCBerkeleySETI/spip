@@ -251,7 +251,7 @@ class TCSDaemon(Daemon):
 
             if command == "configure":
 
-              self.log(2, "parse_obs_cmd: received confiuration for beam " + b)
+              self.log(2, "parse_obs_cmd: received configuration for beam " + b)
               self.beam_states[b]["lock"].acquire()
 
               self.beam_states[b]["source"] = xml['obs_cmd']['source_parameters']['name']['#text']
@@ -267,10 +267,13 @@ class TCSDaemon(Daemon):
               self.beam_states[b]["tobs"] = str(xml['obs_cmd']['observation_parameters']['tobs'])
 
               # custom fields for this instrument (e.g. adc_sync_time on meerkat)
-              self.beam_states[b]["custom_fields"] = str(xml['obs_cmd']['custom_parameters']['fields'])
-              for f in self.beam_states[b]["custom_fields"].split(' '):
-                self.log(2, "parse_obs_cmd: custom field " + f + "=" + str(xml['obs_cmd']['custom_parameters'][f]))
-                self.beam_states[b][f] = str(xml['obs_cmd']['custom_parameters'][f])
+              self.beam_states[b]["custom_fields"] = ""
+              if 'custom_parameters' in xml['obs_cmd'].keys():
+                if 'fields' in xml['obs_cmd']['custom_parameters'].keys():
+                  if xml['obs_cmd']['custom_parameters']['fields'] != None:
+                    self.beam_states[b]["custom_fields"] = str(xml['obs_cmd']['custom_parameters']['fields'])
+                    for f in self.beam_states[b]["custom_fields"].split(' '):
+                      self.beam_states[b][f] = str(xml['obs_cmd']['custom_parameters'][f])
 
               self.beam_states[b]["utc_start"] = None
               self.beam_states[b]["utc_stop"]  = None
@@ -296,6 +299,7 @@ class TCSDaemon(Daemon):
               self.log(-1, "parse_obs_cmd: unrecognized command " + command)
 
     except KeyError as e:
+      self.log (0, "parse_obs_cmd: KeyError exception: " + str(e))
       return (False, "none", "Could not find key " + str(e))
 
     return (True, command, "")
@@ -329,8 +333,9 @@ class TCSDaemon(Daemon):
           obs["UTC_START"] = self.beam_states[b]["utc_start"]
 
           # inject custom fields into header
-          for f in self.beam_states[b]["custom_fields"].split(' '):
-            obs[f.upper()] = self.beam_states[b][f]
+          if len(self.beam_states[b]["custom_fields"]) > 0:
+            for f in self.beam_states[b]["custom_fields"].split(' '):
+              obs[f.upper()] = self.beam_states[b][f]
 
           self.beam_states[b]["lock"].release()
 
@@ -354,7 +359,7 @@ class TCSDaemon(Daemon):
               ctrl_port = int(self.cfg["STREAM_CTRL_PORT"]) + istream
 
               # connect to recv agent and provide observation configuration
-              self.log(3, "issue_start_cmd: openSocket("+host+","+str(ctrl_port)+")")
+              self.log(2, "issue_start_cmd: openSocket("+host+","+str(ctrl_port)+")")
               recv_sock = sockets.openSocket (DL, host, ctrl_port, 1)
               if recv_sock:
                 self.log(3, "issue_start_cmd: sending obs_header")
@@ -458,6 +463,7 @@ class TCSServerDaemon (TCSDaemon, ServerBased):
       self.beam_states[b]["tobs"] = ""
       self.beam_states[b]["adc_sync_time"] = ""
       self.beam_states[b]["mode"] = ""
+      self.beam_states[b]["custom_fields"] = ""
       self.beam_states[b]["state"] = "Idle"
       self.beam_states[b]["lock"] = threading.Lock()
 
@@ -481,6 +487,7 @@ class TCSBeamDaemon (TCSDaemon, BeamBased):
     self.beam_states[b]["tobs"] = ""
     self.beam_states[b]["adc_sync_time"] = ""
     self.beam_states[b]["mode"] = ""
+    self.beam_states[b]["custom_fields"] = ""
     self.beam_states[b]["state"] = "Idle"
     self.beam_states[b]["lock"] = threading.Lock()
 
@@ -523,10 +530,12 @@ if __name__ == "__main__":
 
     script.quit_event.set()
 
-    script.log(-2, "exception caught: " + str(sys.exc_info()[0]))
-    print '-'*60
-    traceback.print_exc(file=sys.stdout)
-    print '-'*60
+    script.log(-2, "exception caught: type=" + str(sys.exc_info()[0]) + " value="+str(sys.exc_info()[1]))
+    script.log(0, "-----------------------------------------")
+    formatted_lines = traceback.format_exc().splitlines()
+    for formatted_line in formatted_lines:
+      script.log(0, formatted_line)
+    script.log(0, "-----------------------------------------")
 
   script.log(1, "STOPPING SCRIPT")
   script.conclude()
