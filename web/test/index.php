@@ -83,6 +83,7 @@ class tests extends spip_webpage
 <tr> <td>MODE</td>         <td><input type="text" name="mode" size="4" value="PSR"/></td> </tr>
 <tr> <td>PROC FILE</td>    <td><input type="text" name="processing_file" size="16" value=""/></td> </tr>
 <tr> <td>NBEAM</td>        <td><input type="text" name="nbeam" size="2" value="<?php echo $this->config["NUM_BEAM"]?>" readonly/></td> </tr>
+<tr> <td>CALFREQ</td>      <td><input type="text" name="calfreq" size="8" value="11.123"/></td> </tr>
 <?php
     for ($i=0; $i<$this->config["NUM_BEAM"]; $i++)
     {
@@ -172,6 +173,7 @@ class tests extends spip_webpage
     $xml .=   "<tobs>".$get["tobs"]."</tobs>\n";
     $xml .=   "<mode>".$get["mode"]."</mode>\n";
     $xml .=   "<processing_file>".$get["processing_file"]."</processing_file>\n";
+    $xml .=   "<calfreq>".$get["calfreq"]."</calfreq>\n";
     $xml .=   "<utc_start></utc_start>\n";
     $xml .=   "<utc_stop></utc_stop>\n";
     $xml .= "</observation_parameters>\n";
@@ -179,6 +181,10 @@ class tests extends spip_webpage
     $xml .= "<instrument_parameters>\n";
     $xml .=   "<adc_sync_time>0</adc_sync_time>\n";
     $xml .= "</instrument_parameters>\n";
+
+    $xml .= "<custom_parameters>\n";
+    $xml .=   "<fields></fields>\n";
+    $xml .= "</custom_parameters>\n";
 
     $html = "";
 
