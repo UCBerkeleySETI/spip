@@ -270,8 +270,17 @@ class timing extends spip_webpage
     {
       $repack_socket = new spip_socket();
 
-      $host = $beam["host"];
-      $port = $this->config["STREAM_REPACK_PORT"] + $ibeam;
+      # if each beam operates indepdent of others      
+      if ($this->config["INDEPENDENT_BEAMS"] == "true")
+      {
+        $host = $beam["host"];
+        $port = $this->config["STREAM_REPACK_PORT"] + $ibeam;
+      }
+      else
+      {
+        $host = $this->config["SERVER_HOST"];
+        $port = $this->config["STREAM_REPACK_PORT"] + $ibeam;
+      }
 
       if ($repack_socket->open ($host, $port, 0) == 0)
       {
@@ -282,7 +291,7 @@ class timing extends spip_webpage
       }
       else
       {
-        $xml .= "<repack_state><beam name='".$beam["name"]."' active='False'></beam></repack_state>";
+        $xml .= "<repack_state><beam name='".$beam["name"]."' active='False' host='".$host."' port='".$port."'></beam></repack_state>";
       }
     }
     # get all information from TCS too
@@ -331,7 +340,7 @@ class timing extends spip_webpage
   // will contact a repacker to request current image information
   function renderImage($get)
   {
-    $beam_name     = $get["beam_name"];
+    $beam_name = $get["beam_name"];
     $ibeam = -1;
     foreach ($this->beams as $ib => $beam)
     {
@@ -351,8 +360,17 @@ class timing extends spip_webpage
         ($get["plot"] == "bandpass") ||
         ($get["plot"] == "snr_vs_time"))
     {
-      $host      = $this->beams[$ibeam]["host"];
-      $port      = $this->config["STREAM_REPACK_PORT"];
+      # if each beam operates indepdent of others      
+      if ($this->config["INDEPENDENT_BEAMS"] == "true")
+      {
+        $host = $this->beams[$ibeam]["host"];
+      }
+      else
+      {
+        $host = $this->config["SERVER_HOST"];
+      }
+      $port = $this->config["STREAM_REPACK_PORT"];
+
       if ($ibeam >= 0)
         $port += $ibeam;
 
