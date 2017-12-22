@@ -12,6 +12,8 @@
 #include <cstdio>
 #include <iostream>
 
+//#define _DEBUG
+
 using namespace std;
 
 spip::BlockFormatUWB::BlockFormatUWB()
@@ -51,6 +53,9 @@ void spip::BlockFormatUWB::deconfigure_fft ()
 
 void spip::BlockFormatUWB::configure_fft ()
 {
+#ifdef _DEBUG
+  cerr << "spip::BlockFormatUWB::configure_fft() nfreq_ft=" << nfreq_ft << endl;
+#endif
   // ensure FFT resources are not allocated
   deconfigure_fft ();
 
@@ -69,61 +74,87 @@ void spip::BlockFormatUWB::configure_fft ()
 
 void spip::BlockFormatUWB::unpack_hgft (char * buffer, uint64_t nbytes)
 {
-  const unsigned nsamp = nbytes / bytes_per_sample;
+  if (!plan)
+    configure_fft();
+
+#ifdef _DEBUG
+  cerr << "spip::BlockFormatUWB::unpack_hgft nbytes=" << nbytes 
+       << " bytes_per_sample=" << bytes_per_sample << endl;
+#endif
+  const uint64_t nsamp = nbytes / bytes_per_sample;
+  const uint64_t nsamp_per_block = 1024;
+  const uint64_t nblock = nsamp / nsamp_per_block;
+
+#ifdef _DEBUG
+  cerr << "spip::BlockFormatUWB::unpack_hgft nsamp=" << nsamp 
+       << " nsamp_per_block=" << nsamp_per_block << " nblock=" << nblock 
+       << " ntime=" << ntime << endl;
+#endif
   const unsigned nsamp_per_time = nsamp / ntime;
+#ifdef _DEBUG
+  cerr << "spip::BlockFormatUWB::unpack_hgft nsamp_per_time=" << nsamp_per_time << endl;
+#endif
 
   int16_t * input = (int16_t *) buffer;
 
   // always zero since UWB has 1 channel only
+  uint64_t idx = 0;
   unsigned ifreq_hg = 0;
   unsigned ival = 0;
   unsigned ibin, itime, power, ifreq;
   int re, im;
   float ref, imf;
 
-  for (unsigned isamp=0; isamp<nsamp; isamp++)
+  for (unsigned ipol=0; ipol<npol; ipol++)
   {
-    for (unsigned ipol=0; ipol<npol; ipol++)
+    for (unsigned iblock=0; iblock<nblock; iblock++)
     {
-      re = (int) input[isamp];
-      im = (int) input[isamp+1];
+      idx = (iblock * nsamp_per_block * npol) + (ipol * nsamp_per_block);
+      //cerr << "ipol=" << ipol << " iblock=" << iblock << " idx=" << idx << endl;
+      for (unsigned ibit=0; ibit<nsamp_per_block; ibit++)
+      {
+        re = (int) input[idx+0];
+        im = (int) input[idx+1];
 
-      ref = (float) re;
-      imf = (float) im;
+        ref = (float) re;
+        imf = (float) im;
 
-      sums[ipol*ndim + 0] += ref;
-      sums[ipol*ndim + 1] += imf;
+        sums[ipol*ndim + 0] += ref;
+        sums[ipol*ndim + 1] += imf;
 
-      // histograms only have 256 bins
-      ibin = (re + 32768) / 256;
-      hist[ipol][0][ifreq_hg][ibin]++;
+        // histograms only have 256 bins
+        ibin = (re + 32768) / 256;
+        hist[ipol][0][ifreq_hg][ibin]++;
 
-      ibin = (im + 32768) / 256;
-      hist[ipol][1][ifreq_hg][ibin]++;
+        ibin = (im + 32768) / 256;
+        hist[ipol][1][ifreq_hg][ibin]++;
 
 #ifdef HAVE_FFTW3
-      in[ival][0] = ref;
-      in[ival][1] = imf;
-      ival++;
-
-      if (ival == nfft)
-      {
-        itime = isamp / nsamp_per_time;
-        fftwf_execute_dft (plan, in, out);
-        for (ifreq=0; ifreq<nfreq_ft; ifreq++)
+        in[ival][0] = ref;
+        in[ival][1] = imf;
+        ival++;
+  
+        if (ival == nfft)
         {
-          ref = out[ifreq][0];
-          imf = out[ifreq][1];
-          power = (unsigned) ((ref * ref) + (imf * imf));
-          freq_time[ipol][ifreq][itime] += power;
+          unsigned isamp = iblock * nsamp_per_block + ibit;
+          itime = isamp / nsamp_per_time;
+          fftwf_execute_dft (plan, in, out);
+          for (ifreq=0; ifreq<nfreq_ft; ifreq++)
+          {
+            ref = out[ifreq][0] / nfft;
+            imf = out[ifreq][1] / nfft;
+            power = (unsigned) ((ref * ref) + (imf * imf));
+            //cerr << "freq_time[" << ipol << "][" << ifreq << "][" << itime << "] += " << power << endl;
+            freq_time[ipol][ifreq][itime] += power;
+          }
+          ival = 0;
         }
-        ival = 0;
-      }
 #else
-      power = (unsigned) ((ref * ref) + (imf * imf));
-      freq_time[ipol][ifreq_hg][itime] += power;
+        power = (unsigned) ((ref * ref) + (imf * imf));
+        freq_time[ipol][ifreq_hg][itime] += power;
 #endif
-      isamp += 2;
+        idx += 2;
+      } 
     }
   }
 }
@@ -145,8 +176,7 @@ void spip::BlockFormatUWB::unpack_ms(char * buffer, uint64_t nbytes)
 
 #ifdef _DEBUG
   cerr << "spip::BlockFormatUWB::unpack_ms nsamp=" << nsamp << endl;
-  cerr << "spip::BlockFormatUWB::unpack_ms nchan_per_freq=" << nchan_per_freq << " nblock=" << nblock << end
-l;
+  //cerr << "spip::BlockFormatUWB::unpack_ms nchan_per_freq=" << nchan_per_freq << " nblock=" << nblock << endl;
 #endif
 
   for (unsigned isamp=0; isamp<nsamp; isamp++)
