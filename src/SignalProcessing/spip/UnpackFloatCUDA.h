@@ -26,13 +26,11 @@ namespace spip {
       
       ~UnpackFloatCUDA ();
  
-      void configure();
-
       void prepare ();
       
       void reserve ();
       
-      void transform ();
+      void transform_SFPT_to_SFPT ();
       
     protected:
     

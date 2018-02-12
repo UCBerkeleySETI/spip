@@ -22,7 +22,12 @@ namespace spip {
 
       ~ForwardFFT ();
 
-      void configure ();
+      void configure (Ordering output_order);
+
+      //! configure the FFT plan
+      virtual void configure_plan () = 0;
+
+      void configure_plan_dimensions ();
 
       void prepare ();
 
@@ -33,8 +38,14 @@ namespace spip {
       //! Perform a forward FFT on input block
       void transformation ();
 
-      //! Data transformation
-      virtual void transform () = 0 ;
+      //! Required data transformation
+      virtual void transform_SFPT_to_TFPS () = 0 ;
+
+      //! Required data transformation
+      virtual void transform_SFPT_to_TSPF () = 0 ;
+
+      //! Required data transformation
+      virtual void transform_SFPT_to_SFPT () = 0 ;
 
       void set_nfft (int);
 
@@ -52,9 +63,31 @@ namespace spip {
 
       uint64_t ndat;
 
+      unsigned nbatch;
+
+      unsigned nchan_out;
+
       int nfft;
 
       double tsamp;
+
+      int rank;
+
+      int n[1];
+
+      int howmany;
+
+      int inembed[1];
+
+      int onembed[1];
+
+      int istride;
+
+      int idist;
+
+      int ostride;
+
+      int odist;
 
     private:
 

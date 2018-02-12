@@ -25,14 +25,20 @@ namespace spip {
       
       ~BackwardFFTFFTW ();
       
-      void configure ();
+      void configure (Ordering output_order);
+
+      void configure_plan ();
 
       void prepare ();
       
       void reserve ();
       
-      void transform ();
-      
+      void transform_TFPS_to_SFPT ();
+
+      void transform_TSPF_to_SFPT ();
+
+      void transform_SFPT_to_SFPT ();
+
     protected:
     
     private:

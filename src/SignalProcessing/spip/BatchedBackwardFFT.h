@@ -22,7 +22,7 @@ namespace spip {
 
       ~BatchedBackwardFFT ();
 
-      void configure ();
+      void configure (Ordering output_order);
 
       void prepare ();
 

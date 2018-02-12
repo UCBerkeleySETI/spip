@@ -34,7 +34,7 @@ namespace spip {
 
       void compute_delta_delays ();
 
-      void configure () { ; } ;
+      void configure (Ordering output_order) { ; } ;
 
       void prepare () { ; } ;
 

@@ -37,9 +37,6 @@ void spip::BatchedBackwardFFTCUDA::prepare ()
 
 void spip::BatchedBackwardFFTCUDA::prepare_plan (uint64_t ndat)
 {
-  if (plan)
-    cufftDestroy (plan);
-
   if (verbose)
     cerr << "spip::BatchedBackwardFFTCUDA::prepare_plan ndat=" << ndat << endl;
 
@@ -47,6 +44,11 @@ void spip::BatchedBackwardFFTCUDA::prepare_plan (uint64_t ndat)
   {
     return;
   }
+
+  // destroy the plan if previously allocated
+  if (plan)
+    cufftDestroy (plan);
+  plan = 0;
 
   cufftResult result = cufftCreate (&plan);
   if (result != CUFFT_SUCCESS)

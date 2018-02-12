@@ -26,6 +26,11 @@ namespace spip {
       //! resize the buffer to match the input dimensions
       void resize ();
 
+      //! zero the buffer
+      void zero ();
+
+      cudaStream_t get_stream () { return stream; };
+
     protected:
 
     private:
@@ -48,6 +53,9 @@ namespace spip {
 
       //! resize the buffer to match the input dimensions
       void resize ();
+
+      //! zero the buffer
+      void zero ();
 
     protected:
 

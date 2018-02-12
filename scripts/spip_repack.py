@@ -10,6 +10,7 @@
 import os, sys, socket, select, signal, traceback, time, threading, copy, string, shutil
 
 from time import sleep
+from shutil import copyfile
 
 from spip.daemons.bases import BeamBased,ServerBased
 from spip.daemons.daemon import Daemon
@@ -26,12 +27,14 @@ class RepackReportingThread(ReportingThread):
   def __init__ (self, script, id):
     host = sockets.getHostNameShort()
     port = int(script.cfg["STREAM_REPACK_PORT"])
-    if id >= 0:
+    if int(id) >= 0:
       port += int(id)
     ReportingThread.__init__(self, script, host, port)
 
     with open (script.cfg["WEB_DIR"] + "/spip/images/blankimage.gif", mode='rb') as file:
       self.no_data = file.read()
+
+    self.script.log (1, "RepackReportingThread::ReportingThread listening on " + host + ":" + str(port))
 
   def parse_message (self, request):
 
@@ -47,7 +50,7 @@ class RepackReportingThread(ReportingThread):
 
       for beam in self.script.beams:
 
-        self.script.log (3, "RepackReportingThread::parse_message: preparing state for beam: " + str(beam))
+        self.script.log (2, "RepackReportingThread::parse_message: preparing state for beam: " + beam)
 
         self.script.results[beam]["lock"].acquire()
         xml += "<beam name='" + str(beam) + "' active='" + str(self.script.results[beam]["valid"]) + "'>"
@@ -194,15 +197,18 @@ class RepackDaemon(Daemon):
           archives = {}
           for subband in self.subbands:
             self.log (3, "processing subband=" + str(subband))
-            
-            cmd = "find " + obs_dir + "/" + subband["cfreq"] + " -mindepth 1 -maxdepth 1 " + \
-                  "-type f -name '" + archives_glob + "' -printf '%f\\n'"
-            rval, files = self.system (cmd, 3)
 
-            for file in files:
-              if not file in archives:
-                archives[file] = 0
-              archives[file] += 1
+            # if this sub-band directory exists yet
+            if os.path.exists(obs_dir + "/" + subband["cfreq"]):
+            
+              cmd = "find " + obs_dir + "/" + subband["cfreq"] + " -mindepth 1 -maxdepth 1 " + \
+                    "-type f -name '" + archives_glob + "' -printf '%f\\n'"
+              rval, files = self.system (cmd, 3)
+
+              for file in files:
+                if not file in archives:
+                  archives[file] = 0
+                archives[file] += 1
 
           # if a file meets the subband count it is ripe for processing
           files = archives.keys()
@@ -210,10 +216,14 @@ class RepackDaemon(Daemon):
 
           for file in files:
 
-            processed_this_loop += 1
-            self.log (1, observation + ": processing " + file)
+            self.log (2, observation + ": " + file + " has " + str(archives[file]) \
+                      + " of " + str(len(self.subbands)) + " present")
 
             if archives[file] == len(self.subbands):
+
+              self.log (1, observation + ": processing " + file)
+
+              processed_this_loop += 1
               if len(self.subbands) > 1:
                 self.log (2, "main: process_subband()")
                 (rval, response) = self.process_subband (obs_dir, out_dir, source, file)
@@ -226,7 +236,7 @@ class RepackDaemon(Daemon):
                 if rval:
                   self.log (-1, "failed to process " + file + ": " + response)
 
-          if len(files) > 0:
+          if processed_this_loop > 0:
             # now process the sum files to produce plots etc
             self.log (2, "main: process_observation("+beam+","+utc+","+source+","+obs_dir+")")
             (rval, response) = self.process_observation (beam, utc, source, obs_dir)
@@ -297,7 +307,7 @@ class RepackDaemon(Daemon):
               header = Config.readCFGFileIntoDict (fin_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
               for i in range(1,len(self.subbands)):
                 header_sub = Config.readCFGFileIntoDict (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.header")
-                header = Config.mergerHeaderFreq (header, header_sub)
+                header = Config.mergeHeaderFreq (header, header_sub)
                 os.remove (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.header")
                 os.remove (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.finished")
                 os.rmdir(fin_dir + "/" + self.subbands[i]["cfreq"])
@@ -323,6 +333,10 @@ class RepackDaemon(Daemon):
 
       cmd = "find " + beam_dir + " -mindepth 2 -maxdepth 2 -type d | sort | tail -n 1"
       rval, observation = self.system (cmd, 3)
+
+      self.log (2, "load_finished: observation=" + str(observation))
+      if len(observation) < 1:
+        return 0, ""
 
       # strip prefix 
       observation = observation[0][(len(beam_dir)+1):]
@@ -410,6 +424,7 @@ class RepackDaemon(Daemon):
       self.results[beam]["snr"] = snr
       self.results[beam]["length"] = length
       self.results[beam]["valid"] = False 
+      self.log (2, "load_finished: self.results["+beam+"][valid]=False")
 
       self.results[beam]["lock"].release()
 
@@ -492,8 +507,7 @@ class RepackDaemon(Daemon):
       return (rval, "failed to convert psrfits file")
 
     # bscrunch to 4 bins for the bandpass plot
-    bscr_factor = int(self.total_channels / 4)
-    cmd = "pam -b " + str(bscr_factor) + " -e bscr " + input_file
+    cmd = "pam --setnbin 4  -e bscr " + input_file
     rval, lines = self.system (cmd, 2)
     if rval:
       return (rval, "could not bscrunch to 4 bins")
@@ -513,19 +527,29 @@ class RepackDaemon(Daemon):
     if rval:
       return (rval, "failed to zap known bad channels")
 
-    # pscrunch and fscrunch to 512 channels for the Fsum
-    fscr_factor = int(self.total_channels / 512)
-    cmd = "pam -p -f " + str(fscr_factor) + " -m " + input_file
+    # get the number of channels
+    cmd = "psredit -q -c nchan " + input_file + " | awk -F= '{print $2}'"
     rval, lines = self.system (cmd, 2)
     if rval:
-      return (rval, "could not fscrunch to 512 channels")
+      return (rval, "failed to get number of channels")
+    nchan = int(lines[0])
+    
+    while nchan > 512:
+      nchan = nchan / 2
+
+    # pscrunch and fscrunch to <512 channels for the Fsum
+    cmd = "pam -p --setnchn " + str(nchan) + " -m " + input_file
+    rval, lines = self.system (cmd, 2)
+    if rval:
+      return (rval, "could not fscrunch to " + str(nchan) + " channels")
 
     # add the archive to the freq sum, tscrunching it
     if not os.path.exists(freq_file):
-      cmd = "cp " + input_file + " " + freq_file
-      rval, lines = self.system (cmd, 2)
-      if rval:
-        return (rval, "failed to copy archive to freq.sum")
+      try:
+        shutil.copyfile (input_file, freq_file)
+      except IOError, e:
+        return (rval, "failed to copy archive to freq.sum: " + str(e))
+
     else:
       cmd = "psradd -T -o " + freq_file + " " + freq_file + " " + input_file
       rval, lines = self.system (cmd, 2)
@@ -539,20 +563,22 @@ class RepackDaemon(Daemon):
       return (rval, "failed add Fscrunch archive")
 
     # add it to the time sum
-    if not os.path.exists(time_file):
+    if not os.path.exists (time_file):
       try:
-        os.rename (input_file, time_file)
-      except OSError, e:
+        shutil.copyfile (input_file, time_file)
+      except IOError, e:
         return (-1, "failed rename Fscrunched archive to time.sum: " + str(e))
     else:
       cmd = "psradd -o " + time_file + " " + time_file + " " + input_file
       rval, lines = self.system (cmd, 2)
       if rval:
         return (rval, "failed add Fscrunched archive to time.sum")
-      try:
-        os.remove (input_file)
-      except OSError, e:
-        return (-1, "failed remove Fscrunched archive")
+  
+    # now delete the working input file
+    try:
+      os.remove (input_file)
+    except OSError, e:
+      return (-1, "failed remove Fscrunched archive")
 
     return (0, "")
 
@@ -596,28 +622,34 @@ class RepackDaemon(Daemon):
 
   def process_observation (self, beam, utc, source, in_dir):
 
+    self.log (2, "process_observation: beam="+beam+" utc="+utc+" source="+source) 
+
     freq_file   = in_dir + "/freq.sum"
     time_file   = in_dir + "/time.sum"
     band_file   = in_dir + "/band.last"
 
     timestamp = times.getCurrentTime() 
 
-    cmd = "psrplot -p freq " + freq_file + " -jDp -j 'F 512' -D -/png"
+    cmd = "psrplot -p freq " + freq_file + " -jDp -c above:l= -D -/png"
+    self.log (2, "process_observation: " + cmd)
     rval, freq_raw = self.system_raw (cmd, 3)
     if rval < 0:
       return (rval, "failed to create freq plot")
 
-    cmd = "psrplot -p time " + time_file + " -jDp -D -/png"
+    cmd = "psrplot -p time " + time_file + " -jDp -c above:l= -D -/png"
+    self.log (2, "process_observation: " + cmd)
     rval, time_raw = self.system_raw (cmd, 3)
     if rval < 0:
       return (rval, "failed to create time plot")
 
-    cmd = "psrplot -p flux -jFD " + freq_file + " -jp -D -/png"
+    cmd = "psrplot -p flux -jFD " + freq_file + " -jp -c above:l= -D -/png"
+    self.log (2, "process_observation: " + cmd)
     rval, flux_raw = self.system_raw (cmd, 3)
     if rval < 0:
       return (rval, "failed to create time plot")
 
     cmd = "psrplot -pb -x -lpol=0,1 -N2,1 -c above:c= " + band_file + " -D -/png"
+    self.log (2, "process_observation: " + cmd)
     rval, bandpass_raw = self.system_raw (cmd, 3)
     if rval < 0:
       return (rval, "failed to create time plot")
@@ -634,6 +666,7 @@ class RepackDaemon(Daemon):
       return (rval, "failed to extract time from time.sum")
     length = lines[0]
 
+    self.log (2, "process_observation: self.results[" + beam + "][lock].acquire")
     self.results[beam]["lock"].acquire() 
 
     self.results[beam]["utc_start"] = utc
@@ -646,6 +679,7 @@ class RepackDaemon(Daemon):
     self.results[beam]["snr"] = snr
     self.results[beam]["length"] = length
     self.results[beam]["valid"] = True
+    self.log (2, "process_observation: self.results[" + str(beam) + "][valid] = True")
     
     t1 = int(times.convertLocalToUnixTime(timestamp))
     t2 = int(times.convertUTCToUnixTime(utc))
@@ -655,7 +689,7 @@ class RepackDaemon(Daemon):
 
     self.snr_plot.configure()
     self.snr_plot.plot (240, 180, False, self.snr_history[beam]["times"], self.snr_history[beam]["snrs"])
-    self.log (2, "process_observation: snr_plot len=" + str(len(self.snr_plot.getRawImage())))
+    self.log (3, "process_observation: snr_plot len=" + str(len(self.snr_plot.getRawImage())))
     self.results[beam]["snr_vs_time"] = self.snr_plot.getRawImage()
 
     self.results[beam]["lock"].release() 
@@ -766,6 +800,7 @@ class RepackDaemon(Daemon):
       # indicate that the beam is no longer valid now that the 
       # observation has finished
       self.results[beam]["valid"] = False
+      self.log (2, "end_observation: self.results["+beam+"][valid]=False")
 
     self.results[beam]["lock"].release()
 
@@ -805,13 +840,14 @@ class RepackServerDaemon (RepackDaemon, ServerBased):
 
     freq_low  = float(self.subbands[0]["cfreq"])  - (float(self.subbands[0]["bw"]) / 2.0)
     freq_high = float(self.subbands[-1]["cfreq"]) + (float(self.subbands[-1]["bw"]) / 2.0)
-    self.out_freq = freq_low + ((freq_high - freq_low) / 2.0)
+    self.out_cfreq = freq_low + ((freq_high - freq_low) / 2.0)
 
     return 0
 
   def conclude (self):
     for i in range(int(self.cfg["NUM_BEAM"])):
       bid = self.cfg["BEAM_" + str(i)]
+    self.results[bid]["lock"].lock()
     self.results[bid]["lock"].release()
 
     RepackDaemon.conclude()

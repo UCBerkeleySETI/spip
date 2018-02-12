@@ -27,7 +27,7 @@ void spip::BackwardFFT::set_nfft (int _nfft)
 }
 
 //! configure parameters at the start of a data stream
-void spip::BackwardFFT::configure ()
+void spip::BackwardFFT::configure (spip::Ordering output_order)
 {
   // this transformation requires the following parameters
   ndat  = input->get_ndat ();
@@ -46,14 +46,22 @@ void spip::BackwardFFT::configure ()
   if (nbit != 32)
     throw invalid_argument ("BackwardFFT::configure input nbit != 32");
 
-  if (ndat % nfft != 0)
+  if (nchan % nfft != 0)
   {
-    cerr << "spip::BackwardFFT::configure ndat=" << ndat << " nfft=" << nfft << endl;
-    throw invalid_argument ("BackwardFFT::configure ndat must be divisible by nfft");
+    cerr << "spip::BackwardFFT::configure nchan=" << nchan << " nfft=" << nfft << endl;
+    throw invalid_argument ("BackwardFFT::configure nchan must be divisible by nfft");
   }
 
-  if (input->get_order() != spip::Ordering::SFPT)
-    throw invalid_argument ("BackwardFFT::configure input order must be SFPT");
+  bool valid_transform = false;
+  if (input->get_order() == TFPS && output_order == SFPT)
+    valid_transform = true;
+  if (input->get_order() == TSPF && output_order == SFPT)
+    valid_transform = true;
+  if (input->get_order() == SFPT && output_order == SFPT)
+    valid_transform = true;
+
+  if (!valid_transform)
+    throw invalid_argument ("BackwardFFT::configure invalid ordering, allowed TFPS->SFPT, TSPF->SFPT or SFPT->SFPT");
 
   // copy input header to output
   output->clone_header (input->get_header());
@@ -62,16 +70,16 @@ void spip::BackwardFFT::configure ()
   output->read_header ();
 
   // update the parameters that this transformation will affect
-  output->set_nchan (nchan * nfft);
-  output->set_tsamp (tsamp / nfft);
-  output->set_order (spip::Ordering::TFPS);
+  output->set_nchan (nchan / nfft);
+  output->set_tsamp (tsamp * nfft);
+  output->set_order (spip::Ordering::SFPT);
 
   if (verbose)
   {
      cerr << "spip::BackwardFFT::configure nchan: " << nchan 
-          << " -> " << nchan * nfft << endl;
+          << " -> " << nchan / nfft << endl;
      cerr << "spip::BackwardFFT::configure tsamp: " << tsamp 
-          << " -> " << tsamp / nfft << endl;
+          << " -> " << tsamp * nfft << endl;
   }
 
   // update the output header parameters with the new details
@@ -83,24 +91,58 @@ void spip::BackwardFFT::configure ()
   // TODO change the UTC_START to be related to the new time resolution
 }
 
+void spip::BackwardFFT::configure_plan_dimensions ()
+{
+  // batch over multiple time samples for a given output channel, antenna and pol
+  // each batch produces nfft out time sample, from nfft input channels 
+  nbatch = ndat;
+  nchan_out = nchan / nfft;
+
+  if (verbose)
+    cerr << "spip::BackwardFFTFFTW::configure_plan_dimensions nbatch=" << nbatch << " nfft=" << nfft << endl;
+
+  rank = 1;                       // 1D transform
+  n[0] = nfft;                    // of length nfft
+  howmany = nbatch;
+
+  inembed[0] = nfft;
+  onembed[0] = nfft;
+
+  if ((input->get_order() == TFPS) && (output->get_order() == SFPT))
+  {
+    istride = npol * nsignal;     // stride between samples
+    idist = nchan * istride;      // stride between FFT blocks
+    ostride = 1;                  // stride between samples
+    odist = nfft * ostride;       // stride between FFT blacks
+  }
+  else if ((input->get_order() == TSPF) && (output->get_order() == SFPT))
+  {
+    istride = npol * nsignal;     // stride between samples
+    idist = nchan * istride;      // stride between FFT blocks
+    ostride = 1;                  // stride between samples
+    odist = nfft * ostride;       // stride between FFT blacks
+  }
+  else if ((input->get_order() == SFPT) && (output->get_order() == SFPT))
+  {
+    istride = npol * nbatch;      // stride between channels
+    idist = 1;                    // stride between FFT blocks
+    ostride = 1;                  // stride between samples
+    odist = nfft * ostride;       // stride between FFT blocks
+  }
+  else
+    throw invalid_argument ("BackwardFFT::configure_plan_dimensions unsupported input/output ordering");
+}
+
 //! prepare prior to each transformation call
 void spip::BackwardFFT::prepare ()
 {
-  ndat = input->get_ndat();
-  uint64_t remainder = ndat % nfft;
-  if (remainder != 0)
-  {
-    if (verbose)
-      cerr << "spip::BackwardFFT::prepare truncating ndat from " << ndat << " to " << ndat - remainder << endl;
-    ndat -= remainder;
-  }
 }
 
 //! ensure meta-data is correct in output
 void spip::BackwardFFT::prepare_output ()
 {
   // update the output parameters that may change from block to block
-  output->set_ndat (ndat / nfft);
+  output->set_ndat (ndat * nfft);
 
   // resize output based on configuration
   output->resize();
@@ -109,8 +151,11 @@ void spip::BackwardFFT::prepare_output ()
 //! simply copy input buffer to output buffer
 void spip::BackwardFFT::transformation ()
 {
-  if (ndat % nfft != 0)
-    throw invalid_argument ("BackwardFFT::transformation ndat must be divisible by nfft");
+  if (verbose)
+    cerr << "void spip::BackwardFFT::transformation()" << endl;
+
+  if (nchan % nfft != 0)
+    throw invalid_argument ("BackwardFFT::transformation nchan must be divisible by nfft");
 
   // ensure the output is appropriately sized
   prepare_output();
@@ -122,6 +167,21 @@ void spip::BackwardFFT::transformation ()
   }
     
   // apply data transformation
-  transform ();
+  if ((input->get_order() == TFPS) && (output->get_order() == SFPT))
+  {
+    transform_TFPS_to_SFPT ();
+  }
+  else if ((input->get_order() == TSPF) && (output->get_order() == SFPT))
+  {
+    transform_TSPF_to_SFPT ();
+  }
+  else if ((input->get_order() == SFPT) && (output->get_order() == SFPT))
+  {
+    transform_SFPT_to_SFPT ();
+  }
+  else
+  {
+    throw runtime_error ("BackwardFFT::transform unsupport input to output conversion");
+  }
 }
 

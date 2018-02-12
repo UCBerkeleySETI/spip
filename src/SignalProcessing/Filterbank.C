@@ -225,31 +225,31 @@ void spip::Filterbank::open ()
   {
     if (verbose)
       cerr << "spip::Filterbank::open ram_to_cuda->configure()" << endl;
-    ram_to_cuda->configure();
+    ram_to_cuda->configure(spip::Ordering::SFPT);
   }
 #endif
   
   // configure the unpacker
   if (verbose)
     cerr << "spip::Filterbank::open unpack_float->configure()" << endl;
-  unpack_float->configure();
+  unpack_float->configure(spip::Ordering::SFPT);
 
-  // configure the forward FFT
+  // configure the forward FFT 
   if (verbose)
     cerr << "spip::Filterbank::open fwd_fft->configure()" << endl;
-  fwd_fft->configure();
+  fwd_fft->configure(spip::Ordering::TSPF);
 
   // configure the backward FFTs
   if (verbose)
     cerr << "spip::Filterbank::open bwd_fft->configure()" << endl;
-  bwd_fft->configure();
+  bwd_fft->configure(spip::Ordering::SFPT);
 
 #ifdef HAVE_CUDA
   if (device >= 0)
   {
     if (verbose)
       cerr << "spip::Filterbank::open cuda_to_ram->configure()" << endl;
-    cuda_to_ram->configure();
+    cuda_to_ram->configure(spip::Ordering::SFPT);
   }
 #endif
 

@@ -21,7 +21,7 @@ spip::RAMtoCUDATransfer::~RAMtoCUDATransfer ()
 }
 
 //! intial configuration at the start of the data stream
-void spip::RAMtoCUDATransfer::configure ()
+void spip::RAMtoCUDATransfer::configure (spip::Ordering output_order)
 {
   ndat  = input->get_ndat ();
 

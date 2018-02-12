@@ -7,7 +7,7 @@
 # 
 ###############################################################################
 
-from os import path
+from os import path, unlink
 from time import sleep
 import threading
 
@@ -29,14 +29,17 @@ class ControlThread(threading.Thread):
     while (self.keep_running()):
       sleep(1)
 
-    # signal binaries to exit
-    for binary in self.script.binary_list:
-      cmd = "pkill -f '^" + binary + "'"
-      rval, lines = self.script.system (cmd, 3)
+    self.script.log (2, "ControlThread::run keep_running == false")
+
+    # terminate any binaries that are currently running
+    self.script.log (2, "ControlThread::run self.script.killBinaries()")
+    self.script.killBinaries()
 
     if path.exists(self.script.quit_file):
       self.script.log (1, "ControlThread: quit request detected")
       self.script.quit_event.set()
+      unlink (self.script.quit_file)
+
     #if path.exists(self.script.reload_file):
     #  self.script.log (2, "ControlThread: reload request detected")
     self.script.log (2, "ControlThread: exiting")

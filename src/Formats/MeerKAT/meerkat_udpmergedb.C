@@ -133,11 +133,7 @@ int main(int argc, char *argv[])
     signal(SIGINT, signal_handler);
    
     // config for the this data stream
-    if (config.load_from_file (argv[optind]) < 0)
-    {
-      cerr << "ERROR: could not read ASCII header from " << argv[optind] << endl;
-      return (EXIT_FAILURE);
-    }
+    config.load_from_file (argv[optind]);
 
     if (verbose)
       cerr << "meerkat_udpmergedb: configuring using fixed config" << endl;

@@ -23,7 +23,7 @@ namespace spip {
       void open_multicast (std::string, int, std::string);
 
       // send the contents of buf (bufsz bytes)
-      inline size_t send () { sendto(fd, buf, bufsz, 0, sock_addr, sock_size); };
+      inline size_t send () { return sendto(fd, buf, bufsz, 0, sock_addr, sock_size); };
 
       size_t send (size_t nbytes);
 

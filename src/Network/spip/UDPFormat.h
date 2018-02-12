@@ -66,6 +66,8 @@ namespace spip {
 
       void set_data_size (unsigned size ) { packet_data_size = size; } ;
 
+      unsigned get_packet_size () { return packet_size; } ;
+
       double rand_normal (double mean, double stddev);
 
       void generate_noise_buffer (int nbits);
@@ -102,6 +104,9 @@ namespace spip {
       //! size of the data in the UDP packet payload
       unsigned packet_data_size;
 
+      //! size of the UDP packet
+      unsigned packet_size;
+
       unsigned ndim;
 
       unsigned npol;
@@ -123,6 +128,8 @@ namespace spip {
       char * noise_buffer;
 
       size_t noise_buffer_size;
+
+      unsigned noise_buffer_alignment;
 
       bool configured;
 

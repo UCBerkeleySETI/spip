@@ -105,11 +105,7 @@ int main(int argc, char *argv[]) try
  
   signal(SIGINT, signal_handler);
 
-  if (config.load_from_file (argv[optind]) < 0)
-  {
-    cerr << "ERROR: could not read ASCII config from " << argv[optind] << endl;
-    return (EXIT_FAILURE);
-  }
+  config.load_from_file (argv[optind]);
 
   if (verbose)
     cerr << "ska1_udpdb: configuring" << endl;
@@ -229,5 +225,7 @@ void * stats_thread (void * arg)
 
     sleep(1);
   }
+  void * result = NULL;
+  return result;
 }
 

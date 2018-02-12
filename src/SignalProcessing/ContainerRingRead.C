@@ -33,7 +33,7 @@ void spip::ContainerRingRead::process_header ()
   header.load_from_str (header_str);
 
   if (header.get ("NANT", "%u", &nsignal) != 1)
-    throw invalid_argument ("NSIGNAL did not exist in header");
+    throw invalid_argument ("NANT did not exist in header");
 
   if (header.get ("NCHAN", "%u", &nchan) != 1)
     throw invalid_argument ("NCHAN did not exist in header");
@@ -46,6 +46,17 @@ void spip::ContainerRingRead::process_header ()
 
   if (header.get ("NDIM", "%u", &ndim) != 1)
     throw invalid_argument ("NDIM did not exist in header");
+
+  char order[5];
+  if (header.get ("ORDER", "%s", order) != 1)
+    throw invalid_argument ("ORDER did not exist in header");
+  if (strcmp (order, "TSPF") == 0)
+    set_order (spip::Ordering::TSPF);
+  else if (strcmp (order, "SFPT") == 0)
+    set_order (spip::Ordering::SFPT);
+  else
+    throw invalid_argument ("unsupported input order");
+
 
   nbits_per_sample = nsignal * nchan * nbit * npol * ndim;
   ndat = size / (nbits_per_sample / 8);

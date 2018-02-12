@@ -21,5 +21,5 @@ dist_bin_SCRIPTS = spip_gen.py \
                    meerkat_recv.py \
                    meerkat_recvsim.py
 
-SUBDIRS = meerkat spip
+SUBDIRS = meerkat spip uwb
 

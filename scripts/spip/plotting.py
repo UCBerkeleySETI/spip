@@ -110,7 +110,13 @@ class HistogramPlot (InlinePlot):
     else:
       self.setLabels ('Histogram channel '+str(channel), '', '') 
 
-  def plot_binned (self, xres, yres, plain, real, imag, nbins):
+  def plot_binned (self, xres, yres, plain, data, nbins):
+    self.openPlot(xres, yres, plain)
+    self.bins = numpy.arange(-128,128,1)
+    self.ax.plot(self.bins, data, color='black')
+    self.closePlot()
+
+  def plot_binned_dual (self, xres, yres, plain, real, imag, nbins):
     self.openPlot(xres, yres, plain)
     self.bins = numpy.arange(-128,128,1)
     self.ax.plot(self.bins, real, color='red', label='real')

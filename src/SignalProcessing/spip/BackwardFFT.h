@@ -22,7 +22,12 @@ namespace spip {
 
       ~BackwardFFT ();
 
-      void configure ();
+      void configure (Ordering output_order);
+
+      //! configuration of FFT plan
+      virtual void configure_plan () = 0;
+
+      void configure_plan_dimensions ();
 
       void prepare ();
 
@@ -33,8 +38,14 @@ namespace spip {
       //! Perform a backward FFT on input block
       void transformation ();
 
-      //! Data transformation
-      virtual void transform () = 0 ;
+      //! transform from TSPF input format
+      virtual void transform_TSPF_to_SFPT () = 0 ;
+
+      //! transform from TFPS input format
+      virtual void transform_TFPS_to_SFPT () = 0 ;
+
+      //! transform from TFPS input format
+      virtual void transform_SFPT_to_SFPT () = 0 ;
 
       void set_nfft (int);
 
@@ -55,6 +66,28 @@ namespace spip {
       int nfft;
 
       double tsamp;
+
+      unsigned nbatch;
+
+      unsigned nchan_out;
+
+      int rank;
+
+      int n[1];
+
+      int howmany;
+
+      int inembed[1];
+
+      int onembed[1];
+
+      int istride;
+
+      int idist;
+
+      int ostride;
+
+      int odist;
 
     private:
 

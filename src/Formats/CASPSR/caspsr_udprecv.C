@@ -98,11 +98,7 @@ int main(int argc, char *argv[])
       cerr << "caspsr_udprecv: Loading configuration from " << argv[optind] << endl;
 
     // config file for this data stream
-    if (config.load_from_file (argv[optind]) < 0)
-    {
-      cerr << "ERROR: could not read ASCII header from " << argv[optind] << endl;
-      return (EXIT_FAILURE);
-    }
+    config.load_from_file (argv[optind]);
 
     if (udprecv->verbose)
       cerr << "caspsr_udprecv: configuring using fixed config" << endl;

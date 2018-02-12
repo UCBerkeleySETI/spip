@@ -17,7 +17,7 @@
 namespace spip {
 
   //! All Data Containers have a sample ordering 
-  typedef enum { SFPT, TFPS, FSTP, Custom } Ordering;
+  typedef enum { SFPT, TFPS, TSPF, Custom } Ordering;
 
   class Container
   {
@@ -80,6 +80,9 @@ namespace spip {
       virtual unsigned char * get_buffer() { return buffer; }
       virtual unsigned char * get_buffer() const { return buffer; }
 
+      //! zero the contents of the buffer
+      virtual void zero () = 0;
+
       // copy the meta-data from the supplied header
       void clone_header (const spip::AsciiHeader &obj);
 
@@ -91,6 +94,9 @@ namespace spip {
 
       //! return const header
       AsciiHeader get_header () const { return header; } 
+
+      //! return a descriptive string regarding the ordering
+      static std::string get_order_string (Ordering o);
 
     protected:
 

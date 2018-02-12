@@ -22,7 +22,7 @@ namespace spip {
 
       ~UnpackFloat ();
 
-      void configure ();
+      void configure (Ordering output_order);
 
       void prepare ();
 
@@ -34,7 +34,7 @@ namespace spip {
       void transformation ();
 
       //! Data transformation
-      virtual void transform () = 0 ;
+      virtual void transform_SFPT_to_SFPT () = 0 ;
 
     protected:
 

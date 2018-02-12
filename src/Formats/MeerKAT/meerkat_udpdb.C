@@ -120,11 +120,7 @@ int main(int argc, char *argv[]) try
   signal(SIGINT, signal_handler);
 
   // config for the this data stream
-  if (config.load_from_file (argv[optind]) < 0)
-  {
-    cerr << "ERROR: could not read ASCII header from " << argv[optind] << endl;
-    return (EXIT_FAILURE);
-  }
+  config.load_from_file (argv[optind]);
 
   uint64_t data_bufsz = udpdb->get_data_bufsz();
   if (config.set("RESOLUTION", "%lu", data_bufsz) < 0)

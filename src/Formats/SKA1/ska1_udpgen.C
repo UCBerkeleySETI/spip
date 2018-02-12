@@ -35,8 +35,6 @@ int main(int argc, char *argv[])
 
   spip::AsciiHeader config;
 
-  char * src_host = 0;
-
   // total time to transmit for
   unsigned transmission_time = 5;   
 
@@ -114,11 +112,7 @@ int main(int argc, char *argv[])
   signal(SIGINT, signal_handler);
 
   // header the this data stream
-  if (config.load_from_file (argv[optind]) < 0)
-  {
-    cerr << "ERROR: could not read ASCII header from " << argv[optind] << endl;
-    return (EXIT_FAILURE);
-  }
+  config.load_from_file (argv[optind]);
 
   if (verbose)
     cerr << "ska1_udpgen: configuring based on header" << endl;
@@ -199,9 +193,6 @@ void * stats_thread (void * arg)
   uint64_t b_sent_1sec = 0;
   uint64_t b_sent_curr = 0;
 
-  uint64_t s_sent_total = 0;
-  uint64_t s_sent_1sec = 0;
-
   float gb_sent_ps = 0;
   float mb_sent_ps = 0;
 
@@ -224,5 +215,7 @@ void * stats_thread (void * arg)
 
     sleep(1);
   }
+  void * result = NULL;
+  return result;
 }
 

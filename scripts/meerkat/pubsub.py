@@ -60,7 +60,7 @@ class PubSubThread (threading.Thread):
     sensors["RA"]                = {"comp": "cbf", "sensor": "pos.request-base-ra"}
     sensors["BMAJ"]              = {"comp": "cbf", "sensor": "beam-major-axis"}
     sensors["BMIN"]              = {"comp": "cbf", "sensor": "beam-minor-axis"}
-    sensors["BPA"]               = {"comp": "cbf", "sensor": "beam-position-axis"}
+    sensors["BPA"]               = {"comp": "cbf", "sensor": "beam-position"}
     sensors["NCHAN"]             = {"comp": "cbf", "sensor": self.fengine_stream + '.antenna-channelised-voltage-n-chans'}
     sensors["ADC_SYNC_TIME"]     = {"comp": "cbf", "sensor": self.fengine_stream + '.synchronisation-epoch'}
     sensors["ITRF"]              = {"comp": "sub", "sensor": "reference-location-itrf"}
@@ -89,7 +89,7 @@ class PubSubThread (threading.Thread):
 
         # instruct the web socket to sample this sensor
         try:
-          self.script.log(2, "PubSubThread::configure set_sampling_strategy(" + name + ")")
+          self.script.log(2, "PubSubThread::configure set_sampling_strategy(" + self.title + ", " + name + ", " + self.policy + ")")
           result = yield self.ws_client.set_sampling_strategy (self.title, name, self.policy)
           self.script.log(2, "PubSubThread::configure set_sampling_strategy result="+str(result))
 

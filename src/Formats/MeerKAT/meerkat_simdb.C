@@ -102,11 +102,7 @@ int main(int argc, char *argv[])
 
   signal(SIGINT, signal_handler);
 
-  if (config.load_from_file (argv[optind]) < 0)
-  {
-    cerr << "ERROR: could not read ASCII config from " << argv[optind] << endl;
-    return (EXIT_FAILURE);
-  }
+  config.load_from_file (argv[optind]);
 
   uint64_t data_bufsz = simdb->get_data_bufsz();
   if (config.set("RESOLUTION", "%lu", data_bufsz) < 0)

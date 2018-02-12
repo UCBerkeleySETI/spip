@@ -23,7 +23,7 @@ spip::UnpackFloat::~UnpackFloat ()
 }
 
 //! intial configuration at the start of the data stream
-void spip::UnpackFloat::configure ()
+void spip::UnpackFloat::configure (spip::Ordering output_order)
 {
   ndat  = input->get_ndat ();
   nchan = input->get_nchan ();
@@ -41,8 +41,11 @@ void spip::UnpackFloat::configure ()
   if (nbit != 8 && nbit != 16 && nbit != 32)
     throw invalid_argument ("UnpackFloat::configure nbit must be 8, 16 or 32");
 
-  if (input->get_order() != spip::Ordering::SFPT)
-    throw invalid_argument ("UnpackFloat::configure input order must be SFPT");
+  bool valid_transform = false;
+  if (input->get_order() == spip::Ordering::SFPT && output_order == spip::Ordering::SFPT)
+    valid_transform = true;
+  if (!valid_transform)
+    throw invalid_argument ("UnpackFloat::configure invalid ordering, must be SFPT->SFPT");
 
   // copy input header to output
   output->clone_header (input->get_header());
@@ -78,7 +81,7 @@ void spip::UnpackFloat::transformation ()
   prepare_output ();
 
   // apply data transformation
-  transform ();
+  transform_SFPT_to_SFPT ();
 }
 
 void spip::UnpackFloat::prepare_output ()

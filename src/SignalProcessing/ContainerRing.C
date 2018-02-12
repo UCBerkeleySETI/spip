@@ -25,6 +25,9 @@ spip::ContainerRing::~ContainerRing ()
 
 void spip::ContainerRing::resize ()
 {
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerRing::resize ndat=" << ndat << " nchan=" << nchan << " nsignal=" << nsignal << " ndim=" << ndim << " npol=" << npol << " nbit=" << nbit << endl;
+
   uint64_t required_size = calculate_buffer_size ();
   if (spip::Container::verbose)
     cerr << "spip::ContainerRing::resize size=" << size << " required_size=" << required_size << endl;

@@ -6,9 +6,11 @@
  ***************************************************************************/
 
 #include "spip/ContainerRAM.h"
+#include "spip/Error.h"
 
 #include <cstring>
 #include <iostream>
+
 
 using namespace std;
 
@@ -21,6 +23,7 @@ spip::ContainerRAM::~ContainerRAM ()
   // deallocate any buffer
   if (buffer)
     free (buffer);
+  buffer = NULL;
 }
 
 void spip::ContainerRAM::resize ()
@@ -34,6 +37,10 @@ void spip::ContainerRAM::resize ()
     if (buffer)
       free (buffer);
     buffer = (unsigned char *) malloc (required_size);
+    if (!buffer)
+      throw Error(InvalidState, "spip::ContainerRAM::resize", "malloc failed");
+
+    size = required_size;
   }
 }
 

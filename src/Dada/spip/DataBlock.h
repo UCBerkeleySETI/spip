@@ -53,6 +53,8 @@ namespace spip
 
     protected:
 
+      bool verbose;
+
       ipcbuf_t * header_block;
 
       ipcio_t * data_block;

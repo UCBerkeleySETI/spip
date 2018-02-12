@@ -172,6 +172,9 @@ class StatDaemon(Daemon,StreamBased):
 
     (host, beam_id, subband_id) = self.cfg["STREAM_" + id].split(":")
     self.beam_name = self.cfg["BEAM_" + beam_id] 
+  
+    (cfreq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + subband_id].split(":")
+    self.cfreq = cfreq
 
     self.hg_plot = HistogramPlot()
     self.ft_plot = FreqTimePlot()
@@ -193,17 +196,18 @@ class StatDaemon(Daemon,StreamBased):
 
     if not os.path.exists(self.processing_dir):
       os.makedirs(self.processing_dir, 0755) 
-    self.log (2, "StatDaemon::main stream_id=" + str(self.id))
 
     # get the data block keys
     db_prefix  = self.cfg["DATA_BLOCK_PREFIX"]
     db_id      = self.cfg["PROCESSING_DATA_BLOCK"]
     num_stream = self.cfg["NUM_STREAM"]
+    stream_id  = str(self.id)
+    self.log (2, "StatDaemon::main stream_id=" + str(self.id))
     db_key     = SMRBDaemon.getDBKey (db_prefix, stream_id, num_stream, db_id)
     self.log (2, "StatDaemon::main db_key=" + db_key)
 
     # start dbstats in a separate thread
-    stat_dir   = self.cfg["CLIENT_STATS_DIR"]   + "/processing/" + self.beam_name
+    stat_dir   = self.cfg["CLIENT_STATS_DIR"]   + "/processing/" + self.beam_name + "/" + self.cfreq
 
     if not os.path.exists(stat_dir):
       os.makedirs(stat_dir, 0755)
@@ -236,8 +240,8 @@ class StatDaemon(Daemon,StreamBased):
       return
 
     # this stat command will not change from observation to observation
-    stat_cmd = self.cfg["STREAM_STATS_BINARY"] + " -k " + db_key + " " + stream_config_file \
-               + " -D  " + stat_dir
+    stat_cmd = self.cfg["STREAM_STATS_BINARY"] + " -k " + db_key + \
+               " " + stream_config_file + " -D  " + stat_dir
 
     while (not self.quit_event.isSet()):
 
@@ -262,7 +266,7 @@ class StatDaemon(Daemon,StreamBased):
 
       pref_freq = 0
      
-      while stat_thread.is_alive():
+      while stat_thread.is_alive() and not self.quit_event.isSet():
 
         # get a list of all the recent observations
         observations = os.listdir (stat_dir)
@@ -287,7 +291,6 @@ class StatDaemon(Daemon,StreamBased):
           self.results["valid"] = self.hg_valid and self.ft_valid and self.ms_valid
 
           self.results["lock"].release()
-
 
         time.sleep(5)
 
@@ -348,6 +351,34 @@ class StatDaemon(Daemon,StreamBased):
         self.hg_plot.plot_binned_image (800, 600, True, hg_data[1][1], nfreq, nbin)
         self.results["histogram_1_imag_hires"] = self.hg_plot.getRawImage()
 
+      else:
+
+        chan_real = hg_data[0][0][0,:]
+        chan_imag = hg_data[0][1][0,:]
+
+        self.hg_plot.plot_binned (240, 160, True, chan_real, nbin)
+        self.results["histogram_0_real"] = self.hg_plot.getRawImage()
+        self.hg_plot.plot_binned (800, 600, True, chan_real, nbin)
+        self.results["histogram_0_real_hires"] = self.hg_plot.getRawImage()
+
+        self.hg_plot.plot_binned (240, 160, True, chan_imag, nbin)
+        self.results["histogram_0_imag"] = self.hg_plot.getRawImage()
+        self.hg_plot.plot_binned (800, 600, True, chan_imag, nbin)
+        self.results["histogram_0_imag_hires"] = self.hg_plot.getRawImage()
+
+        chan_real = hg_data[1][0][0,:]
+        chan_imag = hg_data[1][1][0,:]
+
+        self.hg_plot.plot_binned (240, 160, True, chan_real, nbin)
+        self.results["histogram_1_real"] = self.hg_plot.getRawImage()
+        self.hg_plot.plot_binned (800, 600, True, chan_real, nbin)
+        self.results["histogram_1_real_hires"] = self.hg_plot.getRawImage()
+
+        self.hg_plot.plot_binned (240, 160, True, chan_imag, nbin)
+        self.results["histogram_1_imag"] = self.hg_plot.getRawImage()
+        self.hg_plot.plot_binned (800, 600, True, chan_imag, nbin)
+        self.results["histogram_1_imag_hires"] = self.hg_plot.getRawImage()
+
       if nfreq == 1:
         ifreq = 0
       if ifreq == -1:
@@ -355,16 +386,16 @@ class StatDaemon(Daemon,StreamBased):
 
       chan_real = hg_data[0][0][0,:]
       chan_imag = hg_data[0][1][0,:]
-      self.hg_plot.plot_binned (240, 160, True, chan_real, chan_imag, nbin)
+      self.hg_plot.plot_binned_dual (240, 160, True, chan_real, chan_imag, nbin)
       self.results["histogram_0_none"] = self.hg_plot.getRawImage()
-      self.hg_plot.plot_binned (800, 600, True, chan_real, chan_imag, nbin)
+      self.hg_plot.plot_binned_dual (800, 600, True, chan_real, chan_imag, nbin)
       self.results["histogram_0_none_hires"] = self.hg_plot.getRawImage()
 
       chan_real = hg_data[1][0][0,:]
       chan_imag = hg_data[1][1][0,:]
-      self.hg_plot.plot_binned (240, 160, True, chan_real, chan_imag, nbin)
+      self.hg_plot.plot_binned_dual (240, 160, True, chan_real, chan_imag, nbin)
       self.results["histogram_1_none"] = self.hg_plot.getRawImage()
-      self.hg_plot.plot_binned (800, 600, True, chan_real, chan_imag, nbin)
+      self.hg_plot.plot_binned_dual (800, 600, True, chan_real, chan_imag, nbin)
       self.results["histogram_1_none_hires"] = self.hg_plot.getRawImage()
       #self.hg_plot.plot_binned4 (240, 160, True, hg_data[0][0][ifreq,:], hg_data[0][1][ifreq,:], hg_data[1][0][ifreq,:], hg_data[1][1][ifreq,:], nbin)
       #self.results["histogram_s_none"] = self.hg_plot.getRawImage()

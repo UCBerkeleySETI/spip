@@ -81,6 +81,7 @@ void spip::UDPReceiver::configure (const char * config_str)
 
   if (!format)
     throw runtime_error ("format was not allocated");
+  cerr << "spip::UDPReceiver::configure format->configure()" << endl;
   format->configure (header, "");
 }
 
@@ -156,7 +157,7 @@ void spip::UDPReceiver::receive ()
   uint64_t nsleeps = 0;
 
   // expected size of a UDP packet
-  size_t packet_size = format->get_header_size() + format->get_data_size();
+  size_t packet_size = format->get_packet_size();
 
   // virtual block, make about 128 MB
   size_t data_bufsz = nchan * ndim * npol;

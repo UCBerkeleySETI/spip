@@ -21,7 +21,7 @@ spip::BatchedBackwardFFT::~BatchedBackwardFFT ()
 {
 }
 
-void spip::BatchedBackwardFFT::configure ()
+void spip::BatchedBackwardFFT::configure (spip::Ordering output_order)
 {
   ndat  = input->get_ndat ();
   ndim  = input->get_ndim ();
@@ -43,6 +43,9 @@ void spip::BatchedBackwardFFT::configure ()
   if (input->get_order() != TFPS)
     throw invalid_argument ("BatchedBackwardFFT::configure input was not TFPS order");
 
+  if (output_order != TFPS)
+    throw invalid_argument ("BatchedBackwardFFT::configure output order must be TFPS");
+
   // copy input header to output
   output->clone_header (input->get_header());
 
@@ -52,7 +55,7 @@ void spip::BatchedBackwardFFT::configure ()
   // update the parameters that this transformation will affect
   output->set_nchan (nchan_out);
   output->set_tsamp (tsamp_out);
-  output->set_order (spip::Ordering::TFPS);
+  output->set_order (output_order);
 
   // update the output header parameters with the new details
   output->write_header ();
@@ -90,7 +93,6 @@ void spip::BatchedBackwardFFT::transformation ()
     cerr << "spip::BatchedBackwardFFT::transformation ndat==0, ignoring" << endl;
     return;
   }
-
 
   // apply data transformation
   transform ();

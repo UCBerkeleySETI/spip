@@ -30,7 +30,7 @@ class controls extends spip_webpage
       $host = $this->config["SERVER_HOST"];
       if (!array_key_exists($host, $this->topology))
         $this->topology[$host] = array();
-      array_push($this->topology[$host], array("beam" =>"server", "subband" => "", "stream_id" => "-1"));
+      array_push($this->topology[$host], array("beam" => "server", "subband" => "", "stream_id" => "-1"));
     }
 
     for ($i=0; $i<$this->config["NUM_STREAM"]; $i++)
@@ -148,6 +148,47 @@ class controls extends spip_webpage
         c_xml_request.send(null);
       }
 
+      
+      function handle_daemon_action_request(ca_xml_request)
+      {
+        if ((ca_xml_request.readyState == 4) || (ca_xml_request.readyState == 3))
+        {
+          var xmlDoc = ca_xml_request.responseXML;
+          if (xmlDoc != null)
+          {
+            var xmlObj=xmlDoc.documentElement;
+          }
+        }
+      }
+
+      function actionLMC(url)
+      {
+        var ca_http_request;
+        if (window.XMLHttpRequest)
+          ca_http_request = new XMLHttpRequest()
+        else
+          ca_http_request = new ActiveXObject("Microsoft.XMLHTTP");
+  
+        ca_http_request.onreadystatechange = function() 
+        {
+          handle_daemon_action_request(ca_http_request)
+        }
+
+        ca_http_request.open("GET", url, true)
+        ca_http_request.send(null)
+      }
+
+      function stopLMC(host, stream)
+      {
+        var url = "?action=true&host="+host+"&cmd=stop_lmc&stream="+stream;
+        actionLMC(url);
+      }
+
+      function startLMC(host, stream)
+      {
+        var url = "?action=true&host="+host+"&cmd=start_lmc&stream="+stream;
+        actionLMC(url);
+      }
 
     </script>
 <?php
@@ -165,7 +206,7 @@ class controls extends spip_webpage
     # are used together (i.e. for a multi-beam survey), only 1 set of server daemons
     # will be used
 
-    echo "<table cellpadding='5px' border=1 width='600px'>\n";
+    echo "<table cellpadding='5px' border=1 width='900px'>\n";
 
     echo "<tr>\n";
     echo "<th>Host</th>\n";
@@ -192,10 +233,10 @@ class controls extends spip_webpage
         {
           echo "<td rowspan=".$host_rows.">".$host."</td>\n";
           # each host has a single LMC instance that manages all child daemons
-          echo "<td rowspan=".$host_rows.">\n";
+          echo "<td rowspan=".$host_rows." width='150px'>\n";
             echo "<img border='0' id='".$host."_lmc_light' src='/spip/images/grey_light.png' width='15px' height='15px'>\n";
-            echo "<input type='button' value='Start' onClick='startLMC(\"".$host."\")'/>\n";
-            echo "<input type='button' value='Stop' onClick='stopLMC(\"".$host."\")'/>\n";
+            echo "<input type='button' value='Start' onClick='startLMC(\"".$host."\",\"".$stream["beam"]."\")'/>\n";
+            echo "<input type='button' value='Stop' onClick='stopLMC(\"".$host."\",\"".$stream["beam"]."\")'/>\n";
           echo "</td>\n";
         }
 
@@ -291,9 +332,64 @@ class controls extends spip_webpage
     header('Content-type: text/xml');
     echo $xml;
   }
+
+  function printActionHTML($get)
+  {
+    $xml = "<controls_action>";
+
+    if (isset($get["cmd"]) && (($get["cmd"] == "start_lmc") || ($get["cmd"] == "stop_lmc")))
+    {
+      $cmd = "";
+      if ($get["cmd"] == "start_lmc")
+      {
+        $cmd = "ssh ".$get["host"]." 'python ".$this->config["SCRIPTS_DIR"]."/spip_lmc.py'";
+      }
+      else if ($get["cmd"] == "stop_lmc")
+      {
+        if ($get["stream"] == "server")
+        {
+          $control_dir = $this->config["SERVER_CONTROL_DIR"];
+          $cmd = "touch ".$control_dir."/spip_lmc_".$get["host"].".quit";
+        }
+        else
+        {
+          $control_dir = $this->config["CLIENT_CONTROL_DIR"];
+          $cmd = "ssh ".$get["host"]." 'touch ".$control_dir."/spip_lmc_".$get["host"].".quit'";
+        }
+      }
+      else
+      {
+        $xml .= "<message>Error: unrecognized command ".$get["cmd"]."</message>";
+      }
+      $xml .= "<cmd>".$cmd."</cmd>";
+      if ($cmd != "")
+      {
+        $lines = array();
+        $last = exec($cmd, $lines, $rval);
+        if ($rval == 0)
+        {
+          $xml .= "<message>ok</message>";
+        }
+        else
+        {
+          $html_lines = join($lines, "<BR>");
+          $xml .= "<message rval='".$rval."'>".$html_lines."</message>";
+        }
+      }
+    }
+    else
+    {
+      $xml .= "<message>Error: no cmd specified</message>";
+    }
+
+    $xml .= "</controls_action>";
+
+    header('Content-type: text/xml');
+    echo $xml;
+  } 
 }
 
-if (!isset($_GET["update"]))
+if ((!isset($_GET["update"])) && (!isset($_GET["action"])))
   $_GET["single"] = "true";
 handleDirect("controls");
 

@@ -33,11 +33,6 @@ class controlThread(threading.Thread):
             (not self.script.quit_event.isSet()) ):
       time.sleep(1)
 
-    # signal binaries to exit
-    for binary in self.script.binary_list:
-      cmd = "pkill -f '^" + binary + "'"
-      rval, lines = self.script.system (cmd, 3)
-
     self.script.log (2, "controlThread: quit request detected")
     self.script.quit_event.set()
     self.script.log (2, "controlThread: exiting")

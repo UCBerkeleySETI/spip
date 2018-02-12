@@ -26,9 +26,8 @@ class stat extends spip_webpage
     for ($istream=0; $istream<$this->config["NUM_STREAM"]; $istream++)
     {
       list ($host, $ibeam, $subband) = explode (":", $this->config["STREAM_".$istream]);
-
       $beam_name = $this->config["BEAM_".$ibeam];
-      $this->streams[$istream] = array("beam_name" => $beam_name, "host" => $host);
+      $this->streams[$istream] = array("beam_name" => $beam_name, "host" => $host, "subband" => $subband);
     }
   }
 
@@ -205,12 +204,13 @@ class stat extends spip_webpage
     }
     $xml = "<stat_update>";
 
-    
+    # the preferred channel number
+    $pref_chan = isset($get["pref_chan"]) ? $get["pref_chan"] : 10;
     $xml_req  = XML_DEFINITION;
     $xml_req .= "<stat_request>";
     $xml_req .= "<requestor>stat page</requestor>";
     $xml_req .= "<type>state</type>";
-    $xml_req .= "<pref_chan>".$get["pref_chan"]."</pref_chan>";
+    $xml_req .= "<pref_chan>".$pref_chan."</pref_chan>";
     $xml_req .= "</stat_request>";
 
     foreach ($this->streams as $istream => $stream)
@@ -220,7 +220,6 @@ class stat extends spip_webpage
       $host = $stream["host"];
       $port = $this->config["STREAM_STAT_PORT"] + $istream;
 
-      #echo "host=".$host." port=".$port."<br>\n";
       if ($stat_socket->open ($host, $port, 0) == 0)
       {
         $stat_socket->write ($xml_req."\r\n");

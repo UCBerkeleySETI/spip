@@ -25,30 +25,20 @@ DAEMONIZE = True
 DL        = 1
 
 #################################################################
-# clientThread
 #
-# launches client daemons for the specified stream
- 
-class clientThread (threading.Thread):
+# lmcThread
+#
+class lmcThread (threading.Thread):
 
-  def __init__ (self, stream_id, script, states):
+  def __init__ (self, script, states):
 
-    threading.Thread.__init__(self)
-    self.stream_id = stream_id
+    super(lmcThread, self).__init__()
+
     self.daemon_exit_wait = 10
     self.states = states
     self.parent = script
     self.daemons = {}
     self.ranks = []
-
-    if stream_id >= 0:
-      self.daemon_list = script.cfg["CLIENT_DAEMONS"].split()
-      self.control_dir = script.cfg["CLIENT_CONTROL_DIR"]
-      self.prefix = "clientThread["+str(stream_id)+"] "
-    else:
-      self.daemon_list = script.cfg["SERVER_DAEMONS"].split()
-      self.control_dir = script.cfg["SERVER_CONTROL_DIR"]
-      self.prefix = "serverThread "
 
     ranked_daemons = self.daemon_list
     for ranked_daemon in ranked_daemons:
@@ -59,8 +49,8 @@ class clientThread (threading.Thread):
 
     self.ranks = self.daemons.keys()
     self.ranks.sort()
-    self.process_suffix = " " + str(self.stream_id)
-    self.file_suffix = "_" + str(self.stream_id)
+    self.process_suffix = " " + str(self.id)
+    self.file_suffix = "_" + str(self.id)
 
   def run (self):
 
@@ -76,17 +66,17 @@ class clientThread (threading.Thread):
       while (not self.parent.quit_event.isSet()):
 
         # check if a reload has been requested
-        if self.stream_id >= 0 and self.parent.reload_clients[self.stream_id]:
+        if self.should_reload (): 
           self.parent.log(1, self.prefix + "reloading stream")
           self.stop_daemons (self.ranks)
           self.parent.log(1, self.prefix + "daemons stopped")
           self.start_daemons (self.ranks)
           self.parent.log(1, self.prefix + "daemons started")
-          self.parent.reload_clients[self.stream_id] = False
+          self.did_reload()
           self.parent.log(1, self.prefix + "stream reloaded")
 
         for rank in self.ranks:
-          for daemon in self.daemons[rank]: 
+          for daemon in self.daemons[rank]:
             cmd = "pgrep -f '^python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "' | wc -l"
             rval, lines = self.parent.system (cmd, 2)
             self.states[daemon] = (rval == 0)
@@ -107,6 +97,7 @@ class clientThread (threading.Thread):
       for line in formatted_lines:
         self.parent.log(1, self.prefix + line)
       self.parent.log(1, self.prefix + '-'*60)
+
 
   # start all the daemons in ranks (ascending)
   def start_daemons (self, ranks):
@@ -178,12 +169,85 @@ class clientThread (threading.Thread):
 
       # remove daemon.quit files for this rank
       for daemon in self.daemons[rank]:
-        os.remove (self.control_dir + "/" + daemon + self.file_suffix + ".quit")
+        try:
+          os.remove (self.control_dir + "/" + daemon + self.file_suffix + ".quit")
+        except OSError:
+          pass
 
+#
+# LMC implementation for client Streams
+#
+class streamThread (lmcThread):
+
+  def __init__ (self, id, script, states):
+
+    # configure the stream
+    self.daemon_list = script.cfg["CLIENT_DAEMONS"].split()
+    self.control_dir = script.cfg["CLIENT_CONTROL_DIR"]
+    self.prefix = "streamThread["+str(id)+"] "
+    self.id = id
+
+    # launch the threads
+    lmcThread.__init__(self, script, states)
+
+  def should_reload (self):
+    return self.parent.reload_streams[self.id]
+
+  # mark this thread as reloaded 
+  def did_reload (self):
+    self.parent.reload_streams[self.id] = False
 
 ################################################################$
+# 
+# LMC implementation for Beam Threads
+#
+class beamThread (lmcThread):
 
-class LMCDaemon (Daemon,HostBased):
+  def __init__ (self, id, script, states):
+
+    self.daemon_list = []
+    self.control_dir = ""
+    self.id = id
+    self.prefix = "beamThread["+str(id)+"] "
+
+    # configure the beam
+    if "BEAM_DAEMONS" in script.cfg.keys():
+      self.daemon_list = script.cfg["BEAM_DAEMONS"].split()
+      self.control_dir = script.cfg["BEAM_CONTROL_DIR"]
+
+    # launch the thread
+    lmcThread.__init__(self, script, states)
+
+  # check if this thread has been asked to reload
+  def should_reload (self):
+    return self.parent.reload_beams[self.id]
+
+  # mark this thread as reloaded 
+  def did_reload (self):
+    self.parent.reload_beams[self.id] = False
+
+################################################################$
+# 
+# LMC implementation for Server Threads
+#
+class serverThread (lmcThread):
+
+  def __init__ (self, id, script, states):
+
+    # configure the beam
+    self.daemon_list = script.cfg["SERVER_DAEMONS"].split()
+    self.control_dir = script.cfg["SERVER_CONTROL_DIR"]
+    self.prefix = "serverThread "
+    self.id = id
+
+    # launch the thread
+    lmcThread.__init__(self, script, states)
+
+################################################################$
+#
+# 
+#
+class LMCDaemon (Daemon, HostBased):
 
   def __init__ (self, name, hostname):
     Daemon.__init__(self, name, hostname)
@@ -192,45 +256,68 @@ class LMCDaemon (Daemon,HostBased):
   def main (self):
 
     control_thread = []
-    self.client_threads = {}
-    self.reload_clients = {}
+  
+    # the threads for each instance of beams, streams and server    
+    self.stream_threads = {}
+    self.beam_threads = {}
     self.server_thread = []
+
+    self.reload_beams = {}
+    self.reload_streams = {}
     self.system_lock = threading.Lock()
 
     # find matching client streams for this host
-    client_streams = []
+    host_streams = []
     for istream in range(int(self.cfg["NUM_STREAM"])):
       (req_host, beam_id, subband_id) = Config.getStreamConfig (istream, self.cfg)
-      if req_host == self.req_host:
-        client_streams.append(istream)
+      if req_host == self.req_host and not istream in host_streams:
+        host_streams.append(istream)
+
+    # find matching client streams for this host
+    host_beams = []
+    for istream in range(int(self.cfg["NUM_STREAM"])):
+      (req_host, beam_id, subband_id) = Config.getStreamConfig (istream, self.cfg)
+      if req_host == self.req_host and not beam_id in host_beams:
+        host_beams.append(beam_id)
 
     # find matching server stream
-    server_streams = []
+    host_servers = []
     if self.cfg["SERVER_HOST"] == self.req_host:
-      server_streams.append(-1)
+      host_servers.append(-1)
 
-    daemon_states = {}
+    server_daemon_states = {}
+    stream_daemon_states = {}
+    beam_daemon_states = {}
 
-    for stream in server_streams:
-      self.log(2, "main: client_thread[-1] = clientThread(-1)")
-      daemon_states[-1] = {}
-      server_thread = clientThread(-1, self, daemon_states[-1])
-      self.log(2, "main: client_thread[-1].start()")
+    for stream in host_servers:
+      self.log(2, "main: server_thread["+str(stream)+"] = streamThread(-1)")
+      server_daemon_states[stream] = {}
+      server_thread = serverThread(stream, self, server_daemon_states[stream])
+      self.log(2, "main: server_thread["+str(stream)+"].start()")
       server_thread.start()
-      self.log(2, "main: client_thread[-1] started")
+      self.log(2, "main: server_thread["+str(stream)+"] started")
 
     sleep(1)
 
-    # start a control thread for each stream
-    for stream in client_streams:
-      daemon_states[stream] = {}
-      self.log(2, "main: client_thread["+str(stream)+"] = clientThread ("+str(stream)+")")
-      self.reload_clients[stream] = False
-      self.client_threads[stream] = clientThread(stream, self, daemon_states[stream])
-      self.log(2, "main: client_thread["+str(stream)+"].start()")
-      self.client_threads[stream].start()
-      self.log(2, "main: client_thread["+str(stream)+"] started!")
+    # start a thread for each stream
+    for stream in host_streams:
+      stream_daemon_states[stream] = {}
+      self.log(2, "main: stream_threads["+str(stream)+"] = streamThread ("+str(stream)+")")
+      self.reload_streams[stream] = False
+      self.stream_threads[stream] = streamThread (stream, self, stream_daemon_states[stream])
+      self.log(2, "main: stream_threads["+str(stream)+"].start()")
+      self.stream_threads[stream].start()
+      self.log(2, "main: stream_thread["+str(stream)+"] started!")
 
+    # start a thread for each beam
+    for beam in host_beams:
+      beam_daemon_states[beam] = {}
+      self.log(2, "main: beam_threads["+str(beam)+"] = beamThread ("+str(beam)+")")
+      self.reload_beams[beam] = False
+      self.beam_threads[beam] = beamThread (beam, self, beam_daemon_states[beam])
+      self.log(2, "main: beam_threads["+str(beam)+"].start()")
+      self.beam_threads[beam].start()
+      self.log(2, "main: beam_thread["+str(beam)+"] started!")
 
     # main thread
     disks_to_monitor = [self.cfg["CLIENT_DIR"]]
@@ -271,8 +358,8 @@ class LMCDaemon (Daemon,HostBased):
         rval, ntp_sync = lmc_mon.getNTPSynced(DL)
         self.log(3, "main: " + str(ntp_sync))
 
-        self.log(3, "main: getSMRBCapacity(" + str(client_streams)+ ")")
-        rval, smrbs = lmc_mon.getSMRBCapacity (client_streams, self.quit_event, DL)
+        self.log(3, "main: getSMRBCapacity(" + str(host_streams)+ ")")
+        rval, smrbs = lmc_mon.getSMRBCapacity (host_streams, self.quit_event, DL)
         self.log(3, "main: " + str(smrbs))
 
         self.log(3, "main: getIPMISensors()")
@@ -334,15 +421,21 @@ class LMCDaemon (Daemon,HostBased):
                 command = xml["lmc_cmd"]["command"]
 
                 if command == "reload_clients":
-                  self.log(1, "Reloading clients")
-                  for stream in client_streams:
-                    self.reload_clients[stream] = True
+                  self.log(1, "Reloading streams")
+                  for stream in host_streams:
+                    self.reload_streams[stream] = True
+                  self.log(1, "Reloading beams")
+                  for beam in host_beams:
+                    self.reload_beams[beam] = True
             
                   all_reloaded = False
                   while (not self.parent.quit_event.isSet() and not all_reloaded):
                     all_reloaded = True
-                    for stream in client_streams:
-                      if not self.reload_clients[stream]:
+                    for stream in host_streams:
+                      if not self.reload_streams[stream]:
+                        all_reloaded = False
+                    for beam in host_beams:
+                      if not self.reload_beams[beam]:
                         all_reloaded = False
                     if not all_reloaded:
                       self.log(1, "Waiting for clients to reload")
@@ -355,17 +448,31 @@ class LMCDaemon (Daemon,HostBased):
                   response = ""
                   response += "<lmc_reply>"
 
-                  for stream in server_streams:
+                  # state of the configure server
+                  for stream in host_servers:
+                    response += "<server id='" + str(stream) +"'>"
+                    for daemon in server_daemon_states[stream].keys():
+                      response += "<daemon name='" + daemon + "'>" + str(server_daemon_states[stream][daemon]) + "</daemon>"
+                    response += "</server>"
+
+                  # state of the configured streams
+                  for stream in host_streams:
                     response += "<stream id='" + str(stream) +"'>"
-                    for daemon in daemon_states[stream].keys():
-                      response += "<daemon name='" + daemon + "'>" + str(daemon_states[stream][daemon]) + "</daemon>"
+                    for daemon in stream_daemon_states[stream].keys():
+                      response += "<daemon name='" + daemon + "'>" + \
+                                    str(stream_daemon_states[stream][daemon]) + \
+                                  "</daemon>"
                     response += "</stream>"
 
-                  for stream in client_streams:
-                    response += "<stream id='" + str(stream) +"'>"
-                    for daemon in daemon_states[stream].keys():
-                      response += "<daemon name='" + daemon + "'>" + str(daemon_states[stream][daemon]) + "</daemon>"
-                    response += "</stream>"
+                  # state of the configured beams
+                  for beam in host_beams:
+                    response += "<beam id='" + str(beam) +"'>"
+                    for daemon in beam_daemon_states[beam].keys():
+                      response += "<daemon name='" + daemon + "'>" + \
+                                    str(beam_daemon_states[beam][daemon]) + \
+                                  "</daemon>"
+                    response += "</beam>"
+
                   response += "</lmc_reply>"
 
                 elif command == "host_status":
@@ -430,15 +537,14 @@ class LMCDaemon (Daemon,HostBased):
 #
 if __name__ == "__main__":
 
-  if len(sys.argv) != 2:
-    print "ERROR: 1 command line argument expected"
+  if len(sys.argv) != 1:
+    print "ERROR: 0 command line argument expected"
     sys.exit(1)
 
-  cfg = sys.argv[1]
-
-  cfg_dir = os.environ.get('SPIP_ROOT') + "/share"
-  cmd = "cp " + cfg_dir + "/" + cfg + "/*.cfg " + cfg_dir + "/"
-  system (cmd, False)  
+  # cfg = sys.argv[1]
+  # cfg_dir = os.environ.get('SPIP_ROOT') + "/share"
+  # cmd = "cp " + cfg_dir + "/" + cfg + "/*.cfg " + cfg_dir + "/"
+  # system (cmd, False)  
 
   hostname = getHostNameShort()
 

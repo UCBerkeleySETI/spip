@@ -52,6 +52,8 @@ AC_CONFIG_FILES([Makefile
   src/Formats/UWB/Makefile
   src/Formats/VDIF/Makefile
   src/Dada/Makefile
+  src/Instruments/Makefile
+  src/Instruments/MeerKAT/Makefile
   src/SignalProcessing/Makefile
   src/Telescope/Makefile
   src/Util/Makefile
@@ -61,6 +63,7 @@ AC_CONFIG_FILES([Makefile
   scripts/spip/threads/Makefile
   scripts/spip/utils/Makefile
   scripts/spip/daemons/Makefile
+  scripts/uwb/Makefile
   web/Makefile
   web/controls/Makefile
   web/images/Makefile
