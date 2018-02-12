@@ -70,6 +70,12 @@ namespace spip {
 
       unsigned packets_per_second;
 
+      unsigned udp_nsamp;
+
+      unsigned header_npol;
+
+      unsigned offset;
+
       uint64_t bytes_per_second;
 
       double bw;
