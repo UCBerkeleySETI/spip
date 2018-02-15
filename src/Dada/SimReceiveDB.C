@@ -388,7 +388,7 @@ bool spip::SimReceiveDB::generate (int tobs)
       control_state = Active;
       gettimeofday (&timestamp, 0);
       start_second = timestamp.tv_sec + DELTA_START;
-      cerr << "Setting startt second=" << start_second << endl;
+      cerr << "Setting start second=" << start_second << endl;
     }
 
     // if started
