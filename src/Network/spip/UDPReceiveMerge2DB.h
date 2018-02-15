@@ -4,6 +4,8 @@
 
 #include "dada_def.h"
 
+#include "config.h"
+
 #include "spip/AsciiHeader.h"
 #include "spip/UDPSocketReceive.h"
 #include "spip/UDPFormat.h"
@@ -14,6 +16,10 @@
 #include <cstdlib>
 #include <pthread.h>
 
+#ifdef  HAVE_VMA
+#include <mellanox/vma_extra.h>
+#endif
+
 namespace spip {
 
   enum ControlCmd   { None, Start, Stop, Quit };
@@ -23,7 +29,7 @@ namespace spip {
 
     public:
 
-      UDPReceiveMerge2DB (const char * key_string);
+      UDPReceiveMerge2DB (const char * key1, const char * key2);
 
       ~UDPReceiveMerge2DB ();
 
@@ -38,7 +44,13 @@ namespace spip {
 
       static void * control_thread_wrapper (void * obj)
       {
+#ifdef HAVE_VMA
+        pthread_t id = pthread_self();
+        struct vma_api_t * vma_api = vma_get_api();
+        vma_api->thread_offload (0, id);
+#endif
         ((UDPReceiveMerge2DB*) obj )->control_thread ();
+        pthread_exit (NULL);
       }
 
       void start_threads (int core1, int core2);
@@ -77,13 +89,15 @@ namespace spip {
 
       bool open ();
 
-      void open (const char * header);
+      void open (const char * header1, const char * header2);
 
       void close ();
 
+      void send_terminal_packets();
+
       bool receive ();
 
-      uint64_t get_data_bufsz () { return db->get_data_bufsz(); };
+      uint64_t get_data_bufsz () { return db1->get_data_bufsz(); };
 
     protected:
 
@@ -115,11 +129,15 @@ namespace spip {
 
       unsigned npol;
 
-      float bw;
+      double bw;
 
-      float channel_bw;
+      double tsamp;
+      
+      double freq;
 
-      float tsamp;
+      unsigned start_channel;
+
+      unsigned end_channel;
 
       uint64_t resolution;
 
@@ -133,9 +151,6 @@ namespace spip {
 
     private:
   
-      char * block1;
-      char * block2;
-          
       pthread_t control_thread_id;
 
       pthread_t datablock_thread_id;
@@ -162,9 +177,13 @@ namespace spip {
 
       bool full[2];
 
-      char * overflow;
+      char * blocks[2];
 
-      int64_t overflow_lastbytes[2];
+      char * overflows[2];
+
+      size_t overflow_bufsz;
+        
+      int64_t overflow_lastbytes[2][2];
 
       unsigned chunk_size;
 
@@ -172,7 +191,9 @@ namespace spip {
 
       AsciiHeader config;
 
-      AsciiHeader header;
+      AsciiHeader header1;
+
+      AsciiHeader header2;
 
   };
 
