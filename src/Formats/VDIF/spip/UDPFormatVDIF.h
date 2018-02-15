@@ -58,6 +58,8 @@ namespace spip {
       //! encode header with config data
       void compute_header ();
 
+      inline int64_t get_subband (int64_t byte_offset, int nsubband) { return 0; };
+
     private:
 
       vdif_header header;
