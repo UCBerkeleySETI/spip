@@ -90,7 +90,10 @@ size_t spip::UDPSocketReceiveVMA::recv_from()
       }
       else if (pkt_size == -1)
       {
-        throw runtime_error ("UDPSocketReceiveVMA requires non blocking sockets");
+        if (get_blocking())
+          return -1;
+        else
+          throw runtime_error ("UDPSocketReceiveVMA requires non blocking sockets");
       }
       else
       {
