@@ -66,7 +66,7 @@ namespace spip {
 
       void set_data_size (unsigned size ) { packet_data_size = size; } ;
 
-      unsigned get_packet_size () { return packet_size; } ;
+      unsigned get_packet_size () { return packet_header_size + packet_data_size; };
 
       double rand_normal (double mean, double stddev);
 
