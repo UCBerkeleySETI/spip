@@ -92,6 +92,8 @@ namespace spip {
  
       static unsigned get_samples_per_packet () { return UDP_FORMAT_CUSTOM_PACKET_NSAMP; };
 
+      inline int64_t get_subband (int64_t byte_offset, int nsubband) { return 0; };
+
     private:
 
       ska1_custom_udp_header_t header;
