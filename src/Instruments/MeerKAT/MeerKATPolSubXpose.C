@@ -57,7 +57,7 @@ int64_t spip::MeerKATPolSubXpose::open ()
     throw invalid_argument ("FREQ did not exist in read1_header"); 
   if (read1_header.get ("START_CHANNEL", "%u", &start_channel) != 1)
     throw invalid_argument ("START_CHANNEL did not exist in read1_header"); 
-  if (read1_header.get ("END_CHANNEL", "%u", &start_channel) != 1)
+  if (read1_header.get ("END_CHANNEL", "%u", &end_channel) != 1)
     throw invalid_argument ("END_CHANNEL did not exist in read1_header"); 
 
   // check that npol is indeed 1
@@ -71,7 +71,7 @@ int64_t spip::MeerKATPolSubXpose::open ()
 
   unsigned new_npol = npol * nsubband;
   unsigned new_nchan = nchan / nsubband;
-  double new_bw = bw / subband;
+  double new_bw = bw / nsubband;
   double new_freq;
   unsigned new_start_channel = start_channel;
   unsigned new_end_channel = end_channel;
@@ -90,8 +90,8 @@ int64_t spip::MeerKATPolSubXpose::open ()
   write_header.set("NCHAN", "%u", new_nchan);
   write_header.set("START_CHANNEL", "%u", new_start_channel);
   write_header.set("END_CHANNEL", "%u", new_end_channel);
-  write_header.set("BW", "%lf", bw);
-  write_header.set("FREQ", "%lf", freq);
+  write_header.set("BW", "%lf", new_bw);
+  write_header.set("FREQ", "%lf", new_freq);
 
   unsigned nbytes_per_heap = (nsamp_per_heap * npol * nchan * ndim * nbit) / 8;
   if (verbose)

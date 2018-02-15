@@ -35,6 +35,13 @@ namespace spip {
 
       int subband;
 
+      size_t buffer_size;
+
+      void * buffer1;
+
+      void * buffer2;
+
+
   };
 
 }

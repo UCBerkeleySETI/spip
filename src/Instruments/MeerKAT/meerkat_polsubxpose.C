@@ -130,8 +130,8 @@ int main(int argc, char *argv[]) try
                                        subband);
   }
 
-  if (verbose)
-    cerr << "meerkat_polsubxpose: main()" << endl;
+  //if (verbose)
+  cerr << "meerkat_polsubxpose: main()" << endl;
   try
   {
     op->main();
