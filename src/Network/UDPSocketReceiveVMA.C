@@ -21,7 +21,7 @@ using namespace std;
 spip::UDPSocketReceiveVMA::UDPSocketReceiveVMA ()
 {
   vma_api = vma_get_api();
-  pkts = NULL;
+  vma_pkts = NULL;
   if (!vma_api)
   {
     cerr << "WARNING: VMA support compiled, but VMA not available" << endl;
@@ -58,35 +58,52 @@ void spip::UDPSocketReceiveVMA::open_multicast (string ip_address, string group,
   set_block ();
 }
 
-
 size_t spip::UDPSocketReceiveVMA::recv_from()
 {
   if (vma_api)
   {
-    if (pkts)
-    {
-      vma_api->free_packets(fd, pkts->pkts, pkts->n_packet_num);
-      pkts = NULL;
-    }
     while (!have_packet && keep_receiving)
     {
-      int flags = 0;
-      pkt_size = (int) vma_api->recvfrom_zcopy(fd, buf, bufsz, &flags, NULL, NULL);
-      
-      // largest useful sized packet
-      if (pkt_size > 32)
+      if (vma_pkts)
       {
-        if (flags == MSG_VMA_ZCOPY)
+        vma_api->free_packets(fd, vma_pkts->pkts, vma_pkts->n_packet_num);
+        vma_pkts = NULL;
+      }
+
+      int flags = 0;
+      int size = vma_api->recvfrom_zcopy(fd, buf, bufsz, &flags, NULL, NULL);
+
+      // largest useful sized packet
+      if (size > 0)
+      {
+        if ((flags & MSG_VMA_ZCOPY) == MSG_VMA_ZCOPY)
         {
-          pkts = (vma_packets_t*) buf;
-          if (pkts->n_packet_num == 1)
+          vma_pkts = (vma_packets_t*) buf;
+          if (vma_pkts->n_packet_num == 1)
           {
-            buf_ptr = (char *) pkts->pkts[0].iov[0].iov_base;
-            have_packet = true;
+            if (vma_pkts->pkts[0].sz_iov == 1)
+            {
+              // AJ to check this!
+              pkt_size = vma_pkts->pkts[0].iov[0].iov_len - 2;
+              buf_ptr = (char *) vma_pkts->pkts[0].iov[0].iov_base;
+              have_packet = true;
+            }
+            else
+            {
+              cerr << "spip::UDPSocketReceiveVMA::recv_from pkts->pkts[0].sz_iov=" << vma_pkts->pkts[0].sz_iov << endl;
+            }
+          }
+          else
+          {
+            cerr << "spip::UDPSocketReceiveVMA::recv_from pkts->n_packet_num=" << vma_pkts->n_packet_num << endl;
           }
         }
         else
+        {
+          pkt_size = size;
           buf_ptr = buf;
+          have_packet = true;
+        }
       }
       else if (pkt_size == -1)
       {
