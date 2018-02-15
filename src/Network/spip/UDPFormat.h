@@ -88,6 +88,8 @@ namespace spip {
       //! return the offset from the utc_startin pico seconds
       uint64_t get_pico_seconds () { return pico_seconds; };
 
+      virtual int64_t get_subband (int64_t byte_offset, int nsubband) = 0;
+
       //void set_start_sample (uint64_t s) { start_sample = s; };
 
     protected:
