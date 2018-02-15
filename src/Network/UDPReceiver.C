@@ -7,10 +7,18 @@
 
 //#define _DEBUG
 
+#include "config.h"
+
 #include "spip/Time.h"
 #include "spip/AsciiHeader.h"
 #include "spip/UDPReceiver.h"
 #include "sys/time.h"
+
+#ifdef HAVE_VMA
+#include "spip/UDPSocketReceiveVMA.h"
+#else
+#include "spip/UDPSocketReceive.h"
+#endif
 
 #include <unistd.h>
 #include <cstring>
@@ -90,32 +98,6 @@ void spip::UDPReceiver::prepare ()
   if (verbose)
     cerr << "spip::UDPReceiver::prepare()" << endl;
 
-  // create and open a UDP receiving socket
-#ifdef HAVE_VMA
-  sock = new UDPSocketReceiveVMA ();
-#else
-  sock = new UDPSocketReceive ();
-#endif
-
-  if (data_mcast.size() > 0)
-  {
-    cerr << "spip::UDPReceiver::prepare sock->open_multicast (" << data_host << ", " << data_mcast << ", " << data_port << ")" << endl;
-    sock->open_multicast (data_host, data_mcast, data_port);
-  }
-  else
-  {
-    if (verbose)
-      cerr << "spip::UDPReceiver::prepare sock->open(" << data_host << ", " << data_port << ")" << endl;
-    sock->open (data_host, data_port);
-  }
-  
-  size_t packet_size = format->get_header_size() + format->get_data_size();
-  size_t sock_size = packet_size;
-  if (verbose)
-    cerr << "spip::UDPReceiver::prepare sock->resize(" << sock_size << ")" << endl;
-  sock->resize (sock_size);
-  sock->resize_kernel_buffer (32*1024*1024);
-
   stats = new UDPStats (format->get_header_size(), format->get_data_size());
 
   // if this format is not self starting, check for the UTC_START
@@ -156,8 +138,35 @@ void spip::UDPReceiver::receive ()
   ssize_t got;
   uint64_t nsleeps = 0;
 
+  if (verbose)
+    cerr << "spip::UDPReceiver::receive()" << endl;
+
+  // create and open a UDP receiving socket
+#ifdef HAVE_VMA
+  UDPSocketReceiveVMA * sock = new UDPSocketReceiveVMA ();
+#else
+  UDPSocketReceive * sock = new UDPSocketReceive ();
+#endif
+
+  if (data_mcast.size() > 0)
+  {
+    cerr << "spip::UDPReceiver::receive sock->open_multicast (" << data_host << ", " << data_mcast << ", " << data_port << ")" << endl;
+    sock->open_multicast (data_host, data_mcast, data_port);
+  }
+  else
+  {
+    if (verbose)
+      cerr << "spip::UDPReceiver::receive sock->open(" << data_host << ", " << data_port << ")" << endl;
+    sock->open (data_host, data_port);
+  }
+
   // expected size of a UDP packet
-  size_t packet_size = format->get_packet_size();
+  int packet_size = int(format->get_packet_size());
+  size_t sock_size = packet_size + 64;
+  if (verbose)
+    cerr << "spip::UDPReceiver::receive sock->resize(" << sock_size << ")" << endl;
+  sock->resize (sock_size);
+  sock->resize_kernel_buffer (16*1024*1024);
 
   // virtual block, make about 128 MB
   size_t data_bufsz = nchan * ndim * npol;
