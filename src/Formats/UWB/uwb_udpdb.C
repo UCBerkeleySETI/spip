@@ -5,10 +5,8 @@
  *
  ****************************************************************************/
 
-#include "spip/HardwareAffinity.h"
 #include "spip/UDPReceiveDB.h"
 #include "spip/UDPFormatVDIF.h"
-#include "spip/TCPSocketServer.h"
 
 #include <unistd.h>
 #include <signal.h>
@@ -36,17 +34,12 @@ int main(int argc, char *argv[]) try
   // tcp control port to receive configuration
   int control_port = -1;
 
-  // control socket for the control port
-  spip::TCPSocketServer * ctrl_sock = 0;
-
-  spip::HardwareAffinity hw_affinity;
-
   int verbose = 0;
 
   opterr = 0;
   int c;
 
-  int core;
+  int core = -1;
 
   while ((c = getopt(argc, argv, "b:c:hk:v")) != EOF) 
   {
@@ -54,8 +47,6 @@ int main(int argc, char *argv[]) try
     {
       case 'b':
         core = atoi(optarg);
-        hw_affinity.bind_process_to_cpu_core (core);
-        hw_affinity.bind_to_memory (core);
         break;
 
       case 'c':
@@ -107,17 +98,13 @@ int main(int argc, char *argv[]) try
   unsigned resolution = 16384;
   if (config.set("RESOLUTION", "%u", resolution) < 0)
   {
-    fprintf (stderr, "ERROR: could not write RESOLUTION=%lu to config\n", resolution);
+    fprintf (stderr, "ERROR: could not write RESOLUTION=%u to config\n", resolution);
     return (EXIT_FAILURE);
   }
 
   if (verbose)
     cerr << "uwb_udpdb: configuring using fixed config" << endl;
   udpdb->configure (config.raw());
-
-  if (verbose)
-    cerr << "uwb_udpdb: preparing runtime resources" << endl;
-  udpdb->prepare ();
 
   // prepare a header which combines config with observation parameters
   spip::AsciiHeader header;
@@ -134,10 +121,11 @@ int main(int argc, char *argv[]) try
     bool keep_receiving = true;
     while (keep_receiving)
     {
-      //if (verbose)
-      cerr << "uwb_udpdb: receiving" << endl;
-      keep_receiving = udpdb->receive ();
-      cerr << "uwb_udpdb: receive returned" << endl;
+      if (verbose)
+        cerr << "uwb_udpdb: receiving" << endl;
+      keep_receiving = udpdb->receive (core);
+      if (verbose)
+        cerr << "uwb_udpdb: receive returned" << endl;
     }
   }
   else
@@ -150,7 +138,7 @@ int main(int argc, char *argv[]) try
     udpdb->start_capture ();
 
     cerr << "uwb_udpdb: calling receive" << endl;
-    udpdb->receive ();
+    udpdb->receive (core);
   }
 
   udpdb->stop_stats_thread ();
