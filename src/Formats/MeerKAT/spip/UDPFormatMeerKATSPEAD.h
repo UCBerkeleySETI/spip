@@ -127,6 +127,10 @@ namespace spip {
 
       int channels_per_spead_stream;
 
+      int half_num_spead_streams;
+
+      int spead_stream;
+
   };
 
 
