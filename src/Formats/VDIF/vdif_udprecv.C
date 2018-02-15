@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
     if (udprecv->verbose)
       cerr << "vdif_udprecv: starting stats thread" << endl;
     pthread_t stats_thread_id;
-    int rval = pthread_create (&stats_thread_id, 0, stats_thread, (void *) recv);
+    int rval = pthread_create (&stats_thread_id, 0, stats_thread, (void *) udprecv);
     if (rval != 0)
     {
       cerr << "vdif_udprecv: failed to start stats thread" << endl;
