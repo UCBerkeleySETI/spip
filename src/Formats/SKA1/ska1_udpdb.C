@@ -6,7 +6,6 @@
  ****************************************************************************/
 
 #include "spip/AsciiHeader.h"
-#include "spip/HardwareAffinity.h"
 #include "spip/UDPReceiveDB.h"
 #include "spip/UDPFormatCustom.h"
 
@@ -38,7 +37,6 @@ int main(int argc, char *argv[]) try
 
   // core on which to bind thread operations
   int core = -1;
-  spip::HardwareAffinity hw_affinity;
 
   int verbose = 0;
 
@@ -51,8 +49,6 @@ int main(int argc, char *argv[]) try
     {
       case 'b':
         core = atoi(optarg);
-        hw_affinity.bind_process_to_cpu_core (core);
-        hw_affinity.bind_to_memory (core);
         break;
 
       case 'f':
@@ -112,10 +108,6 @@ int main(int argc, char *argv[]) try
   udpdb->configure (config.raw());
 
   if (verbose)
-    cerr << "ska1_udpdb: allocating resources" << endl;
-  udpdb->prepare ();
-
-  if (verbose)
     cerr << "ska1_udpdb: writing header to data block" << endl;
   udpdb->open ();
 
@@ -134,7 +126,7 @@ int main(int argc, char *argv[]) try
 
   if (verbose)
     cerr << "ska1_udpdb: receiving" << endl;
-  udpdb->receive ();
+  udpdb->receive (core);
   quit_threads = 1;
 
   udpdb->close();
