@@ -5,7 +5,6 @@
  *
  ****************************************************************************/
 
-#include "spip/HardwareAffinity.h"
 #include "spip/UDPReceiveDB.h"
 #include "spip/UDPFormatMeerKATSimple.h"
 #ifdef HAVE_SPEAD2
@@ -44,14 +43,12 @@ int main(int argc, char *argv[]) try
   // control socket for the control port
   spip::TCPSocketServer * ctrl_sock = 0;
 
-  spip::HardwareAffinity hw_affinity;
-
   int verbose = 0;
 
   opterr = 0;
   int c;
 
-  int core;
+  int core = -1;
 
   while ((c = getopt(argc, argv, "b:c:f:hk:v")) != EOF) 
   {
@@ -59,8 +56,6 @@ int main(int argc, char *argv[]) try
     {
       case 'b':
         core = atoi(optarg);
-        hw_affinity.bind_process_to_cpu_core (core);
-        hw_affinity.bind_to_memory (core);
         break;
 
       case 'c':
@@ -134,14 +129,8 @@ int main(int argc, char *argv[]) try
   udpdb->configure (config.raw());
 
   if (verbose)
-    cerr << "meerkat_udpdb: preparing runtime resources" << endl;
-  udpdb->prepare ();
-
-  // prepare a header which combines config with observation parameters
-  spip::AsciiHeader header;
-  header.load_from_str (config.raw());
-
-  udpdb->start_stats_thread ();
+    cerr << "meerkat_udpdb: starting stats thread" << endl;
+  //udpdb->start_stats_thread ();
 
   if (control_port > 0)
   {
@@ -149,14 +138,26 @@ int main(int argc, char *argv[]) try
     cerr << "meerkat_udpdb: start_control_thread (" << control_port << ")" << endl;
     udpdb->start_control_thread (control_port);
 
-    bool keep_receiving = true;
-    while (keep_receiving)
+    while (!quit_threads)
     {
-      //if (verbose)
-      cerr << "meerkat_udpdb: receiving" << endl;
-      keep_receiving = udpdb->receive ();
-      cerr << "meerkat_udpdb: receive returned" << endl;
+      if (verbose)
+        cerr << "meerkat_udpdb: udpdb->receive" << endl;
+
+      bool result = udpdb->receive (core);
+      if (!result)
+      {
+        cerr << "meerkat_udpdb: receive failed, exiting" << endl;
+        quit_threads = 1;
+      }  
+
+      if (verbose)
+        cerr << "meerkat_udpdb: receive returned" << endl;
+      udpdb->set_control_cmd (spip::None);
     }
+
+    // ensure the control thread is stopped
+    udpdb->stop_control_thread();
+
   }
   else
   {
@@ -164,15 +165,20 @@ int main(int argc, char *argv[]) try
       cerr << "meerkat_udpdb: writing header to data block" << endl;
     udpdb->open ();
 
-    cerr << "meerkat_udpdb: issuing start command" << endl;
+    if (verbose)
+      cerr << "meerkat_udpdb: issuing start command" << endl;
     udpdb->start_capture ();
 
-    cerr << "meerkat_udpdb: calling receive" << endl;
-    udpdb->receive ();
+    if (verbose)
+      cerr << "meerkat_udpdb: calling receive" << endl;
+    udpdb->receive (core);
+  
+    udpdb->close();
+
   }
 
+  //
   udpdb->stop_stats_thread ();
-  udpdb->close();
 
   delete udpdb;
 }
