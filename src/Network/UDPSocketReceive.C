@@ -72,7 +72,7 @@ void spip::UDPSocketReceive::open (string ip_address, int port)
   {
     throw runtime_error ("could not bind to UDP socket");
   }
-  //set_nonblock();
+  set_nonblock();
 }
 
 void spip::UDPSocketReceive::open_multicast (string ip_address, string group, int port)
@@ -177,7 +177,7 @@ size_t spip::UDPSocketReceive::resize_kernel_buffer (size_t pref_size)
     throw runtime_error("could not get SO_RCVBUF size");
 
   // Check the size. n.b. linux actually sets the size to DOUBLE the value
-  if (value*2 != pref_size && value/2 != pref_size)
+  if (value*2 != int(pref_size) && value/2 != int(pref_size))
   {
     len = sizeof(value);
     value = 131071;
@@ -266,10 +266,10 @@ ssize_t spip::UDPSocketReceive::recv_from()
     else if (pkt_size == -1)
     {
       nsleeps++;
-      if (nsleeps > 1000)
-      {
-        nsleeps -= 1000;
-      }
+      //if (nsleeps > 1000)
+      //{
+      //  nsleeps -= 1000;
+      //}
     }
     else
     {
