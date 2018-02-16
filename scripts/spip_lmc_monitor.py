@@ -99,9 +99,14 @@ def getSMRBCapacity (stream_ids, quit_event, dl):
     port = SMRBDaemon.getDBMonPort (stream_id)
     sock = sockets.openSocket (dl, "localhost", port, 1)
     if sock:
-      sock.send ("smrb_status\n")
-      data = sock.recv(65536)
-      smrbs[stream_id] = json.loads(data) 
+      try:
+        sock.settimeout(1)
+        sock.send ("smrb_status\n")
+        data = sock.recv(65536)
+      except socket.error, e:
+        print "socket connection to SMRB failed" 
+      else:
+        smrbs[stream_id] = json.loads(data) 
       sock.close()
 
   return rval, smrbs 
