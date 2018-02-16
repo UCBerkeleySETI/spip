@@ -17,16 +17,19 @@ import spip_lmc_monitor as lmc_mon
 
 from spip.daemons.bases import HostBased
 from spip.daemons.daemon import Daemon
+from spip.threads.reporting_thread import ReportingThread
 from spip.utils.sockets import getHostNameShort
 from spip.config import Config
 from spip.utils.core import system
 
-DAEMONIZE = True
-DL        = 1
+DAEMONIZE = False
+DL = 1
 
 #################################################################
 #
 # lmcThread
+#
+# Manages the start/stop of all configured Daemons for this LMC host
 #
 class lmcThread (threading.Thread):
 
@@ -37,6 +40,7 @@ class lmcThread (threading.Thread):
     self.daemon_exit_wait = 10
     self.states = states
     self.parent = script
+    self.sustain = True
     self.daemons = {}
     self.ranks = []
 
@@ -52,9 +56,11 @@ class lmcThread (threading.Thread):
     self.process_suffix = " " + str(self.id)
     self.file_suffix = "_" + str(self.id)
 
-  def run (self):
+  # ask the thread to terminate
+  def conclude (self):
+    self.sustain = False
 
-    self.parent.log(2, self.prefix + "thread running")
+  def run (self):
 
     try:
 
@@ -63,7 +69,7 @@ class lmcThread (threading.Thread):
 
       # monitor the daemons in each stream and 
       # process control commands specific to the stream
-      while (not self.parent.quit_event.isSet()):
+      while self.sustain:
 
         # check if a reload has been requested
         if self.should_reload (): 
@@ -78,16 +84,14 @@ class lmcThread (threading.Thread):
         for rank in self.ranks:
           for daemon in self.daemons[rank]:
             cmd = "pgrep -f '^python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "' | wc -l"
-            rval, lines = self.parent.system (cmd, 2)
+            rval, lines = self.parent.system (cmd, 3)
             self.states[daemon] = (rval == 0)
         counter = 5
-        while (not self.parent.quit_event.isSet() and counter > 0):
+        while (self.sustain and counter > 0):
           sleep(1)
           counter -= 1
 
-      self.parent.log(1, self.prefix + "asking daemons to quit")
       self.stop_daemons (self.ranks)
-      self.parent.log(1, self.prefix + "thread exiting")
 
     except:
       self.parent.quit_event.set()
@@ -111,20 +115,22 @@ class lmcThread (threading.Thread):
         sleep(to_sleep)
         to_sleep = 0
 
-      self.parent.log(1, self.prefix + "launching daemons of rank " + rank)
+      self.parent.log(2, self.prefix + "launching daemons of rank " + rank)
       for daemon in self.daemons[rank]:
         self.states[daemon] = False
         cmd = "python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix
-        self.parent.log(1, self.prefix + cmd)
+        self.parent.log(2, self.prefix + cmd)
         rval, lines = self.parent.system (cmd)
         if rval:
+          self.parent.log(0, "Launch failure: " + daemon + " asking all threads to quit")
           for line in lines:
             self.parent.log(-2, self.prefix + line)
+          
           self.parent.quit_event.set()
         else:
           for line in lines:
             self.parent.log(2, self.prefix + line)
-      self.parent.log (1, self.prefix + "launched daemons of rank " + rank)
+      self.parent.log (2, self.prefix + "launched daemons of rank " + rank)
 
     self.parent.log(1, self.prefix + "launched all daemons")
     self.parent.system_lock.release ()
@@ -134,7 +140,7 @@ class lmcThread (threading.Thread):
 
     for rank in ranks[::-1]:
       if rank == 0:
-        self.parent.log (1, self.prefix + " sleep(5) for rank 0 daemons")
+        self.parent.log (2, self.prefix + " sleep(5) for rank 0 daemons")
         sleep(5)
 
       for daemon in self.daemons[rank]:
@@ -213,7 +219,7 @@ class beamThread (lmcThread):
     # configure the beam
     if "BEAM_DAEMONS" in script.cfg.keys():
       self.daemon_list = script.cfg["BEAM_DAEMONS"].split()
-      self.control_dir = script.cfg["BEAM_CONTROL_DIR"]
+      self.control_dir = script.cfg["CLIENT_CONTROL_DIR"]
 
     # launch the thread
     lmcThread.__init__(self, script, states)
@@ -243,6 +249,222 @@ class serverThread (lmcThread):
     # launch the thread
     lmcThread.__init__(self, script, states)
 
+  def should_reload (self):
+    return False
+
+  def did_reload (self):
+    return 0
+
+################################################################$
+# 
+# Provide XML monitoring service via a socket
+#
+class LMCReportingThread (ReportingThread):
+
+  def __init__ (self, script):
+
+    host = script.req_host
+    port = int(script.cfg["LMC_PORT"])
+    ReportingThread.__init__(self, script, host, port)
+
+    # allow 5 queued connections
+    self.set_listening_slots (5)
+
+  def run (self):
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    self.script.log (3, "LMCReportingThread listening on " + self.host + ":" + str(self.port))
+    sock.bind((self.host, int(self.port)))
+    self.script.log (3, "LMCReportingThread configuring number of listening slots to " + str(self.nlisten))
+    sock.listen(self.nlisten)
+
+    self.can_read = [sock]
+    self.can_write = []
+    self.can_error = []
+
+    serve_requests = True
+
+    while serve_requests:
+
+      timeout = 1
+
+      did_read = []
+      did_write = []
+      did_error = []
+
+      try:
+        # wait for some activity on the control socket
+        self.script.log (3, "LMCReportingThread::run select len(can_read)=" + str(len(self.can_read)) + " can_read=" + str(self.can_read))
+        did_read, did_write, did_error = select.select(self.can_read, self.can_write, self.can_error, timeout)
+        self.script.log (3, "LMCReportingThread::run read="+str(len(did_read))+" write="+ str(len(did_write))+" error="+str(len(did_error)))
+
+      except select.error as e:
+        if e[0] == errno.EINTR:
+          self.script.log(0, "SIGINT received during select, exiting")
+          self.script.quit_event.set()
+        else:
+          raise
+
+      if (len(did_read) > 0):
+        self.script.log (3, "LMCReportingThread::run len(did_read)=" + str(len(did_read)))
+        for handle in did_read:
+          if (handle == sock):
+            self.script.log (3, "LMCReportingThread::run accepting new connection")
+            (new_conn, addr) = sock.accept()
+            self.script.log (2, "LMCReportingThread: accept connection from "+repr(addr))
+
+            # add the accepted connection to can_read
+            self.can_read.append(new_conn)
+
+          # an accepted connection must have generated some data
+          else:
+            self.script.log (3, "LMCReportingThread::run processing data on existing connection")
+            try:
+              self.process_message_on_handle (handle)
+
+            except socket.error as e:
+              self.script.log (3, "LMCReportingThread::run socket error on existing connection")
+              if e.errno == errno.ECONNRESET:
+                self.script.log (2, "LMCReportingThread closing connection")
+                handle.close()
+                self.script.log (3, "LMCReportingThread::run trying to delete socket from can_read")
+                for i, x in enumerate(self.can_read):
+                  if (x == handle):
+                    self.script.log (3, "LMCReportingThread::run deleting can_read[" + str(i) + "]")
+                    del self.can_read[i]
+              else:
+                raise
+
+      # if we are asked to quit, close the listening socket and remove it from the list
+      if self.script.quit_event.isSet():
+        self.script.log (3, "LMCReportingThread::run script.quit_event.isSet() == True")
+        for i, x in enumerate(self.can_read):
+          if (x == sock):
+            self.script.log (1, "LMCReportingThread::run closing listening socket at index[" + str(i) + "]")
+            sock.close()
+            del self.can_read[i]
+
+        self.script.log (1, "LMCReportingThread::run concluding, len(can_read)=" + str(len(self.can_read)) + " can_read=" + str(self.can_read))
+        if len(self.can_read) == 0:
+          serve_requests = False
+
+    self.script.log (1, "LMCReportingThread::run exiting")
+
+  def parse_message (self, request):
+
+    self.script.log (2, "LMCReportingThread::parse_message: " + str(request))
+
+    command = request["lmc_cmd"]["command"]
+
+    self.script.resource_lock.acquire()
+
+    if command == "reload_clients":
+      self.script.log(1, "Reloading streams")
+      for stream in self.script.host_streams:
+        self.sciprt.reload_streams[stream] = True
+      self.script.log(1, "Reloading beams")
+      for beam in self.script.host_beams:
+        self.script.reload_beams[beam] = True
+
+      all_reloaded = False
+      while (not self.script.parent.quit_event.isSet() and not all_reloaded):
+        all_reloaded = True
+        for stream in self.script.host_streams:
+          if not self.script.reload_streams[stream]:
+            all_reloaded = False
+        for beam in self.script.host_beams:
+          if not self.script.reload_beams[beam]:
+            all_reloaded = False
+        if not all_reloaded:
+          self.script.log(1, "Waiting for clients to reload")
+          sleep(1)
+
+      self.script.log(1, "Clients reloaded")
+      response = "<lmc_reply>OK</lmc_reply>"
+
+    if command == "daemon_status":
+      response = ""
+      response += "<lmc_reply>"
+
+      # state of the configure server
+      for stream in self.script.host_servers:
+        response += "<server id='" + str(stream) +"'>"
+        for daemon in self.script.server_daemon_states[stream].keys():
+          response += "<daemon name='" + daemon + "'>" + str(self.script.server_daemon_states[stream][daemon]) + "</daemon>"
+        response += "</server>"
+
+      # state of the configured streams
+      for stream in self.script.host_streams:
+        response += "<stream id='" + str(stream) +"'>"
+        for daemon in self.script.stream_daemon_states[stream].keys():
+          response += "<daemon name='" + daemon + "'>" + \
+                        str(self.script.stream_daemon_states[stream][daemon]) + \
+                      "</daemon>"
+        response += "</stream>"
+
+      # state of the configured beams
+      for beam in self.script.host_beams:
+        response += "<beam id='" + str(beam) +"'>"
+        for daemon in self.script.beam_daemon_states[beam].keys():
+          response += "<daemon name='" + daemon + "'>" + \
+                        str(self.script.beam_daemon_states[beam][daemon]) + \
+                      "</daemon>"
+        response += "</beam>"
+
+      response += "</lmc_reply>"
+
+    # reply with information about the host
+    elif command == "host_status":
+
+      response = "<lmc_reply>"
+
+      for disk in self.script.disks.keys():
+        d = self.script.disks[disk]
+        percent_full = 1.0 - (float(d["available"]) / float(d["size"]))
+        response += "<disk mount='" + disk +"' percent_full='"+str(percent_full)+"'>"
+        response += "<size units='MB'>" + d["size"] + "</size>"
+        response += "<used units='MB'>" + d["used"] + "</used>"
+        response += "<available units='MB'>" + d["available"] + "</available>"
+        response += "</disk>"
+
+      response += "<local_time_synced>"+str(self.script.ntp_sync)+"</local_time_synced>"
+
+      for stream in self.script.smrbs.keys():
+        for key in self.script.smrbs[stream].keys():
+          smrb = self.script.smrbs[stream][key]
+          response += "<smrb stream='" + str(stream) + "' key='" + str(key) + "'>"
+          response += "<header_block nbufs='"+str(smrb['hdr']['nbufs'])+"'>"+ str(smrb['hdr']['full'])+"</header_block>"
+          response += "<data_block nbufs='"+str(smrb['data']['nbufs'])+"'>"+ str(smrb['data']['full'])+"</data_block>"
+          response += "</smrb>"
+
+      response += "<system_load ncore='" + self.script.loads["ncore"] + "'>"
+      response += "<load1>" + self.script.loads["1min"] + "</load1>"
+      response += "<load5>" + self.script.loads["5min"] + "</load5>"
+      response += "<load15>" + self.script.loads["15min"] + "</load15>"
+      response += "</system_load>"
+
+      response += "<sensors>"
+      for sensor in self.script.sensors.keys():
+        s  = self.script.sensors[sensor]
+        response += "<metric name='" + sensor + "' units='"+s["units"]+"'>" + s["value"] + "</metric>"
+      response += "</sensors>"
+
+      response += "</lmc_reply>"
+
+    # be agreeable and just reply OK
+    else:
+      response = "<lmc_reply>OK</lmc_reply>"
+
+    self.script.log(2, "-> " + response)
+    response += "\r\n"
+
+    self.script.resource_lock.release()
+
+    return True, response
+
+
 ################################################################$
 #
 # 
@@ -252,6 +474,16 @@ class LMCDaemon (Daemon, HostBased):
   def __init__ (self, name, hostname):
     Daemon.__init__(self, name, hostname)
     HostBased.__init__(self, hostname, self.cfg)
+
+    self.resource_lock = threading.Lock()
+
+    self.resource_lock.acquire()
+
+    self.disks = {}
+    self.loads = { 'ncore': '0', '1min': '0', '5min': '0', '15min': '0' }
+    self.ntp_sync = True
+    self.smrbs = {}
+    self.sensors = {}
 
   def main (self):
 
@@ -267,54 +499,55 @@ class LMCDaemon (Daemon, HostBased):
     self.system_lock = threading.Lock()
 
     # find matching client streams for this host
-    host_streams = []
+    self.host_streams = []
     for istream in range(int(self.cfg["NUM_STREAM"])):
       (req_host, beam_id, subband_id) = Config.getStreamConfig (istream, self.cfg)
-      if req_host == self.req_host and not istream in host_streams:
-        host_streams.append(istream)
+      if req_host == self.req_host and not istream in self.host_streams:
+        self.host_streams.append(istream)
 
     # find matching client streams for this host
-    host_beams = []
+    self.host_beams = []
     for istream in range(int(self.cfg["NUM_STREAM"])):
       (req_host, beam_id, subband_id) = Config.getStreamConfig (istream, self.cfg)
-      if req_host == self.req_host and not beam_id in host_beams:
-        host_beams.append(beam_id)
+      if req_host == self.req_host and not beam_id in self.host_beams:
+        self.host_beams.append(beam_id)
 
     # find matching server stream
-    host_servers = []
+    self.host_servers = []
     if self.cfg["SERVER_HOST"] == self.req_host:
-      host_servers.append(-1)
+      self.host_servers.append(-1)
 
-    server_daemon_states = {}
-    stream_daemon_states = {}
-    beam_daemon_states = {}
+    self.server_daemon_states = {}
+    self.stream_daemon_states = {}
+    self.beam_daemon_states = {}
 
-    for stream in host_servers:
+    # start server thread
+    for stream in self.host_servers:
       self.log(2, "main: server_thread["+str(stream)+"] = streamThread(-1)")
-      server_daemon_states[stream] = {}
-      server_thread = serverThread(stream, self, server_daemon_states[stream])
+      self.server_daemon_states[stream] = {}
+      self.server_thread = serverThread(stream, self, self.server_daemon_states[stream])
       self.log(2, "main: server_thread["+str(stream)+"].start()")
-      server_thread.start()
+      self.server_thread.start()
       self.log(2, "main: server_thread["+str(stream)+"] started")
 
     sleep(1)
 
     # start a thread for each stream
-    for stream in host_streams:
-      stream_daemon_states[stream] = {}
+    for stream in self.host_streams:
+      self.stream_daemon_states[stream] = {}
       self.log(2, "main: stream_threads["+str(stream)+"] = streamThread ("+str(stream)+")")
       self.reload_streams[stream] = False
-      self.stream_threads[stream] = streamThread (stream, self, stream_daemon_states[stream])
+      self.stream_threads[stream] = streamThread (stream, self, self.stream_daemon_states[stream])
       self.log(2, "main: stream_threads["+str(stream)+"].start()")
       self.stream_threads[stream].start()
       self.log(2, "main: stream_thread["+str(stream)+"] started!")
 
     # start a thread for each beam
-    for beam in host_beams:
-      beam_daemon_states[beam] = {}
+    for beam in self.host_beams:
+      self.beam_daemon_states[beam] = {}
       self.log(2, "main: beam_threads["+str(beam)+"] = beamThread ("+str(beam)+")")
       self.reload_beams[beam] = False
-      self.beam_threads[beam] = beamThread (beam, self, beam_daemon_states[beam])
+      self.beam_threads[beam] = beamThread (beam, self, self.beam_daemon_states[beam])
       self.log(2, "main: beam_threads["+str(beam)+"].start()")
       self.beam_threads[beam].start()
       self.log(2, "main: beam_thread["+str(beam)+"] started!")
@@ -322,216 +555,78 @@ class LMCDaemon (Daemon, HostBased):
     # main thread
     disks_to_monitor = [self.cfg["CLIENT_DIR"]]
 
-    # create socket for LMC commands
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((self.req_host, int(self.cfg["LMC_PORT"])))
-    sock.listen(5)
-
-    can_read = [sock]
-    can_write = []
-    can_error = []
-    timeout = 1
     hw_poll = 5
     counter = 0 
 
-    sensors = {}
+    self.log(2, "main: starting main loop")
+    first_time = True
 
-    # monitor / control loop
+    # control loop
     while not self.quit_event.isSet():
 
-      self.log(3, "Main Loop: counter="+str(counter))
+      # update the monitoring points
+      if counter == 0:
 
-      while (counter == 0):
-
-        self.log(2, "Refreshing monitoring points")
+        self.log(2, "main: refreshing monitoring points")
+        if not first_time:
+          self.resource_lock.acquire ()
 
         self.log(3, "main: getDiskCapacity ()")
-        rval, disks = lmc_mon.getDiskCapacity (disks_to_monitor, DL)
-        self.log(3, "main: " + str(disks))
+        rval, self.disks = lmc_mon.getDiskCapacity (disks_to_monitor, DL)
+        self.log(3, "main: " + str(self.disks))
 
         self.log(3, "main: getLoads()")
-        rval, loads = lmc_mon.getLoads (DL)
-        self.log(3, "main: " + str(loads))
+        rval, self.loads = lmc_mon.getLoads (DL)
+        self.log(3, "main: " + str(self.loads))
 
         self.log(3, "main: getNTPSynced()")
-        rval, ntp_sync = lmc_mon.getNTPSynced(DL)
-        self.log(3, "main: " + str(ntp_sync))
+        rval, self.ntp_sync = lmc_mon.getNTPSynced(DL)
+        self.log(3, "main: " + str(self.ntp_sync))
 
-        self.log(3, "main: getSMRBCapacity(" + str(host_streams)+ ")")
-        rval, smrbs = lmc_mon.getSMRBCapacity (host_streams, self.quit_event, DL)
-        self.log(3, "main: " + str(smrbs))
+        self.log(3, "main: getSMRBCapacity(" + str(self.host_streams)+ ")")
+        rval, self.smrbs = lmc_mon.getSMRBCapacity (self.host_streams, self.quit_event, DL)
+        self.log(3, "main: " + str(self.smrbs))
 
         self.log(3, "main: getIPMISensors()")
-        rval, sensors = lmc_mon.getIPMISensors (DL)
-        self.log(3, "main: " + str(sensors))
+        rval, self.sensors = lmc_mon.getIPMISensors (DL)
+        self.log(3, "main: " + str(self.sensors))
+
+        first_time = False
+        self.resource_lock.release ()
+
+        self.log(2, "main: monitoring points refreshed")
 
         counter = hw_poll
 
-      self.log(3, "main: calling select len(can_read)="+str(len(can_read)))
-      timeout = 1
-      did_read = []
-      did_write = []
-      did_error = []
-
-      try:
-        did_read, did_write, did_error = select.select(can_read, can_write, can_error, timeout)
-      except select.error as e:
-        self.quit_event.set()
-      else:
-        self.log(3, "main: read="+str(len(did_read))+" write="+
-                    str(len(did_write))+" error="+str(len(did_error)))
-
-      if (len(did_read) > 0):
-        for handle in did_read:
-          if (handle == sock):
-            (new_conn, addr) = sock.accept()
-            self.log(2, "main: accept connection from "+repr(addr))
-            # add the accepted connection to can_read
-            can_read.append(new_conn)
-            # new_conn.send("Welcome to the LMC interface\r\n")
-
-          # an accepted connection must have generated some data
-          else:
-            try:
-              raw = handle.recv(4096)
-            except socket.error, e:
-              if e.errno == errno.ECONNRESET:
-                self.log(2, "main: closing connection")
-                handle.close()
-                for i, x in enumerate(can_read):
-                  if (x == handle):
-                    del can_read[i]
-              else:
-                raise e
-            else: 
-              message = raw.strip()
-              self.log(2, "main: message='" + message+"'")
-
-              if len(message) == 0:
-                self.log(2, "main: closing connection")
-                handle.close()
-                for i, x in enumerate(can_read):
-                  if (x == handle):
-                    del can_read[i]
-
-              else:
-                xml = xmltodict.parse(message)
-
-                command = xml["lmc_cmd"]["command"]
-
-                if command == "reload_clients":
-                  self.log(1, "Reloading streams")
-                  for stream in host_streams:
-                    self.reload_streams[stream] = True
-                  self.log(1, "Reloading beams")
-                  for beam in host_beams:
-                    self.reload_beams[beam] = True
-            
-                  all_reloaded = False
-                  while (not self.parent.quit_event.isSet() and not all_reloaded):
-                    all_reloaded = True
-                    for stream in host_streams:
-                      if not self.reload_streams[stream]:
-                        all_reloaded = False
-                    for beam in host_beams:
-                      if not self.reload_beams[beam]:
-                        all_reloaded = False
-                    if not all_reloaded:
-                      self.log(1, "Waiting for clients to reload")
-                      sleep(1)
-
-                  self.log(1, "Clients reloaded")
-                  response = "<lmc_reply>OK</lmc_reply>"
-
-                if command == "daemon_status":
-                  response = ""
-                  response += "<lmc_reply>"
-
-                  # state of the configure server
-                  for stream in host_servers:
-                    response += "<server id='" + str(stream) +"'>"
-                    for daemon in server_daemon_states[stream].keys():
-                      response += "<daemon name='" + daemon + "'>" + str(server_daemon_states[stream][daemon]) + "</daemon>"
-                    response += "</server>"
-
-                  # state of the configured streams
-                  for stream in host_streams:
-                    response += "<stream id='" + str(stream) +"'>"
-                    for daemon in stream_daemon_states[stream].keys():
-                      response += "<daemon name='" + daemon + "'>" + \
-                                    str(stream_daemon_states[stream][daemon]) + \
-                                  "</daemon>"
-                    response += "</stream>"
-
-                  # state of the configured beams
-                  for beam in host_beams:
-                    response += "<beam id='" + str(beam) +"'>"
-                    for daemon in beam_daemon_states[beam].keys():
-                      response += "<daemon name='" + daemon + "'>" + \
-                                    str(beam_daemon_states[beam][daemon]) + \
-                                  "</daemon>"
-                    response += "</beam>"
-
-                  response += "</lmc_reply>"
-
-                elif command == "host_status":
-                  response = "<lmc_reply>"
-
-                  for disk in disks.keys():
-                    percent_full = 1.0 - (float(disks[disk]["available"]) / float(disks[disk]["size"]))
-                    response += "<disk mount='" + disk +"' percent_full='"+str(percent_full)+"'>"
-                    response += "<size units='MB'>" + disks[disk]["size"] + "</size>"
-                    response += "<used units='MB'>" + disks[disk]["used"] + "</used>"
-                    response += "<available units='MB'>" + disks[disk]["available"] + "</available>"
-                    response += "</disk>"
-
-                  response += "<local_time_synced>"+str(ntp_sync)+"</local_time_synced>"
-
-                  for stream in smrbs.keys():
-                    for key in smrbs[stream].keys():
-                      smrb = smrbs[stream][key]
-                      response += "<smrb stream='" + str(stream) + "' key='" + str(key) + "'>"
-                      response += "<header_block nbufs='"+str(smrb['hdr']['nbufs'])+"'>"+ str(smrb['hdr']['full'])+"</header_block>"
-                      response += "<data_block nbufs='"+str(smrb['data']['nbufs'])+"'>"+ str(smrb['data']['full'])+"</data_block>"
-                      response += "</smrb>"
-                  
-                  response += "<system_load ncore='"+loads["ncore"]+"'>"
-                  response += "<load1>" + loads["1min"] + "</load1>"
-                  response += "<load5>" + loads["5min"] + "</load5>"
-                  response += "<load15>" + loads["15min"] + "</load15>"
-                  response += "</system_load>"
-
-                  response += "<sensors>"
-                  for sensor in sensors.keys():
-                    response += "<metric name='" + sensor + "' units='"+sensors[sensor]["units"]+"'>" + sensors[sensor]["value"] + "</metric>"
-                  response += "</sensors>"
-                  
-                  response += "</lmc_reply>"
-
-                else:
-                  response = "<lmc_reply>OK</lmc_reply>"
-
-                self.log(2, "-> " + response)
-
-                handle.send(response + "\r\n")
+      if not self.quit_event.isSet():
+        sleep(1)
 
       counter -= 1
 
+    self.log(2, "main: quit_event set, asking lmcThreads to terminate")
+    self.concludeThreads()
 
-    def conclude (self):
+    self.log(2, "main: done")
 
-      self.quit_event.set()
 
-      for stream in self.client_streams:
-        self.client_threads[stream].join()
+  ########################################################################## 
+  # 
+  # instruct lmc worker threads to conclude
+  #
+  def concludeThreads (self):
 
-      if self.server_thread:
-        self.server_thread.join()
+    script.log(1, "LMCDaemon::concludeThreads()")
+    for beam in self.beam_threads.keys():
+      self.beam_threads[beam].conclude()
+      self.beam_threads[beam].join()
 
-      script.log(1, "STOPPING SCRIPT")
-      Daemon.conclude (self)
+    for stream in self.stream_threads.keys():
+      self.stream_threads[stream].conclude()
+      self.stream_threads[stream].join()
 
+    if self.server_thread:
+      self.server_thread.conclude()
+      self.server_thread.join()
 
 ###############################################################################
 #
@@ -557,9 +652,15 @@ if __name__ == "__main__":
 
   try:
 
+    reporting_thread = LMCReportingThread(script)
+    reporting_thread.start()
+
     script.main()
 
+    reporting_thread.join()
+
   except:
+    print "ERROR: exception during script.main, script.quit_event.set()"
     script.quit_event.set()
 
     script.log(-2, "exception caught: " + str(sys.exc_info()[0]))
