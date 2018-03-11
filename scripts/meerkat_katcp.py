@@ -24,7 +24,7 @@ from meerkat.pubsub import PubSubThread
 from meerkat.device_server import KATCPServer
 
 DAEMONIZE = True
-DL = 2
+DL = 1
 
 ###############################################################
 # KATCP daemon
@@ -53,12 +53,11 @@ class KATCPDaemon(Daemon):
     self.reset_cam_config()
 
     # get a list of all LMCs
-
     for i in range(int(self.cfg["NUM_STREAM"])):
       (host, beam, subband) = self.cfg["STREAM_" + str(i)].split(":")
       if (beam == self.beam):
-        if not self.lmc == "None":
-          raise Exception ("KATCPDaemon more than 1 matching lmc")
+        # if not self.lmc == "None":
+        #   raise Exception ("KATCPDaemon more than 1 matching lmc")
         self.lmc = host +  ":" + self.cfg["LMC_PORT"]
         self.host = host
 
@@ -72,13 +71,18 @@ class KATCPDaemon(Daemon):
     self.fan_speed_pattern = re.compile("fan[0-9,a-z]+")
     self.power_supply_pattern = re.compile("ps[0-9]+_status")
 
-    # get a list of all the repacking scripts
+    # get the repacking host:port for this beam
     for i in range(int(self.cfg["NUM_STREAM"])):
-      (host, beam, subband) = self.cfg["STREAM_" + str(i)].split(":")
+      (host, beam_id, subband_id) = self.cfg["STREAM_" + str(i)].split(":")
+      # if the beam resides on this host
       if beam == self.beam:
-        if not self.repack == "None":
-          raise Exception ("KATCPDaemon more than 1 matching repack")
-        self.repack = host + ":" + str(int(self.cfg["STREAM_REPACK_PORT"]) + i)
+        # if the current beam is not configured
+        if self.repack == "None":
+          self.repack = host + ":" + str(int(self.cfg["BEAM_REPACK_PORT"]) + int(beam))
+    
+    if self.repack == "None":
+      raise Exception ("KATCPDaemon could not find beam repack daemon")
+
     self.repack_cmd = "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>" + \
                       "<repack_request>" + \
                       "<requestor>katcp daemon</requestor>" + \
@@ -113,17 +117,22 @@ class KATCPDaemon(Daemon):
     self.beam_config["TOBS"] = "None"
     self.beam_config["MODE"] = "PSR"
     self.beam_config["CALFREQ"] = "0"
-    self.beam_config["PROC_FILE"] = "None"
     self.beam_config["ADC_SYNC_TIME"] = "0"
     self.beam_config["PERFORM_FOLD"] = "1"
     self.beam_config["PERFORM_SEARCH"] = "0"
-    self.beam_config["PERFORM_TRANS"] = "0"
     self.beam_config["ANTENNAE"] = "0"
     self.beam_config["SCHEDULE_BLOCK_ID"] = "None"
     self.beam_config["EXPERIMENT_ID"] = "None"
     self.beam_config["PROPOSAL_ID"] = "None"
     self.beam_config["DESCRIPTION"] = "None"
     self.beam_config["POOL_RESOURCES"] = "None"
+    self.beam_config["DM"] = "Default"
+    self.beam_config["OUTNCHAN"] = "Default"
+    self.beam_config["OUTNBIN"] = "Default"
+    self.beam_config["OUTTSUBINT"] = "Default"
+    self.beam_config["OUTNSTOKES"] = "Default"
+    self.beam_config["OUTNBIT"] = "Default"
+    self.beam_config["OUTTDEC"] = "Default"
     self.beam_config["lock"].release()
 
   #############################################################################
@@ -151,6 +160,7 @@ class KATCPDaemon(Daemon):
 
     while not self.quit_event.isSet():
 
+      self.log(2, "KATCPDaemon::main loop start")
       # the primary function of the KATCPDaemon is to update the 
       # sensors in the DeviceServer periodically
 
@@ -159,32 +169,50 @@ class KATCPDaemon(Daemon):
 
       # connect to SPIP_LMC to retreive temperature information
       if self.quit_event.isSet():
+        self.log(2, "KATCPDaemon::main quit_event was set, exiting main 1")
         return
+
       (host, port) = self.lmc.split(":")
-      self.log(3, "KATCPDaemon::main updating sensors from LMC")
+      self.log(2, "KATCPDaemon::main updating sensors from LMC")
       try:
-        self.log(3, "KATCPDaemon::main openSocket("+host+","+port+")")
+        self.log(2, "KATCPDaemon::main openSocket("+host+","+port+")")
         sock = sockets.openSocket (DL, host, int(port), 1)
+        self.log(2, "KATCPDaemon::main socket opened")
         if sock:
+          self.log(2, "KATCPDaemon::main sock.settimeout(1.0)")
+          sock.settimeout(1.0)
+          self.log(2, "KATCPDaemon::main sock.send()")
           sock.send(self.lmc_cmd)
+          self.log(2, "KATCPDaemon::main sock.recv()")
           lmc_reply = sock.recv (65536)
+          self.log(2, "KATCPDaemon::main xml.parse()")
           xml = xmltodict.parse(lmc_reply)
+          self.log(2, "KATCPDaemon::main sock.close()")
           sock.close()
+          self.log(2, "KATCPDaemon::main sock.close() done")
 
           if self.quit_event.isSet():
+            self.log(2, "KATCPDaemon::main quit_event was set, exiting main 2")
             return
-          self.log(3, "KATCPDaemon::main update_lmc_sensors("+host+",[xml])")
+          self.log(2, "KATCPDaemon::main update_lmc_sensors("+host+",[xml])")
           self.update_lmc_sensors(host, xml)
 
       except socket.error as e:
+        self.log(2, "KATCPDaemon::main socket error on LMC sensor read")
         if e.errno == errno.ECONNRESET:
           self.log(1, "lmc connection was unexpectedly closed")
           sock.close()
 
+      except:
+        self.log(2, "KATCPDaemon::main other exception on LMC sensor read")
+        sock.close()
+
+      self.log(2, "KATCPDaemon::main received LMC data")
+
       # connect to SPIP_REPACK to retrieve Pulsar SNR performance
       if self.quit_event.isSet():
         return
-      self.log(3, "KATCPDaemon::main pulsar SNR sensor from REPACK")
+      self.log(2, "KATCPDaemon::main pulsar SNR sensor from REPACK")
       (host, port) = self.repack.split(":")
       try:
         sock = sockets.openSocket (DL, host, int(port), 1)
@@ -204,10 +232,17 @@ class KATCPDaemon(Daemon):
           self.log(1, "repack connection was unexpectedly closed")
           sock.close()
 
+      except:
+        self.log(2, "KATCPDaemon::main other exception on repack sensor read")
+        sock.close()
+
+
       # connect to STAT (TBD) to retrieve beam-former power levels
       host = "None"
       xml = "None"
       self.update_stat_sensors (host, xml)
+
+      self.log(2, "KATCPDaemon::main sleeping for 5 seconds")
 
       to_sleep = 5
       while not self.quit_event.isSet() and to_sleep > 0:
@@ -231,7 +266,7 @@ class KATCPDaemon(Daemon):
     xml +=   "</beam_configuration>"
 
     xml +=   "<source_parameters>"
-    xml +=     "<name epoch='J2000'>" + self.beam_config["SOURCE"] + "</name>"
+    xml +=     "<name key='SOURCE' epoch='J2000'>" + self.beam_config["SOURCE"] + "</name>"
 
     ra = self.beam_config["RA"]
     if ra == "None":
@@ -245,35 +280,52 @@ class KATCPDaemon(Daemon):
       if reply == "ok":
         dec = message
 
-    xml +=     "<ra units='hh:mm:ss'>" + ra + "</ra>"
-    xml +=     "<dec units='hh:mm:ss'>" + dec+ "</dec>"
+    xml +=     "<ra key='RA' units='hh:mm:ss'>" + ra + "</ra>"
+    xml +=     "<dec key='DEC' units='dd:mm:ss'>" + dec+ "</dec>"
     xml +=   "</source_parameters>"
 
     xml +=   "<observation_parameters>"
-    xml +=     "<observer>" + self.beam_config["OBSERVER"] + "</observer>"
-    xml +=     "<project_id>" + self.beam_config["PID"] + "</project_id>"
-    xml +=     "<tobs>" + self.beam_config["TOBS"] + "</tobs>"
-    xml +=     "<mode>" + self.beam_config["MODE"] + "</mode>"
-    xml +=     "<calfreq>" + self.beam_config["CALFREQ"] + "</calfreq>"
-    xml +=     "<processing_file>" + self.beam_config["PROC_FILE"] + "</processing_file>"
-    xml +=     "<utc_start></utc_start>"
-    xml +=     "<utc_stop></utc_stop>"
+    xml +=     "<observer key='OBSERVER'>" + self.beam_config["OBSERVER"] + "</observer>"
+    xml +=     "<project_id key='PID'>" + self.beam_config["PID"] + "</project_id>"
+    xml +=     "<tobs key='TOBS' units='seconds'>" + self.beam_config["TOBS"] + "</tobs>"
+    xml +=     "<mode key='MODE'>" + self.beam_config["MODE"] + "</mode>"
+    xml +=     "<calfreq key='CALFREQ'>" + self.beam_config["CALFREQ"] + "</calfreq>"
+    xml +=     "<utc_start key='UTC_START'>None</utc_start>"
+    xml +=     "<utc_stop key='UTC_STOP'>None</utc_stop>"
     xml +=   "</observation_parameters>"
 
-    #xml +=   "<instrument_parameters>"
-    #xml +=     "<adc_sync_time>" + self.beam_config["ADC_SYNC_TIME"] + "</adc_sync_time>"
-    #xml +=   "</instrument_parameters>"
-
     xml +=   "<custom_parameters>"
-    xml +=     "<fields>adc_sync_time antennae description experiment_id proposal_id program_block_id schedule_block_id</fields>"
-    xml +=     "<adc_sync_time>" + self.beam_config["ADC_SYNC_TIME"] + "</adc_sync_time>"
-    xml +=     "<antennae>" + self.beam_config["ANTENNAE"] + "</antennae>"
-    xml +=     "<schedule_block_id>" + self.beam_config["SCHEDULE_BLOCK_ID"] + "</schedule_block_id>"
-    xml +=     "<experiment_id>" + self.beam_config["EXPERIMENT_ID"] + "</experiment_id>"
-    xml +=     "<proposal_id>" + self.beam_config["PROPOSAL_ID"] + "</proposal_id>"
-    xml +=     "<program_block_id>" + "TBD" + "</program_block_id>"
-    xml +=     "<description>" + self.beam_config["DESCRIPTION"] + "</description>"
+    xml +=     "<adc_sync_time key='ADC_SYNC_TIME'>" + self.beam_config["ADC_SYNC_TIME"] + "</adc_sync_time>"
+    xml +=     "<antennae key='ANTENNAE'>" + self.beam_config["ANTENNAE"] + "</antennae>"
+    xml +=     "<schedule_block_id key='SCHEDULE_BLOCK_ID'>" + self.beam_config["SCHEDULE_BLOCK_ID"] + "</schedule_block_id>"
+    xml +=     "<experiment_id key='EXPERIMENT_ID'>" + self.beam_config["EXPERIMENT_ID"] + "</experiment_id>"
+    xml +=     "<proposal_id key='PROPOSAL_ID'>" + self.beam_config["PROPOSAL_ID"] + "</proposal_id>"
+    xml +=     "<program_block_id key='PROGRAM_BLOCK_ID'>" + "TBD" + "</program_block_id>"
+    xml +=     "<description key='DESCRIPTION'>" + self.beam_config["DESCRIPTION"] + "</description>"
     xml +=   "</custom_parameters>"
+
+    xml +=   "<processing_modes>"
+    xml +=     "<fold key='PERFORM_FOLD'>" + self.beam_config["PERFORM_FOLD"] + "</fold>"
+    xml +=     "<search key='PERFORM_SEARCH'>" + self.beam_config["PERFORM_SEARCH"] + "</search>"
+    xml +=   "</processing_modes>"
+
+    
+    # processing parameters control the behaviour of PTUSE
+    xml +=   "<fold_processing_parameters>"
+    xml +=     "<output_nchannels key='OUTNCHAN'>" + self.beam_config["OUTNCHAN"] + "</output_nchannels>"
+    xml +=     "<dm key='DM'>" + self.beam_config["DM"] + "</dm>"
+    xml +=     "<output_nbins key='OUTNBIN'>" + self.beam_config["OUTNBIN"] + "</output_nbins>"
+    xml +=     "<output_tsubint key='OUTTSUBINT'>" + self.beam_config["OUTTSUBINT"] + "</output_tsubint>"
+    xml +=     "<output_nstokes key='OUTNSTOKES'>" + self.beam_config["OUTNSTOKES"] + "</output_nstokes>"
+    xml +=   "</fold_processing_parameters>"
+
+    xml +=   "<search_processing_parameters>"
+    xml +=     "<output_nbits key='OUTNBIT'>" + self.beam_config["OUTNBIT"] + "</output_nbits>"
+    xml +=     "<output_nchannels key='OUTNCHAN'>" + self.beam_config["OUTNCHAN"] + "</output_nchannels>"
+    xml +=     "<dm key='DM'>" + self.beam_config["DM"] + "</dm>"
+    xml +=     "<output_tdec key='OUTTDEC'>" + self.beam_config["OUTTDEC"] + "</output_tdec>"
+    xml +=     "<output_nstokes key='OUTNSTOKES'>" + self.beam_config["OUTNSTOKES"] + "</output_nstokes>"
+    xml +=   "</search_processing_parameters>"
 
 
     xml += "</obs_cmd>"
@@ -290,7 +342,7 @@ class KATCPDaemon(Daemon):
     xml +=     "<beam_state_0 name='" + self.beam_name + "'>on</beam_state_0>"
     xml +=   "</beam_configuration>"
     xml +=   "<observation_parameters>"
-    xml +=     "<utc_start></utc_start>"
+    xml +=     "<utc_start key='UTC_START'>None</utc_start>"
     xml +=   "</observation_parameters>"
     xml += "</obs_cmd>"
 
@@ -306,7 +358,7 @@ class KATCPDaemon(Daemon):
     xml +=     "<beam_state_0 name='" + self.beam_name + "'>on</beam_state_0>"
     xml +=   "</beam_configuration>"
     xml +=   "<observation_parameters>"
-    xml +=     "<utc_stop></utc_stop>"
+    xml +=     "<utc_stop key='UTC_STOP'>None</utc_stop>"
     xml +=   "</observation_parameters>"
     xml += "</obs_cmd>"
 
