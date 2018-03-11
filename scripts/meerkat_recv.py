@@ -10,6 +10,7 @@
 import sys, traceback
 from time import sleep
 
+from spip_smrb import SMRBDaemon
 from spip_recv import RecvDaemon,ConfiguringThread
 from spip.meerkat_config import MeerKATConfig
 
@@ -25,11 +26,13 @@ class MeerKATRecvDaemon(RecvDaemon):
     RecvDaemon.__init__(self, name, id)
 
   def getConfiguration (self):
+    self.log (2, "MeerKATRecvDaemon::getConfiguration()")
     meerkat_config = MeerKATConfig()
-    local_config = meerkat_config.getStreamConfigFixed (self.id)
+    local_config = meerkat_config.getMuxedStreamConfigFixed (self.id)
     return local_config
 
   def getEnvironment (self):
+    self.log (2, "MeerKATRecvDaemon::getEnvironment()")
     env = RecvDaemon.getEnvironment (self)
     env["LD_PRELOAD"] = "libvma.so"
     env["VMA_MTU"] = "4200"
@@ -39,11 +42,23 @@ class MeerKATRecvDaemon(RecvDaemon):
     return env
 
   def getCommand (self, config_file):
-    cmd = self.cfg["STREAM_BINARY"] + " -k " + self.db_key \
-            + " -v -b " + self.cpu_core \
+    self.log (2, "MeerKATRecvDaemon::getCommand()")
+
+    db_id = self.cfg["RECEIVING_DATA_BLOCK"]
+    db_prefix = self.cfg["DATA_BLOCK_PREFIX"]
+    num_stream = self.cfg["NUM_STREAM"]
+    key1 = SMRBDaemon.getDBKey (db_prefix, 0, num_stream, db_id)
+    key2 = SMRBDaemon.getDBKey (db_prefix, 1, num_stream, db_id)
+
+    cmd = self.cfg["STREAM_BINARY"] + " " + config_file + " " + key1 + " " + key2 \
+            + " -b " + self.cpu_core \
             + " -c " + self.ctrl_port \
-            + " -f spead" \
-            + " " + config_file 
+            + " -f spead"
+
+    # hack for sub-band mode
+    if self.id != "0":
+      cmd = "sleep 2678400" # 1 month
+
     return cmd
 
 ###############################################################################
