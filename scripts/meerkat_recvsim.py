@@ -10,7 +10,7 @@
 import sys, traceback
 from time import sleep
 
-from spip_recvsim import RecvSimDaemon
+from spip_recvsim import RecvSimDaemon,ConfiguringThread
 from spip.meerkat_config import MeerKATConfig
 
 DAEMONIZE = True
@@ -27,6 +27,7 @@ class MeerKATRecvSimDaemon(RecvSimDaemon):
     return local_config
 
   def getCommand (self, config_file):
+
     cmd = self.cfg["STREAM_BINARY"] + " -k " + self.db_key \
             + " -b " + self.cpu_core \
             + " -c " + self.ctrl_port \
@@ -55,7 +56,12 @@ if __name__ == "__main__":
 
   try:
     
+    configuring_thread = ConfiguringThread (script, stream_id)
+    configuring_thread.start()
+
     script.main ()
+
+    configuring_thread.join()
 
   except:
 
