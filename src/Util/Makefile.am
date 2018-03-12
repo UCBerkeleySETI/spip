@@ -14,7 +14,7 @@ libspiputil_la_SOURCES = AsciiHeader.C  \
 
 libspiputil_la_LIBADD = 
 
-#if HAVE_CUFFT
+if HAVE_CUFFT
 
 libspiputil_headers += spip/CUFFTError.h
 libspiputil_la_SOURCES += CUFFTError.C
@@ -23,7 +23,7 @@ libspiputil_la_LIBADD += @CUFFT_LIBS@
 AM_CPPFLAGS = @CUFFT_CFLAGS@
 AM_LDFLAGS =  @CUFFT_LIBS@
 
-#endif
+endif
 
 TESTS = test_AsciiHeader
 
