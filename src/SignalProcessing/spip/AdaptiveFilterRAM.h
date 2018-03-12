@@ -43,6 +43,11 @@ namespace spip {
     
     private:
 
+      float * ast_buffer;
+
+      float * ref_buffer;
+
+      size_t buffer_size;
   };
 }
 
