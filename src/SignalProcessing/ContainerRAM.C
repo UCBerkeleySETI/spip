@@ -11,7 +11,6 @@
 #include <cstring>
 #include <iostream>
 
-
 using namespace std;
 
 spip::ContainerRAM::ContainerRAM ()
@@ -31,9 +30,9 @@ void spip::ContainerRAM::resize ()
   uint64_t required_size = calculate_buffer_size ();
   if (required_size > size)
   {
-#ifdef _DEBUG
-    cerr << "spip::ContainerRAM::resize resizing from " << size << " to " << required_size << " bytes" << endl;
-#endif
+    if (spip::Container::verbose)
+    cerr << "spip::ContainerRAM::resize resizing from " << size 
+         << " to " << required_size << " bytes" << endl;
     if (buffer)
       free (buffer);
     buffer = (unsigned char *) malloc (required_size);
