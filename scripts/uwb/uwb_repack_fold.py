@@ -294,7 +294,7 @@ class RepackFoldDaemon(Daemon):
     cmd = "ssh " + self.rsync_user + "@" + self.rsync_server + " '" + rem_cmd + "'"
     rval, lines = self.system(cmd, 2)
     if rval:
-      return (rval, "failed to touch remote obs.failed file: " + str(lines[0]))
+      return (rval, "failed to touch remote obs.failed file")
 
     # simply move the observation to the failed directory
     try:
