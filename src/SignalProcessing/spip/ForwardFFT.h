@@ -47,7 +47,13 @@ namespace spip {
       //! Required data transformation
       virtual void transform_SFPT_to_SFPT () = 0 ;
 
+      //! Require data renormalization
+      virtual void normalize_output () = 0;
+
       void set_nfft (int);
+
+      //! Should the FFT normalize itself
+      void set_normalization (bool _normalize);
 
     protected:
 
@@ -70,6 +76,10 @@ namespace spip {
       int nfft;
 
       double tsamp;
+
+      bool normalize;
+
+      float scale_fac;
 
       int rank;
 

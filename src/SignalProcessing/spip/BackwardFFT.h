@@ -47,7 +47,12 @@ namespace spip {
       //! transform from TFPS input format
       virtual void transform_SFPT_to_SFPT () = 0 ;
 
+      //! normalize output
+      virtual void normalize_output () = 0;
+
       void set_nfft (int);
+
+      void set_normalization (bool);
 
     protected:
 
@@ -66,6 +71,10 @@ namespace spip {
       int nfft;
 
       double tsamp;
+
+      bool normalize;
+
+      float scale_fac;
 
       unsigned nbatch;
 

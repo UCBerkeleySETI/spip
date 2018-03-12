@@ -15,6 +15,8 @@ using namespace std;
 spip::BackwardFFT::BackwardFFT () : Transformation<Container,Container>("BackwardFFT", outofplace)
 {
   nfft = 0;
+  normalize = false;
+  scale_fac = 1.0f;
 }
 
 spip::BackwardFFT::~BackwardFFT ()
@@ -23,7 +25,30 @@ spip::BackwardFFT::~BackwardFFT ()
 
 void spip::BackwardFFT::set_nfft (int _nfft)
 {
+  if (_nfft <= 0)
+    throw invalid_argument ("BackwardFFT::set_nfft nfft must be > 0");
+
   nfft = _nfft;
+  if (normalize)
+    scale_fac = 1.0f / float(nfft);
+  else
+    scale_fac = 1.0f;
+
+  if (verbose)
+    cerr << "spip::BackwardFFT::set_nfft nfft=" << nfft << " scale_fac=" << scale_fac << endl;
+
+}
+
+void spip::BackwardFFT::set_normalization (bool _normalize)
+{ 
+  normalize = _normalize;
+  if (normalize)
+  { 
+    if (nfft > 0)
+      scale_fac = 1.0f / float(nfft);
+  }
+  else
+    scale_fac = 1.0f;
 }
 
 //! configure parameters at the start of a data stream
@@ -71,7 +96,7 @@ void spip::BackwardFFT::configure (spip::Ordering output_order)
 
   // update the parameters that this transformation will affect
   output->set_nchan (nchan / nfft);
-  output->set_tsamp (tsamp * nfft);
+  output->set_tsamp (tsamp / nfft);
   output->set_order (spip::Ordering::SFPT);
 
   if (verbose)
@@ -79,7 +104,7 @@ void spip::BackwardFFT::configure (spip::Ordering output_order)
      cerr << "spip::BackwardFFT::configure nchan: " << nchan 
           << " -> " << nchan / nfft << endl;
      cerr << "spip::BackwardFFT::configure tsamp: " << tsamp 
-          << " -> " << tsamp * nfft << endl;
+          << " -> " << tsamp / nfft << endl;
   }
 
   // update the output header parameters with the new details
@@ -183,5 +208,13 @@ void spip::BackwardFFT::transformation ()
   {
     throw runtime_error ("BackwardFFT::transform unsupport input to output conversion");
   }
+
+  if (normalize)
+  {
+    if (verbose)
+      cerr << "spip::BackwardFFT::transform normalize_output()" << endl;
+    normalize_output();
+  }
+
 }
 

@@ -40,6 +40,8 @@ namespace spip {
 
       void transform_SFPT_to_SFPT ();
 
+      void normalize_output ();
+
     protected:
     
     private:

@@ -94,6 +94,7 @@ void spip::ForwardFFTFFTW::transform_SFPT_to_TFPS ()
         // process ndat samples via batched FFT
         out_offset = isig + (ipol * nsignal) + (ochan * npol * nsignal);
         fftwf_execute_dft (plan, in, out + out_offset);
+  
         in += ndat;
       }
     }
@@ -137,7 +138,8 @@ void spip::ForwardFFTFFTW::transform_SFPT_to_TSPF ()
 
 void spip::ForwardFFTFFTW::transform_SFPT_to_SFPT ()
 {
-  cerr << "spip::ForwardFFTFFTW::transform_SFPT_to_SFPT()" << endl;
+  if (verbose)
+    cerr << "spip::ForwardFFTFFTW::transform_SFPT_to_SFPT()" << endl;
 
   fftwf_complex * in  = (fftwf_complex *) input->get_buffer();
   fftwf_complex * out = (fftwf_complex *) output->get_buffer();
@@ -166,6 +168,24 @@ void spip::ForwardFFTFFTW::transform_SFPT_to_SFPT ()
         in += ndat;
       }
     }
+  }
+}
+
+void spip::ForwardFFTFFTW::normalize_output ()
+{
+  if (verbose)
+    cerr << "spip::ForwardFFTFFTW::transform_normalize_output()" << endl;
+
+  fftwf_complex * out = (fftwf_complex *) output->get_buffer();
+  uint64_t nval = ndat * nsignal * nchan * npol;
+
+  if (verbose)
+    cerr << "spip::ForwardFFTFFTW::transform_normalize_output nval=" 
+         << nval << " scale_fac=" << scale_fac << endl;
+  for (uint64_t ival=0; ival<nval; ival++)
+  {
+    out[ival][0] = out[ival][0] * scale_fac;
+    out[ival][1] = out[ival][1] * scale_fac;
   }
 }
 

@@ -178,4 +178,23 @@ void spip::BackwardFFTFFTW::transform_SFPT_to_SFPT ()
   }
 }
 
+void spip::BackwardFFTFFTW::normalize_output ()
+{
+  if (verbose)
+    cerr << "spip::BackwardFFTFFTW::transform_normalize_output()" << endl;
+
+  fftwf_complex * out = (fftwf_complex *) output->get_buffer();
+  uint64_t nval = ndat * nsignal * nchan * npol;
+
+  if (verbose)
+    cerr << "spip::BackwardFFTFFTW::transform_normalize_output nval=" << nval 
+         << " scale_fac=" << scale_fac << endl;
+  for (uint64_t ival=0; ival<nval; ival++)
+  {
+    out[ival][0] = out[ival][0] * scale_fac;
+    out[ival][1] = out[ival][1] * scale_fac;
+  }
+}
+
+
 

@@ -16,6 +16,8 @@ spip::ForwardFFT::ForwardFFT () : Transformation<Container,Container>("ForwardFF
 {
   nfft = 0;
   nbatch = 0;
+  normalize = true;
+  scale_fac = 1.0f;
 }
 
 spip::ForwardFFT::~ForwardFFT ()
@@ -24,7 +26,29 @@ spip::ForwardFFT::~ForwardFFT ()
 
 void spip::ForwardFFT::set_nfft (int _nfft)
 {
+  if (_nfft <= 0)
+    throw invalid_argument ("ForwardFFT::set_nfft nfft must be > 0");
+
   nfft = _nfft;
+  if (normalize)
+    scale_fac = 1.0f / float(nfft);
+  else
+    scale_fac = 1.0f;
+
+  if (verbose)
+    cerr << "spip::ForwardFFT::set_nfft nfft=" << nfft << " scale_fac=" << scale_fac << endl;
+}
+
+void spip::ForwardFFT::set_normalization (bool _normalize)
+{
+  normalize = _normalize;
+  if (normalize)
+  {
+    if (nfft > 0)
+      scale_fac = 1.0f / float(nfft);
+  }
+  else
+    scale_fac = 1.0f;
 }
 
 //! configure parameters at the start of a data stream
@@ -39,7 +63,8 @@ void spip::ForwardFFT::configure (spip::Ordering output_order)
   nsignal = input->get_nsignal ();
   tsamp = input->get_tsamp();
 
-  cerr << "spip::ForwardFFT::configure ndat=" << ndat << " nfft=" << nfft << endl;
+  if (verbose)
+    cerr << "spip::ForwardFFT::configure ndat=" << ndat << " nfft=" << nfft << endl;
 
   if (ndim != 2)
     throw invalid_argument ("ForwardFFT::configure input ndim != 2");
@@ -76,7 +101,7 @@ void spip::ForwardFFT::configure (spip::Ordering output_order)
 
   // update the parameters that this transformation will affect
   output->set_nchan (nchan * nfft);
-  output->set_tsamp (tsamp / nfft);
+  output->set_tsamp (tsamp * nfft);
   output->set_order (output_order);
 
   if (verbose)
@@ -84,7 +109,7 @@ void spip::ForwardFFT::configure (spip::Ordering output_order)
      cerr << "spip::ForwardFFT::configure nchan: " << nchan 
           << " -> " << nchan * nfft << endl;
      cerr << "spip::ForwardFFT::configure tsamp: " << tsamp 
-          << " -> " << tsamp / nfft << endl;
+          << " -> " << tsamp * nfft << endl;
   }
 
   // update the output header parameters with the new details
@@ -138,6 +163,8 @@ void spip::ForwardFFT::configure_plan_dimensions()
   {
     throw invalid_argument ("ForwardFFT::configure_plan_dimensions input/output order not supported");
   }
+  if (verbose)
+    cerr << "spip::ForwardFFT::configure_plan_dimensions istride=" << istride << " idist=" << idist << " ostride=" << ostride << " odist=" << odist << endl;
 }
 
 //! prepare prior to each transformation call
@@ -213,6 +240,13 @@ void spip::ForwardFFT::transformation ()
   else
   {
     throw runtime_error ("ForwardFFT::transform unsupport input to output conversion");
+  }
+
+  if (normalize)
+  {
+    if (verbose)
+      cerr << "spip::ForwardFFT::transform normalize_output()" << endl;
+    normalize_output();
   }
 }
 
