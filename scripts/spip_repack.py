@@ -90,6 +90,8 @@ class RepackReportingThread(ReportingThread):
      
       if req["plot"] in self.script.valid_plots:
 
+        self.script.log (2, "RepackReportingThread::parse_message: results[" + req["beam"] +"][lock].acquire()")
+
         self.script.results[req["beam"]]["lock"].acquire()
         self.script.log (2, "RepackReportingThread::parse_message: beam=" + \
                           req["beam"] + " plot=" + req["plot"]) 
@@ -112,6 +114,10 @@ class RepackReportingThread(ReportingThread):
           # still return if the timestamp is recent
           return False, self.no_data
 
+      else:
+        # still return if the timestamp is recent
+        return False, self.no_data
+
       xml += "<repack_state>"
       xml += "<error>Invalid request</error>"
       xml += "</repack_state>\r\n"
@@ -123,13 +129,31 @@ class RepackDaemon(Daemon):
   def __init__ (self, name, id):
     Daemon.__init__(self, name, str(id))
 
-    self.valid_plots = ["freq_vs_phase", "flux_vs_phase", "time_vs_phase", "bandpass", "snr_vs_time"]
+    self.plot_types = ["freq_vs_phase", "flux_vs_phase", "time_vs_phase", "bandpass", "snr_vs_time"]
+    self.plot_resses = ["lo", "hi"]
+    self.valid_plots = []
+    for plot_type in self.plot_types:
+      for plot_res in self.plot_resses:
+        self.valid_plots.append(plot_type + "_" + plot_res)
+
     self.beams = []
     self.subbands = []
     self.results = {}
     self.snr_history = {}
 
     self.snr_plot = SNRPlot()
+
+    self.suffixes = { "flux_vs_phase_lo": "flux.lo.png",
+                      "flux_vs_phase_hi": "flux.hi.png",
+                      "freq_vs_phase_lo": "freq.lo.png",
+                      "freq_vs_phase_hi": "freq.hi.png",
+                      "time_vs_phase_lo": "time.lo.png",
+                      "time_vs_phase_hi": "time.hi.png",
+                      "snr_vs_time_lo":   "snrt.lo.png",
+                      "snr_vs_time_hi":   "snrt.hi.png",
+                      "bandpass_lo":      "band.lo.png",
+                      "bandpass_hi":      "band.hi.png" }
+
 
   #################################################################
   # main
@@ -178,6 +202,8 @@ class RepackDaemon(Daemon):
 
         # for each observation      
         for observation in observations:
+
+          processed_this_obs = 0
    
           # strip prefix 
           observation = observation[(len(beam_dir)+1):]
@@ -223,7 +249,7 @@ class RepackDaemon(Daemon):
 
               self.log (1, observation + ": processing " + file)
 
-              processed_this_loop += 1
+              processed_this_obs += 1
               if len(self.subbands) > 1:
                 self.log (2, "main: process_subband()")
                 (rval, response) = self.process_subband (obs_dir, out_dir, source, file)
@@ -236,7 +262,8 @@ class RepackDaemon(Daemon):
                 if rval:
                   self.log (-1, "failed to process " + file + ": " + response)
 
-          if processed_this_loop > 0:
+          # if any individual files (from sub-bands) were found, update the monitoring plots etc
+          if processed_this_obs > 0:
             # now process the sum files to produce plots etc
             self.log (2, "main: process_observation("+beam+","+utc+","+source+","+obs_dir+")")
             (rval, response) = self.process_observation (beam, utc, source, obs_dir)
@@ -320,7 +347,9 @@ class RepackDaemon(Daemon):
               self.log (2, "main: writing header to " + fin_dir + "/" + "obs.header")
               shutil.copyfile (fin_dir + "/obs.header", out_dir + "/obs.header")
 
-
+          processed_this_loop += processed_this_obs
+          self.log (2, "main: finished processing loop for " + observation)
+          
       if processed_this_loop == 0:
         self.log (3, "time.sleep(1)")
         time.sleep(1)
@@ -348,66 +377,30 @@ class RepackDaemon(Daemon):
 
       time_file = obs_dir + "/time.sum"
       freq_file = obs_dir + "/freq.sum"
+      timestamp = ""
 
       cmd = "find  " + obs_dir + " -mindepth 1 -maxdepth 1 -type f -name '????-??-??-??:??:??.*.png' | sort"
       rval, pngs = self.system (cmd, 3)
 
-      flux_vs_phase = ""
-      freq_vs_phase = ""
-      time_vs_phase = ""
-      snr_vs_time = ""
-      bandpass = ""
-      timestamp = ""
+      self.results[beam]["lock"].acquire()
 
       for png in pngs:
-        self.log (2, "load_finished: evaluating png=" + png)
-        if png.find("flux") >= 0:
-          flux_vs_phase = png
-        if png.find("freq") >= 0:
-          freq_vs_phase = png
-        if png.find("time") >= 0:
-          time_vs_phase = png
-        if png.find("snrt") >= 0:
-          snr_vs_time = png
-        if png.find("band") >= 0:
-          bandpass = png
+        for key in self.suffixes.keys():
+          suffix = self.suffixes[key]
+          if png.find(suffix) >= 0:
+            fptr = open (png, "rb")
+            self.results[beam][key] = fptr.read()
+            fptr.close()
+
         if timestamp == "":
           filename = png.split("/")[-1]
           timestamp = filename.split(".")[0]
           self.log (2, "load_finished: png=" + png + " filename=" + filename + " timestamp=" + timestamp)
-      
-      self.results[beam]["lock"].acquire()
 
       self.results[beam]["utc_start"] = utc
       self.results[beam]["source"] = source
       self.log (1, "load_finished: utc_start=" + utc + " source=" + source)
     
-      if os.path.exists(flux_vs_phase):
-        fptr = open (flux_vs_phase, "rb")
-        self.results[beam]["flux_vs_phase"] = fptr.read()
-        fptr.close()
-
-      if os.path.exists(freq_vs_phase):
-        fptr = open (freq_vs_phase, "rb")
-        self.results[beam]["freq_vs_phase"] = fptr.read()
-        fptr.close()
-
-      if os.path.exists(time_vs_phase):
-        fptr = open (time_vs_phase, "rb")
-        self.results[beam]["time_vs_phase"] = fptr.read()
-        fptr.close()
-
-      if os.path.exists(snr_vs_time):
-        fptr = open (snr_vs_time, "rb")
-        self.results[beam]["snr_vs_time"] = fptr.read()
-        fptr.close()
-
-      if os.path.exists(bandpass):
-        fptr = open (bandpass, "rb")
-        self.results[beam]["bandpass"] = fptr.read()
-        fptr.close()
-
-
       cmd = "psrstat -jFDp -c snr " + freq_file + " | awk -F= '{printf(\"%f\",$2)}'"
       rval, lines = self.system (cmd, 3)
       if rval < 0:
@@ -424,8 +417,8 @@ class RepackDaemon(Daemon):
       self.results[beam]["snr"] = snr
       self.results[beam]["length"] = length
       self.results[beam]["valid"] = False 
-      self.log (2, "load_finished: self.results["+beam+"][valid]=False")
 
+      self.log (2, "load_finished: self.results["+beam+"][valid]=False")
       self.results[beam]["lock"].release()
 
     return 0, ""
@@ -520,6 +513,8 @@ class RepackDaemon(Daemon):
     rval, lines = self.system (cmd, 2)
     if rval:
       return (rval, "failed to copy recent band file")
+    if not os.path.exists (band_file):
+      self.log (1, "process_archive: " + band_file + " did not exist after copy...")
 
     # auto-zap bad channels
     cmd = "zap.psh -m " + input_file
@@ -629,30 +624,70 @@ class RepackDaemon(Daemon):
     band_file   = in_dir + "/band.last"
 
     timestamp = times.getCurrentTime() 
+    lo_res = " -g 240x180 -c x:view=0:1 -c y:view=0:1"
+    hi_res = " -g 1024x768"
+    opts = " -c above:l= -c above:c=  -D -/png"
 
-    cmd = "psrplot -p freq " + freq_file + " -jDp -c above:l= -D -/png"
+    # create the freq plots
+    cmd = "psrplot -p freq " + freq_file + " -jDp" + lo_res + opts
     self.log (2, "process_observation: " + cmd)
-    rval, freq_raw = self.system_raw (cmd, 3)
+    rval, freq_lo_raw = self.system_raw (cmd, 3)
     if rval < 0:
       return (rval, "failed to create freq plot")
 
-    cmd = "psrplot -p time " + time_file + " -jDp -c above:l= -D -/png"
+    cmd = "psrplot -p freq " + freq_file + " -jDp" + hi_res + opts
     self.log (2, "process_observation: " + cmd)
-    rval, time_raw = self.system_raw (cmd, 3)
+    rval, freq_hi_raw = self.system_raw (cmd, 3)
+    if rval < 0:
+      return (rval, "failed to create freq plot")
+
+    cmd = "psrplot -p time " + time_file + " -jDp" + lo_res + opts
+    self.log (2, "process_observation: " + cmd)
+    rval, time_lo_raw = self.system_raw (cmd, 3)
     if rval < 0:
       return (rval, "failed to create time plot")
 
-    cmd = "psrplot -p flux -jFD " + freq_file + " -jp -c above:l= -D -/png"
+    cmd = "psrplot -p time " + time_file + " -jDp" + hi_res + opts
     self.log (2, "process_observation: " + cmd)
-    rval, flux_raw = self.system_raw (cmd, 3)
+    rval, time_hi_raw = self.system_raw (cmd, 3)
     if rval < 0:
       return (rval, "failed to create time plot")
 
-    cmd = "psrplot -pb -x -lpol=0,1 -N2,1 -c above:c= " + band_file + " -D -/png"
+    cmd = "psrplot -p flux " + freq_file + " -jFDp " + lo_res + opts
     self.log (2, "process_observation: " + cmd)
-    rval, bandpass_raw = self.system_raw (cmd, 3)
+    rval, flux_lo_raw = self.system_raw (cmd, 3)
     if rval < 0:
-      return (rval, "failed to create time plot")
+      return (rval, "failed to create flux plot")
+
+    cmd = "psrplot -p flux " + freq_file + " -jFDp " + hi_res + opts
+    self.log (2, "process_observation: " + cmd)
+    rval, flux_hi_raw = self.system_raw (cmd, 3)
+    if rval < 0:
+      return (rval, "failed to create flux plot")
+
+    # get the number of polarisations
+    cmd = "psredit -q -c npol " + band_file + " | awk -F= '{print $2}'"
+    rval, lines = self.system (cmd, 2)
+    if rval:
+      return (rval, "failed to get number of polarisations")
+    npol = int(lines[0])
+
+    # plot the bandpass
+    basecmd = "psrplot -pb -x "
+    if npol == 2:
+      basecmd = basecmd + "-lpol=0,1 -N2,1 "
+  
+    cmd = basecmd + band_file + lo_res + opts
+    self.log (2, "process_observation: " + cmd)
+    rval, bandpass_lo_raw = self.system_raw (cmd, 2)
+    if rval < 0:
+      return (rval, "failed to create bandpass plot")
+
+    cmd = basecmd + band_file + hi_res + opts
+    self.log (2, "process_observation: " + cmd)
+    rval, bandpass_hi_raw = self.system_raw (cmd, 2)
+    if rval < 0:
+      return (rval, "failed to create bandpass plot")
 
     cmd = "psrstat -jFDp -c snr " + freq_file + " | awk -F= '{printf(\"%f\",$2)}'"
     rval, lines = self.system (cmd, 3)
@@ -671,10 +706,14 @@ class RepackDaemon(Daemon):
 
     self.results[beam]["utc_start"] = utc
     self.results[beam]["source"] = source
-    self.results[beam]["freq_vs_phase"] = freq_raw
-    self.results[beam]["flux_vs_phase"] = flux_raw
-    self.results[beam]["time_vs_phase"] = time_raw
-    self.results[beam]["bandpass"] = bandpass_raw 
+    self.results[beam]["freq_vs_phase_lo"] = copy.deepcopy(freq_lo_raw)
+    self.results[beam]["flux_vs_phase_lo"] = copy.deepcopy(flux_lo_raw)
+    self.results[beam]["time_vs_phase_lo"] = copy.deepcopy(time_lo_raw)
+    self.results[beam]["bandpass_lo"]      = copy.deepcopy(bandpass_lo_raw)
+    self.results[beam]["freq_vs_phase_hi"] = copy.deepcopy(freq_hi_raw)
+    self.results[beam]["flux_vs_phase_hi"] = copy.deepcopy(flux_hi_raw)
+    self.results[beam]["time_vs_phase_hi"] = copy.deepcopy(time_hi_raw)
+    self.results[beam]["bandpass_hi"]      = copy.deepcopy(bandpass_hi_raw)
     self.results[beam]["timestamp"] = timestamp
     self.results[beam]["snr"] = snr
     self.results[beam]["length"] = length
@@ -688,9 +727,13 @@ class RepackDaemon(Daemon):
     self.snr_history[beam]["snrs"].append(snr)
 
     self.snr_plot.configure()
-    self.snr_plot.plot (240, 180, False, self.snr_history[beam]["times"], self.snr_history[beam]["snrs"])
+    self.snr_plot.plot (240, 180, True, self.snr_history[beam]["times"], self.snr_history[beam]["snrs"])
+    self.results[beam]["snr_vs_time_lo"] = self.snr_plot.getRawImage()
     self.log (3, "process_observation: snr_plot len=" + str(len(self.snr_plot.getRawImage())))
-    self.results[beam]["snr_vs_time"] = self.snr_plot.getRawImage()
+
+    self.snr_plot.plot (1024, 768, False, self.snr_history[beam]["times"], self.snr_history[beam]["snrs"])
+    self.results[beam]["snr_vs_time_hi"] = self.snr_plot.getRawImage()
+    self.log (3, "process_observation: snr_plot len=" + str(len(self.snr_plot.getRawImage())))
 
     self.results[beam]["lock"].release() 
 
@@ -767,32 +810,17 @@ class RepackDaemon(Daemon):
               timestamp + " valid=" + str(self.results[beam]["valid"]))
 
     if (self.results[beam]["valid"]):
+
+      # write out image files
+      for key in self.suffixes.keys():
+
+        extension = self.suffixes[key]
     
-      flux_vs_phase = obs_dir + "/" + timestamp + ".flux.png"
-      freq_vs_phase = obs_dir + "/" + timestamp + ".freq.png"
-      time_vs_phase = obs_dir + "/" + timestamp + ".time.png"
-      snr_vs_time = obs_dir + "/" + timestamp + ".snrt.png"
-      bandpass = obs_dir + "/" + timestamp + ".band.png"
+        filename = obs_dir + "/" + timestamp + "." + extension
 
-      fptr = open (flux_vs_phase, "wb")
-      fptr.write(self.results[beam]["flux_vs_phase"])
-      fptr.close()
-
-      fptr = open (freq_vs_phase, "wb")
-      fptr.write(self.results[beam]["freq_vs_phase"])
-      fptr.close()
-
-      fptr = open (time_vs_phase, "wb")
-      fptr.write(self.results[beam]["time_vs_phase"])
-      fptr.close()
-
-      fptr = open (snr_vs_time, "wb")
-      fptr.write(self.results[beam]["snr_vs_time"])
-      fptr.close()
-
-      fptr = open (bandpass, "wb")
-      fptr.write(self.results[beam]["bandpass"])
-      fptr.close()
+        fptr = open (filename, "wb")
+        fptr.write(self.results[beam][key])
+        fptr.close()
 
       self.snr_history[beam]["times"] = []
       self.snr_history[beam]["snrs"] = []
@@ -847,12 +875,9 @@ class RepackServerDaemon (RepackDaemon, ServerBased):
   def conclude (self):
     for i in range(int(self.cfg["NUM_BEAM"])):
       bid = self.cfg["BEAM_" + str(i)]
-    self.results[bid]["lock"].lock()
-    self.results[bid]["lock"].release()
-
-    RepackDaemon.conclude()
-
-
+      self.results[bid]["lock"].acquire()
+      self.results[bid]["lock"].release()
+    Daemon.conclude(self)
 
 class RepackBeamDaemon (RepackDaemon, BeamBased):
 
