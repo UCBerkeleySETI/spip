@@ -274,12 +274,12 @@ class timing extends spip_webpage
       if ($this->config["INDEPENDENT_BEAMS"] == "true")
       {
         $host = $beam["host"];
-        $port = $this->config["STREAM_REPACK_PORT"] + $ibeam;
+        $port = $this->config["BEAM_REPACK_PORT"] + $ibeam;
       }
       else
       {
         $host = $this->config["SERVER_HOST"];
-        $port = $this->config["STREAM_REPACK_PORT"] + $ibeam;
+        $port = $this->config["BEAM_REPACK_PORT"] + $ibeam;
       }
 
       if ($repack_socket->open ($host, $port, 0) == 0)
@@ -369,7 +369,7 @@ class timing extends spip_webpage
       {
         $host = $this->config["SERVER_HOST"];
       }
-      $port = $this->config["STREAM_REPACK_PORT"];
+      $port = $this->config["BEAM_REPACK_PORT"];
 
       if ($ibeam >= 0)
         $port += $ibeam;
