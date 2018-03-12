@@ -63,7 +63,6 @@ int main(int argc, char *argv[])
         break;
 
       case 'h':
-        cerr << "HELLO" << endl;
         usage();
         return (EXIT_SUCCESS);
         break;
