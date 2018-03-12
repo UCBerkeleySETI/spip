@@ -9,7 +9,7 @@
 #ifndef __IntegerDelay_h
 #define __IntegerDelay_h
 
-#include "spip/ContainerRAM.h"
+#include "spip/Container.h"
 #include "spip/Transformation.h"
 
 namespace spip {
@@ -22,60 +22,24 @@ namespace spip {
 
       ~IntegerDelay ();
 
-      void prepare (unsigned _nsignal);
+      void configure (Ordering output_order);
+
+      void prepare ();
+
+      void prepare_output ();
 
       void reserve ();
 
       //! Set the integer delay for a specific channel
       void set_delay (unsigned isig, unsigned delay);
 
-      //! Get the container of delays
-      ContainerRAM * get_delays () { return curr_delays; }
+      //! Perform the delay of input to output
+      void transformation ();
+
+      //! Data transformation
+      virtual void transform_SFPT_to_SFPT () = 0 ;
 
       void compute_delta_delays ();
-
-      void configure (Ordering output_order) { ; } ;
-
-      void prepare () { ; } ;
-
-      void prepare_output () { ; } ;
-
-      template <typename T>
-      void transform (T * in, T* buf, T * out)
-      {
-        int * delta = (int *) delta_delays->get_buffer();
-        uint64_t idat, odat;
-
-        for (unsigned ichan=0; ichan<nchan; ichan++)
-        {
-          for (unsigned ipol=0; ipol<npol; ipol++)
-          {
-            // TODO fix the integer transition
-
-            for (unsigned isig=0; isig<nsignal; isig++)
-            {
-              int delay = delta[isig];
-              // copy buffered data to the output
-              if (have_buffered_output)
-              {
-                for (odat=ndat-delay,idat=0; idat<ndat; idat++,odat++)
-                  out[odat] = buf[idat];
-              }
-
-              // copy input to the buffer
-              for (odat=0,idat=delay; idat<ndat; idat++,odat++)
-                buf[odat] = in[idat];
-
-              in += ndat;
-              out += ndat;
-
-            }
-          }
-        }
-      }
-
-      //! Perform the integer delay transformation from input to output
-      void transformation ();
 
       bool have_output () { return have_buffered_output; }
 
@@ -84,16 +48,16 @@ namespace spip {
     private:
 
       //! integer delays applied to previous block
-      ContainerRAM * prev_delays;
+      Container * prev_delays;
 
       //! integer delays to be applied to current block
-      ContainerRAM * curr_delays;
+      Container * curr_delays;
 
       //! difference between prev and curr delays
-      ContainerRAM * delta_delays;
+      Container * delta_delays;
 
       //! buffered output
-      ContainerRAM * buffered;
+      Container * buffered;
 
       bool have_buffered_output;
 
