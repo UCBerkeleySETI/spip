@@ -5,7 +5,7 @@
  *
  ***************************************************************************/
 
-//#define _DEBUG
+// #define _DEBUG
 
 #include "spip/UDPFormatVDIF.h"
 #include "spip/Time.h"
@@ -85,6 +85,9 @@ void spip::UDPFormatVDIF::configure (const spip::AsciiHeader& config, const char
 
 void spip::UDPFormatVDIF::prepare (spip::AsciiHeader& config, const char * suffix)
 {
+#ifdef _DEBUG
+  cerr << "spip::UDPFormatVDIF::prepare" << endl;
+#endif
   // if the stream is to start on a supplied epoch, extract the 
   // UTC_START from the config
   if (!self_start)
@@ -107,7 +110,11 @@ void spip::UDPFormatVDIF::prepare (spip::AsciiHeader& config, const char * suffi
   else
     offset = 0;
 
+#ifdef _DEBUG
+  cerr << "spip::UDPFormatVDIF::prepare configured_stream=false" << endl;
+#endif
   prepared = true;
+  configured_stream = false;
 }
 
 void spip::UDPFormatVDIF::compute_header ()
@@ -225,8 +232,8 @@ inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_si
   // this UDP format assumes 1 thread, for either pol 0 or 1
   int thread_id = getVDIFThreadID (header_ptr);
 
-  if (thread_id != 0 && thread_id != 1)
-    throw invalid_argument ("VDIF thread ID must be 0 or 1");
+  //if (thread_id != 0 && thread_id != 1)
+  //  throw invalid_argument ("VDIF thread ID must be 0 or 1");
 
   if (header_npol == 1)
   {
@@ -234,6 +241,7 @@ inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_si
     offset = 0;
   }
 
+  // configure the stream on the first packet
   if (!configured_stream)
   {
     // decode the header parameters
@@ -304,8 +312,16 @@ inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_si
     else
     // determine start_seconds of this VDIF data relative to UTC_START
     {
+      cerr << "spip::UDPFormatVDIF::decode_packet self_start == false" << endl;
+      // add the delay here...
       Time vdif_epoch (key);
+      cerr << "spip::UDPFormatVDIF::decode_packet vdif_epoch=" << key << endl;
+      cerr << "spip::UDPFormatVDIF::decode_packet utc_start="  << utc_start.get_gmtime()<< endl;
       start_second = utc_start.get_time() - vdif_epoch.get_time();
+      cerr << "spip::UDPFormatVDIF::decode_packet start_second=" << start_second << endl;
+      cerr << "spip::UDPFormatVDIF::decode_packet inserting 37 second hack for VDIF/BAT error" << endl;
+      start_second += 37;
+      cerr << "spip::UDPFormatVDIF::decode_packet start_second=" << start_second << endl;
       pico_seconds = 0;
     }
 
