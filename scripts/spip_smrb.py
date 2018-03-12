@@ -240,6 +240,10 @@ class SMRBDaemon(Daemon,StreamBased):
         if rval != 0:
           self.log (-2, "Could not destroy existing datablock")
 
+    for db_id in db_ids:
+
+      db_key = self.getDBKey (db_prefix, self.id, num_stream, db_id)
+
       # start a thread to create a data block in persistence mode
       self.log (2, "SMRBDaemon::main smrbThread("+db_key+","+db_id+","+numa_node+")")
       smrb_threads[db_id] = smrbThread (db_key, db_id, self.id, numa_node, log_pipe.sock, script)
@@ -248,6 +252,7 @@ class SMRBDaemon(Daemon,StreamBased):
       # append this command to the list of binaries that will be terminated
       # on script shutdown
       self.binary_list.append ("dada_db -k " + db_key)
+      db_keys.append(db_key)
 
     # wait 1 second for threads to initialize
     sleep(1)
