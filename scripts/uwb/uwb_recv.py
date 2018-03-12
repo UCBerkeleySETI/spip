@@ -31,18 +31,17 @@ class UWBRecvDaemon(RecvDaemon):
 
   def getEnvironment (self):
     env = RecvDaemon.getEnvironment (self)
-    env["LD_PRELOAD"] = "libvma.so"
-    env["VMA_MTU"] = "4200"
-    env["VMA_RING_ALLOCATION_LOGIC_RX"] = "10"
-    env["VMA_INTERNAL_THREAD_AFFINITY"] = "6"
-    env["VMA_TRACELEVEL"] = "WARNING"
+    #env["LD_PRELOAD"] = "libvma.so"
+    #env["VMA_MTU"] = "4200"
+    #env["VMA_RING_ALLOCATION_LOGIC_RX"] = "10"
+    #env["VMA_INTERNAL_THREAD_AFFINITY"] = "6"
+    #env["VMA_TRACELEVEL"] = "WARNING"
     return env
 
   def getCommand (self, config_file):
     cmd = self.cfg["STREAM_BINARY"] + " -k " + self.db_key \
-            + " -v -b " + self.cpu_core \
+            + " -b " + self.cpu_core \
             + " -c " + self.ctrl_port \
-            + " -f spead" \
             + " " + config_file 
     return cmd
 
