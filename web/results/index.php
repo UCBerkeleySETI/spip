@@ -18,6 +18,7 @@ class results extends spip_webpage
     $this->nav_item = "results";
 
     $this->config = spip::get_config();
+    $this->beams = array();
     $this->streams = array();
 
     $this->callback_freq = 60 * 1000;
@@ -34,7 +35,8 @@ class results extends spip_webpage
       list ($host, $ibeam, $subband) = explode (":", $this->config["STREAM_".$istream]);
 
       $beam_name = $this->config["BEAM_".$ibeam];
-      $this->streams[$istream] = array("beam_name" => $beam_name, "host" => $host);
+      $this->beams[$istream] = array("beam_name" => $beam_name, "host" => $host, "port" => ($this->config["BEAM_RESULTS_PORT"] + $ibeam));
+      $this->streams[$istream] = array("beam_name" => $beam_name, "host" => $host, "port" => ($this->config["BEAM_RESULTS_PORT"] + $ibeam));
     }
   }
 
@@ -260,7 +262,7 @@ class results extends spip_webpage
       $results_socket = new spip_socket();
 
       $host = $stream["host"];
-      $port = $this->config["STREAM_RESULTS_PORT"] + $istream;
+      $port = $stream["port"];
       $beam_name = $stream["beam_name"];
 
       $xml_req  = XML_DEFINITION;
@@ -307,7 +309,7 @@ class results extends spip_webpage
         if ($stream["beam_name"] == $get["beam"])
         {
           $host = $stream["host"];
-          $port = $this->config["STREAM_RESULTS_PORT"] + $istream;
+          $port = $stream["port"];
         }
       }
 
