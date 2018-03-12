@@ -243,6 +243,12 @@ class serverThread (lmcThread):
     # launch the thread
     lmcThread.__init__(self, script, states)
 
+  def should_reload (self):
+    return False
+
+  def did_reload (self):
+    return False
+
 ################################################################$
 #
 # 
@@ -320,12 +326,23 @@ class LMCDaemon (Daemon, HostBased):
       self.log(2, "main: beam_thread["+str(beam)+"] started!")
 
     # main thread
-    disks_to_monitor = [self.cfg["CLIENT_DIR"]]
+    if len(host_servers) > 0:
+      disks_to_monitor = [self.cfg["SERVER_DIR"]]
+    else:
+      disks_to_monitor = [self.cfg["CLIENT_DIR"]]
 
     # create socket for LMC commands
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((self.req_host, int(self.cfg["LMC_PORT"])))
+
+    bound = False
+    while not bound:
+      try:
+        sock.bind((self.req_host, int(self.cfg["LMC_PORT"])))
+        bound = True
+      except socket.error, e:
+        self.log(-1, "Could not bind to " + self.req_host + ":" + self.cfg["LMC_PORT"] + ", sleep(5)")
+        sleep(5)
     sock.listen(5)
 
     can_read = [sock]
