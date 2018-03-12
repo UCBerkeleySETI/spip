@@ -62,6 +62,10 @@ class UWBFoldDaemon (UWBProcDaemon):
     # configure the command to be run
     self.cmd = "dspsr -Q " + db_key_filename + " -F 256:D -cuda " + self.gpu_id + " -minram 2048 -b 1024 -x 1024 -L 10 -no_dyn"
 
+    # only produce 1 output polarisation if one input pol
+    if self.header["NPOL"] == "1":
+      self.cmd = self.cmd + " -d 1"
+
     self.log_prefix = "fold_src"
 
 ###############################################################################
