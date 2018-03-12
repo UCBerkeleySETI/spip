@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <limits> 
 
 using namespace std;
 
@@ -24,6 +25,9 @@ spip::Container::Container ()
   npol = 1;
   nbit = 8;
   size = 0;
+
+  file_size = -1;
+  compute_file_size = false;
 
   buffer = NULL;
 }
@@ -76,10 +80,62 @@ void spip::Container::read_header()
 
   if (header.get ("OSAMP_DENOMINATOR", "%u", &(oversampling_ratio[1])) != 1)
     oversampling_ratio[1] = 1;
+  
+  if (header.get ("BYTES_PER_SECOND", "%lu", &bytes_per_second) != 1)
+    throw invalid_argument ("BYTES_PER_SECOND did not exist in header");
+
+  if (header.get ("FILE_SIZE", "%ld", &file_size) != 1)
+    file_size = -1;
+  else
+  {
+    seconds_per_file = double(file_size) / double(bytes_per_second);
+    compute_file_size = true;
+  }
+
+  // update the calculated parameters
+  recalculate();
+
+  // assume little endian, unless specified
+  if (header.get ("ENDIAN", "%s", &tmp_buf) == 1)
+  {
+    //cerr << "spip::Container::read_header ENDIAN=" << tmp_buf << endl;
+    if (string(tmp_buf) == "LITTLE")
+      endianness = spip::Endian::Little;
+    else if (string(tmp_buf) == "BIG")
+      endianness = spip::Endian::Big;
+    else
+      throw invalid_argument ("ENDIAN not LITTLE or BIG");
+  }
+  else
+  {
+    cerr << "spip::Container::read_header did not find ENDIAN keyword in header" << endl;
+    endianness = spip::Endian::Little;
+  }
+
+  // assume Twos Complement Encoding, unless specified
+  if (header.get ("ENCODING", "%s", &tmp_buf) == 1)
+  {
+    //cerr << "spip::Container::read_header ENCODING=" << tmp_buf << endl;
+    if (string(tmp_buf) == "TWOSCOMPLEMENT")
+      encoding = spip::Encoding::TwosComplement;
+    else if (string(tmp_buf) == "OFFSETBINARY")
+      encoding = spip::Encoding::OffsetBinary;
+    else
+      throw invalid_argument ("ENCODING not TWOSCOMPLEMENT or OFFSETBINARY");
+  }
+  else
+  {
+    cerr << "spip::Container::read_header did not find ENCODING keyword in header" << endl;
+    encoding = spip::Encoding::TwosComplement;
+  }
+
 }
 
 void spip::Container::write_header ()
 {
+  typedef std::numeric_limits< double > dbl;
+  cerr.precision(dbl::max_digits10);
+
   if (header.set ("NANT", "%u", nsignal) < 0)
     throw invalid_argument ("Could not write NANT to header");
 
@@ -95,7 +151,7 @@ void spip::Container::write_header ()
   if (header.set ("NDIM", "%u", ndim) < 0)
     throw invalid_argument ("Could not write NDIM to header");
 
-  if (header.set ("TSAMP", "%lf", tsamp) < 0)
+  if (header.set ("TSAMP", "%.16lf", tsamp) < 0)
     throw invalid_argument ("Could not write TSAMP to header");
 
   if (header.set ("BW", "%lf", bandwidth) < 0)
@@ -120,6 +176,31 @@ void spip::Container::write_header ()
   if (header.set ("OSAMP_DENOMINATOR", "%u", (oversampling_ratio[1])) < 0)
     throw invalid_argument ("Could not write OSAMP_DENOMINATOR to header");
 
+  if (endianness == spip::Endian::Little)
+  {
+    if (header.set ("ENDIAN", "%s", "LITTLE") < 0)
+      throw invalid_argument ("Could not write ENDIAN to header");
+  }
+  else
+  {
+    if (header.set ("ENDIAN", "%s", "BIG") < 0)
+      throw invalid_argument ("Could not write ENDIAN to header");
+  }
+
+  // update the calculated parameters of the Container
+  recalculate ();
+
+  if (header.set ("BYTES_PER_SECOND", "%lu", bytes_per_second) < 0)
+    throw invalid_argument ("Could not write BYTES_PER_SECOND to header");
+
+  if (file_size != -1)
+  {
+    if (header.set ("FILE_SIZE", "%ld", file_size) < 0)
+      throw invalid_argument ("Could not write FILE_SIZE to header");
+  }
+
+  if (header.set ("RESOLUTION", "%lu", resolution) < 0)
+    throw invalid_argument ("Could not write RESOLUTION to header");
 }
 
 void spip::Container::clone_header (const spip::AsciiHeader &obj)
@@ -138,4 +219,39 @@ std::string spip::Container::get_order_string (spip::Ordering o)
   if (o == spip::Ordering::Custom)
     return std::string("Custom");
   return std::string("Unknown");
+}
+
+uint64_t spip::Container::calculate_bytes_per_second ()
+{
+  double nbit_per_samp = double(calculate_nbits_per_sample());
+  //cerr << "spip::Container::calculate_bytes_per_second nbit_per_samp=" << nbit_per_samp << endl;
+  double nsamp_per_second = double(1000000) / tsamp;
+  //cerr << "spip::Container::calculate_bytes_per_second tsamp=" << tsamp << " nsamp_per_second=" << nsamp_per_second << endl;
+  double nbit_per_second = nbit_per_samp * nsamp_per_second;
+  //cerr << "spip::Container::calculate_bytes_per_second nbit_per_second=" << nbit_per_second<< endl;
+  return uint64_t(nbit_per_second) / 8;
+}
+
+void spip::Container::recalculate ()
+{
+  // compute the new number of bits per sample
+  bits_per_sample = calculate_nbits_per_sample();
+
+  // compute the new bytes per second
+  bytes_per_second = calculate_bytes_per_second ();
+
+  // determine the resolution, based on the ordering
+  if ((order == spip::Ordering::TFPS) || (order == spip::Ordering::TSPF))
+    resolution = bits_per_sample / 8;
+  else
+    resolution = size;
+
+  if (compute_file_size)
+  {
+    file_size = int64_t (seconds_per_file * bytes_per_second);
+    if (verbose)
+      cerr << "spip::Container::recalculate computed FILE_SIZE=" << file_size
+           << " seconds_per_file=" << seconds_per_file 
+           << " bytes_per_second=" << bytes_per_second << endl;
+  }
 }

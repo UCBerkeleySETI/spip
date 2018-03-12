@@ -14,6 +14,7 @@
 #include "spip/UnpackFloat.h"
 
 #include <iostream>
+#include <climits>
 
 namespace spip {
 
@@ -35,12 +36,29 @@ namespace spip {
     
     private:
 
+      inline float    convert_twos (float in)    { return in; };
+      inline uint16_t convert_twos (uint16_t in) { return in ^ 0x8000; };
+      inline int16_t  convert_twos (int16_t in)  { return in ^ 0x8000; };
+      inline int8_t   convert_twos (int8_t in)   { return in ^ 0x80; };
+      inline uint8_t  convert_twos (uint8_t in)  { return in ^ 0x80; };
+
       template <class T>
       void unpack_sfpt_to_sfpt (T * in, float * out)
       {
         uint64_t nval = ndim * ndat * npol * nchan * nsignal;
         for (uint64_t ival=0; ival < nval; ival++)
-          out[ival] = float(in[ival]);
+        {
+          T raw = in[ival]; 
+
+          // first convert Endian if required
+          if (endianness != spip::Endian::Little)
+            raw = swap_endian(raw);
+
+          if (encoding != spip::Encoding::TwosComplement)
+            raw = convert_twos(raw);
+
+          out[ival] = (float(raw) + offset) * scale;
+        }
       }
 
       template <class T>
@@ -63,12 +81,37 @@ namespace spip {
               for (unsigned isig=0; isig<nsignal; isig++)
               { 
                 const uint64_t signal_offset = pol_offset + isig * signal_stride;
-                out[signal_offset] = float(*in);
+                if (endianness != spip::Endian::Little)
+                {
+                  out[signal_offset] = (float(swap_endian(*in)) + offset) * scale;
+                }
+                else
+                {
+                  out[signal_offset] = (float(*in) + offset) * scale;
+                }
                 in++;
               }
             }
           }
         }
+      }
+
+      template <typename T>
+      T swap_endian(T u)
+      {
+        static_assert (CHAR_BIT == 8, "CHAR_BIT != 8");
+        union
+        {
+          T u;
+          unsigned char u8[sizeof(T)];
+        } source, dest;
+
+        source.u = u;
+
+        for (size_t k = 0; k < sizeof(T); k++)
+          dest.u8[k] = source.u8[sizeof(T) - k - 1];
+
+        return dest.u;
       }
 
   };

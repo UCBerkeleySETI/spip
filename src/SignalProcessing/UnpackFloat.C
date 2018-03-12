@@ -14,8 +14,12 @@ using namespace std;
 
 spip::UnpackFloat::UnpackFloat () : Transformation<Container,Container>("UnpackFloat", outofplace)
 {
-  offset = 0;
+  offset = 0.0;
   scale = 1;
+  endianness = spip::Little;
+  encoding  = spip::TwosComplement;
+  big_endian = false;
+  twos_complement = false;
 }
 
 spip::UnpackFloat::~UnpackFloat ()
@@ -31,9 +35,25 @@ void spip::UnpackFloat::configure (spip::Ordering output_order)
   nbit  = input->get_nbit ();
   ndim  = input->get_ndim ();
   nsignal = input->get_nsignal ();
+  endianness = input->get_endianness();
+  encoding = input->get_encoding ();
+
+  // hack to deal with nvcc not liking enums
+  big_endian = (endianness == spip::Endian::Big);
+  twos_complement = (encoding == spip::Encoding::TwosComplement);
 
   if (verbose)
+  {
+    if (big_endian)
+      cerr << "spip::UnpackFloat::configure input is Big Endian" << endl;
+    else
+      cerr << "spip::UnpackFloat::configure input is Little Endian" << endl;
+    if (twos_complement)
+      cerr << "spip::UnpackFloat::configure input is Twos Complement" << endl;
+    else
+      cerr << "spip::UnpackFloat::configure input is Offset Binary" << endl;
     cerr << "spip::UnpackFloat::configure: ndat=" << ndat << endl;
+  }
 
   if (ndim != 2)
     throw invalid_argument ("UnpackFloat::configure only ndim==2 supported");
@@ -55,6 +75,8 @@ void spip::UnpackFloat::configure (spip::Ordering output_order)
 
   // update the parameters that this transformation will affect
   output->set_nbit (32);
+  //output->set_instrument ("DSPSR");
+  output->set_endianness (spip::Endian::Little);
   output->set_order (spip::Ordering::SFPT);
 
   // update the output header parameters with the new details

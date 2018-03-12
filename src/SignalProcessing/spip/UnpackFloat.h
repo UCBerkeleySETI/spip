@@ -9,7 +9,7 @@
 #ifndef __UnpackFloat_h
 #define __UnpackFloat_h
 
-#include "spip/ContainerRAM.h"
+#include "spip/Container.h"
 #include "spip/Transformation.h"
 
 namespace spip {
@@ -37,6 +37,15 @@ namespace spip {
       virtual void transform_SFPT_to_SFPT () = 0 ;
 
     protected:
+
+      Endian endianness;
+
+      Encoding encoding;
+
+      // hacks to accomodate nvcc and enums
+      bool big_endian;
+
+      bool twos_complement;
 
       unsigned nchan;
 
