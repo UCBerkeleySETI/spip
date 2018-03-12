@@ -77,11 +77,48 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
   //if (threadIdx.x == 0 || threadIdx.x == 1023)
   //  printf ("[%d][%d] ichanpol=%u idx=%lu\n", blockIdx.x, threadIdx.x, ichanpol, idx);
 
+  __shared__ float normalized_factor;
+  float previos_factor;
+
   for (unsigned iloop=0; iloop<nloops; iloop++)
   {
     // read the reference antenna value
     cuFloatComplex r = ref[idx];
     cuFloatComplex a = in[idx];
+
+///////////////////////////////////
+    cuFloatComplex pa = cuCmulf(a, cuConjf(a));
+    cuFloatComplex pr =  cuCmulf(r, cuConjf(r));
+
+    pa = blockReduceSumFC(pa);
+    pr = blockReduceSumFC(pr);
+
+    if (threadIdx.x == 0)
+    {
+      // normalise
+      float pn = pa.x / blockDim.x + pr.x / blockDim.x;
+      //normalized_power.y = pa.y / blockDim.y + pr.y / blockDim.y;
+
+    float current_factor = pn;
+
+
+    if(iloop == 0)
+    {
+      normalized_factor = 0.999 * current_factor + 0.001 *current_factor;
+    }
+    else
+    {
+      normalized_factor = 0.999 * previos_factor + 0.001 *current_factor;
+    }
+
+    previos_factor = current_factor;
+
+    }
+
+    // ensure pn are common across the block
+    __syncthreads();
+
+//////////////////////////////////
 
     // compute complex conjugate f = [gain * ref]
     cuFloatComplex f = cuCmulf(g, r);
@@ -91,6 +128,9 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
 
     // compute correlation [corr = af * conj(ref)]
     cuFloatComplex corr = cuCmulf(af, cuConjf(r));
+
+    corr.x /= normalized_factor;
+    corr.y /= normalized_factor;
 
     // sum corr across the block
     corr = blockReduceSumFC(corr);
@@ -103,7 +143,7 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
       corr.y /= blockDim.x;
 
       // compute new gain
-      const float epsilon = 1e-4;
+      const float epsilon = 0.1;
       g.x = (corr.x * epsilon) + g.x;
       g.y = (corr.y * epsilon) + g.y;
     }
@@ -144,7 +184,8 @@ void spip::AdaptiveFilterCUDA::set_input_ref (Container * _input_ref)
 {
   input_ref = dynamic_cast<spip::ContainerCUDADevice *>(_input_ref);
   if (!input_ref)
-    throw invalid_argument ("spip::AdaptiveFilterCUDA::set_input_ref RFI input was not castable to spip::ContainerCUDADevice *");
+    throw Error (InvalidState, "spip::AdaptiveFilterCUDA::set_input_ref",
+                 "RFI input was not castable to spip::ContainerCUDADevice *");
 }
 
 // configure the pipeline prior to runtime
