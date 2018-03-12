@@ -26,7 +26,7 @@ class RepackReportingThread(ReportingThread):
 
   def __init__ (self, script, id):
     host = sockets.getHostNameShort()
-    port = int(script.cfg["STREAM_REPACK_PORT"])
+    port = int(script.cfg["BEAM_REPACK_PORT"])
     if int(id) >= 0:
       port += int(id)
     ReportingThread.__init__(self, script, host, port)
@@ -890,7 +890,10 @@ class RepackBeamDaemon (RepackDaemon, BeamBased):
       self.subbands.append({ "cfreq": cfreq, "bw": bw, "nchan": nchan })
       self.total_channels += int(nchan)
 
-    self.out_cfreq = cfreq
+    freq_low  = float(self.subbands[0]["cfreq"])  - (float(self.subbands[0]["bw"]) / 2.0)
+    freq_high = float(self.subbands[-1]["cfreq"]) + (float(self.subbands[-1]["bw"]) / 2.0)
+    self.out_cfreq = freq_low + ((freq_high - freq_low) / 2.0)
+
     self.log(1, "RepackBeamDaemon::configure done")
 
     return 0
