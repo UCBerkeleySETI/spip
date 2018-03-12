@@ -37,6 +37,9 @@ namespace spip {
       //! unset the buffer pointer
       void unset_buffer ();
 
+      //! query whether the buffer is valid
+      bool is_valid () { return buffer_valid; }
+
     protected:
 
     private:
