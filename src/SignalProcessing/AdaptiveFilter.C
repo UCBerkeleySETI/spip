@@ -15,8 +15,8 @@ using namespace std;
 spip::AdaptiveFilter::AdaptiveFilter () : Transformation<Container,Container>("AdaptiveFilter", outofplace)
 {
   // default, should be configured [TODO]
-  filter_update_time = 1024;
-  epsilon = 1E-4;
+  filter_update_time = 1000;
+  epsilon = 1e-1;
   gains = NULL;
 }
 
