@@ -97,7 +97,7 @@ class TCSDaemon(Daemon):
     for b in self.beam_states.keys():
 
       # TODO check this for SERVER / BEAM
-      beam_dir = self.cfg["CLIENT_FOLD_DIR"] + "/finished/" + b
+      beam_dir = self.fold_dir + "/finished/" + b
 
       cmd = "find " + beam_dir + " -mindepth 2 -maxdepth 2 -type d | sort | tail -n 1"
       rval, observation = self.system (cmd, 3)
@@ -128,7 +128,6 @@ class TCSDaemon(Daemon):
 
         self.beam_states[b]["tobs"] = header["TOBS"]
         self.beam_states[b]["utc_start"] = header["UTC_START"]
-        self.beam_states[b]["adc_sync_time"] = header["ADC_SYNC_TIME"]
         self.beam_states[b]["state"] = "Idle"
 
         self.beam_states[b]["lock"].release()
@@ -448,6 +447,7 @@ class TCSServerDaemon (TCSDaemon, ServerBased):
     ServerBased.__init__(self, self.cfg)
     self.interface_port = int(self.cfg["TCS_INTERFACE_PORT"])
     self.report_port = int(self.cfg["TCS_REPORT_PORT"])
+    self.fold_dir = self.cfg["SERVER_FOLD_DIR"]
 
     # beam_states maintains info about last observation for beam
     for i in range(int(self.cfg["NUM_BEAM"])):
@@ -474,6 +474,7 @@ class TCSBeamDaemon (TCSDaemon, BeamBased):
     BeamBased.__init__(self, str(id), self.cfg)
     self.interface_port = int(self.cfg["TCS_INTERFACE_PORT_" + str(id)])
     self.report_port = int(self.cfg["TCS_REPORT_PORT_" + str(id)])
+    self.fold_dir = self.cfg["CLIENT_FOLD_DIR"]
 
     b = self.cfg["BEAM_"+str(id)]
     self.beam_states[b] = {}
