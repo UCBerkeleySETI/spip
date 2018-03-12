@@ -18,5 +18,8 @@ class UWBConfig(Config):
 
     cfg = Config.getStreamConfigFixed (self, id)
 
+    (cfg["DATA_HOST"], cfg["DATA_PORT"]) = self.config["STREAM_UDP_" + str(id)].split(":")
+    cfg["UDP_NSAMP"] = "2048"
+
     return cfg
 
