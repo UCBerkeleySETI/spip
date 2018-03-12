@@ -1,32 +1,31 @@
 
 noinst_LTLIBRARIES = libinstuwb.la
 
-libinstuwb_headers = spip/UWBDigitizer.h
+libinstuwb_headers = spip/ContinuumPipeline.h
 
-libinstuwb_la_SOURCES = UWBDigitizer.C
+libinstuwb_la_SOURCES = ContinuumPipeline.C
 
-bin_PROGRAMS = uwb_digitizer
+bin_PROGRAMS = uwb_continuum_pipeline
 
 AM_CXXFLAGS = -I .\
   -I$(top_builddir)/src/Affinity \
   -I$(top_builddir)/src/Dada \
+  -I$(top_builddir)/src/SignalProcessing \
   -I$(top_builddir)/src/Util
 
 LDADD = libinstuwb.la \
+  $(top_builddir)/src/SignalProcessing/libspipdsp.la \
   $(top_builddir)/src/Dada/libspipdada.la \
   $(top_builddir)/src/Util/libspiputil.la \
   $(top_builddir)/src/Affinity/libspipaffinity.la \
   -lpthread
 
-uwb_polsubxpose_SOURCES = uwb_digitizer.C
-
 AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@
 LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@
 
-if HAVE_CUDA
+uwb_continuum_pipeline_SOURCES = uwb_continuum_pipeline.C
 
-libinstuwb_headers += spip/UWB.h
-libinstuwb_la_SOURCES += UWBDigitizer.C
+if HAVE_CUDA
 
 AM_CXXFLAGS += @CUDA_CFLAGS@
 LDADD += @CUDA_LIBS@
