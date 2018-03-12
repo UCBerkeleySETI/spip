@@ -28,19 +28,26 @@ spip::BlockFormat::BlockFormat()
   ndim = 1;
   nchan = 1;
   nbit = 8;
+  freq = 0;
+  bw = 0;
 }
 
 spip::BlockFormat::~BlockFormat()
 {
 }
 
-void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime, unsigned _nfreq)
+void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime,
+                                 unsigned _nfreq, double _freq,
+                                 double _bw, double _tsamp)
 {
   bits_per_sample = nchan * npol * ndim * nbit;
   bytes_per_sample = bits_per_sample / 8;
 
   nbin = _nbin;
   ntime = _ntime;
+  bw = _bw;
+  freq = _freq;
+  tsamp = _tsamp;
 
   // configure the number of channels in the FT
   if (_nfreq < nchan)
@@ -93,6 +100,7 @@ void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime, unsigned _nfre
       }
     }
   }
+
 }
 
 void spip::BlockFormat::reset()
@@ -146,12 +154,15 @@ void spip::BlockFormat::write_freq_times(string ft_filename)
   ft_file.write (reinterpret_cast<const char *>(&npol), sizeof(npol));
   ft_file.write (reinterpret_cast<const char *>(&nfreq_ft), sizeof(nfreq_ft));
   ft_file.write (reinterpret_cast<const char *>(&ntime), sizeof(ntime));
+  ft_file.write (reinterpret_cast<const char *>(&freq), sizeof(freq));
+  ft_file.write (reinterpret_cast<const char *>(&bw), sizeof(bw));
+  ft_file.write (reinterpret_cast<const char *>(&tsamp), sizeof(tsamp));
   for (unsigned ipol=0; ipol<npol; ipol++)
   {
     for (unsigned ifreq=0; ifreq<nfreq_ft; ifreq++)
     {
       const char * buffer = reinterpret_cast<const char*>(&freq_time[ipol][ifreq][0]);
-      ft_file.write(buffer, freq_time[ipol][ifreq].size() * sizeof(unsigned));
+      ft_file.write (buffer, freq_time[ipol][ifreq].size() * sizeof(float));
     }
   }
   ft_file.close();
