@@ -62,6 +62,9 @@ class LogsDaemon(Daemon):
     line_buffers = {}
     timeout = 1
 
+    # todo fix this
+    allowed_hosts = ["127.0.0.1", "130.155.182.74", "130.155.182.28", "130.155.182.31", "130.155.182.32", "130.155.182.33", "130.155.182.34", "130.155.182.35", "130.155.182.36", "130.155.182.37", "130.155.182.38"]
+
     while (not self.quit_event.isSet()):
 
       self.log(3, "main: calling select len(can_read)="+str(len(can_read)))
@@ -74,24 +77,31 @@ class LogsDaemon(Daemon):
         for handle in did_read:
           if (handle == sock):
             (new_conn, addr) = sock.accept()
-            self.log(1, "main: accept connection from "+repr(addr))
-      
-            # read header information about this logging stream
-            header = new_conn.recv (4096)
+            ip, port = addr
+            self.log(1, "main: accept connection from " + ip + ":" + str(port))
 
-            try: 
-              xml = parse(header)
-            except ExpatError as e:
-              self.log(0, "main: accept: xml error [" + header + "]")
-              new_conn.send ("<xml>Malformed XML message</xml>\r\n")
+            if len(allowed_hosts) > 0 and not (ip in allowed_hosts):
+              self.log(1, "main: rejecting connection from " + ip + " not in " + str(allowed_hosts))
               new_conn.close()
+
             else:
-              # add to list of open file handles
-              can_read.append(new_conn)
-              # return a single character to confirm header has been receive
-              new_conn.send('\n')
-              headers[new_conn] = xml
-              line_buffers[new_conn] = ""
+
+              # read header information about this logging stream
+              header = new_conn.recv (4096)
+
+              try: 
+                xml = parse(header)
+              except ExpatError as e:
+                self.log(0, "main: accept: xml error [" + header + "]")
+                new_conn.send ("<xml>Malformed XML message</xml>\r\n")
+                new_conn.close()
+              else:
+                # add to list of open file handles
+                can_read.append(new_conn)
+                # return a single character to confirm header has been receive
+                new_conn.send('\n')
+                headers[new_conn] = xml
+                line_buffers[new_conn] = ""
 
           else:
             message = handle.recv(4096)
@@ -141,7 +151,7 @@ class LogsDaemon(Daemon):
     else:
       file = self.log_dir + "/" + dest + "_" + id + ".log"
     fptr = open(file, 'a')
-    fptr.write(source + ": " + line + "\n")
+    fptr.write(source + ": " + line.decode('utf-8', 'replace') + "\n")
     fptr.close()
 
 
