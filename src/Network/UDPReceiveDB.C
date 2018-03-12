@@ -48,7 +48,7 @@ spip::UDPReceiveDB::UDPReceiveDB(const char * key_string)
 
   pthread_cond_init( &cond, NULL);
   pthread_mutex_init( &mutex, NULL);
-  verbose = true;
+  verbose = false;
 
 }
 
@@ -137,6 +137,7 @@ int spip::UDPReceiveDB::configure (const char * config_str)
   }
 
   stats = new UDPStats (format->get_header_size(), format->get_data_size());
+  return 0;
 }
 
 void spip::UDPReceiveDB::set_format (spip::UDPFormat * fmt)
@@ -189,7 +190,6 @@ void spip::UDPReceiveDB::control_thread()
 
   int fd = -1;
 
-  char * cmds = (char *) malloc (DEFAULT_HEADER_SIZE);
   char * cmd  = (char *) malloc (32);
 
   // wait for a connection
@@ -266,7 +266,7 @@ void spip::UDPReceiveDB::stats_thread()
 {
   uint64_t b_recv_total, b_recv_curr, b_recv_1sec;
   uint64_t b_drop_total, b_drop_curr, b_drop_1sec;
-  double mb_recv_ps, gb_recv_ps, gb_drop_ps, gb_drop;
+  double gb_recv_ps, gb_drop_ps, gb_drop;
 
   if (verbose)
     cerr << "spip::UDPReceiveDB::stats_thread starting polling" << endl;
@@ -282,7 +282,6 @@ void spip::UDPReceiveDB::stats_thread()
 
     while (control_state == Active)
     {
-      cerr << "spip::UDPReceiveDB::stats_thread control_state == Active" << endl;
       // get a snapshot of the data as quickly as possible
       b_recv_curr = stats->get_data_transmitted();
       b_drop_curr = stats->get_data_dropped();
@@ -356,6 +355,7 @@ bool spip::UDPReceiveDB::open ()
       throw invalid_argument ("failed to write SOURCE to header");
   }
 
+  cerr << "spip::UDPReceiveDB::open format->prepare(header, )" << endl;
   format->prepare(header, "");
 
   open (header.raw());
@@ -455,7 +455,7 @@ bool spip::UDPReceiveDB::receive (int core)
 
   // block accounting
   const int64_t data_bufsz = db->get_data_bufsz();
-  int64_t curr_byte_offset;
+  int64_t curr_byte_offset = 0;
   int64_t next_byte_offset = 0;
   int64_t overflow_maxbyte = 0;
 
@@ -476,16 +476,13 @@ bool spip::UDPReceiveDB::receive (int core)
   unsigned bytes_received;
 
   control_state = Idle;
-
-  cerr << "spip::UDPReceiveDB::receive waiting while control_cmd == None" << endl;
+  spip::UDPSocketReceive::keep_receiving = true;
 
   // wait for the starting command from the control_thread
   pthread_mutex_lock (&mutex);
   while (control_cmd == None)
     pthread_cond_wait (&cond, &mutex);
   pthread_mutex_unlock (&mutex);
-
-  cerr << "spip::UDPReceiveDB::receive control_cmd != None" << endl;
 
   // check the new command
   if (control_cmd == Start)
@@ -496,8 +493,6 @@ bool spip::UDPReceiveDB::receive (int core)
   // data acquisition loop
   while (control_state == Active)
   {
-    cerr << "spip::UDPReceiveDB::receive MAIN control_State == Active" << endl;
-
     // open a new data block buffer if necessary
     if (!db->is_block_open())
     {
@@ -507,7 +502,7 @@ bool spip::UDPReceiveDB::receive (int core)
       // copy any data from the overflow into the new block
       if (overflow_lastbyte > 0)
       {
-        //memcpy (block, overflow, overflow_lastbyte);
+        memcpy (block, overflow, overflow_lastbyte);
         overflow_lastbyte = 0;
         bytes_this_buf = overflowed_bytes;
         stats->increment_bytes (overflowed_bytes);
@@ -593,7 +588,6 @@ bool spip::UDPReceiveDB::receive (int core)
                 ((float) bytes_this_buf / (float) data_bufsz) * 100 << endl;
           cerr << "spip::UDPReceiveDB::receive close_block bytes_this_buf="
                << bytes_this_buf << " bytes_per_buf=" << data_bufsz << endl;
-          format->print_packet_header();
 #endif
           stats->dropped_bytes (data_bufsz - bytes_this_buf);
           db->close_block (data_bufsz);
