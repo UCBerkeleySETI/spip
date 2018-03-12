@@ -26,7 +26,7 @@ class InlinePlot (object):
     self.xlabel = ''
     self.ylabel = ''
     self.imgdata = StringIO.StringIO()
-    self.fig = matplotlib.figure.Figure(facecolor='black')
+    self.fig = matplotlib.figure.Figure(edgecolor='black',  facecolor='white')
     self.dpi = self.fig.get_dpi()
     self.ax = []
 
@@ -65,8 +65,9 @@ class InlinePlot (object):
   def openPlot (self, xres, yres, plain):
 
     # ensure plot is of the right size
-    #print "InlinePlot::openPlot setResolution ("+str(xres)+", "+str(yres)+")"
-    self.setResolution (xres, yres)
+    if self.xres != xres or self.yres != yres:
+      self.res_set = False
+      self.setResolution (xres, yres)
 
     # always add axes on a new plot [TODO check!]
     if plain:
@@ -74,13 +75,18 @@ class InlinePlot (object):
     else:
       self.ax = self.fig.add_subplot(1,1,1)
 
-    set_foregroundcolor(self.ax, 'black')
-    set_backgroundcolor(self.ax, 'white')
+    self.fgcolor = 'black'
+    self.bgcolor = 'white'
+
+    set_foregroundcolor(self.ax, self.fgcolor)
+    set_backgroundcolor(self.ax, self.bgcolor)
 
     if not plain:
       self.ax.set_title(self.title)
       self.ax.set_xlabel(self.xlabel)
       self.ax.set_ylabel(self.ylabel)
+      #self.ax.set_xlabel(self.xlabel, color=self.fgcolor)
+      #self.ax.set_ylabel(self.ylabel, color=self.fgcolor)
 
     self.ax.grid(False)
 
@@ -112,15 +118,20 @@ class HistogramPlot (InlinePlot):
 
   def plot_binned (self, xres, yres, plain, data, nbins):
     self.openPlot(xres, yres, plain)
-    self.bins = numpy.arange(-128,128,1)
+    maxbin = nbins / 2
+    minbin = -1 * maxbin
+    self.bins = numpy.arange(minbin,maxbin,1)
     self.ax.plot(self.bins, data, color='black')
     self.closePlot()
 
   def plot_binned_dual (self, xres, yres, plain, real, imag, nbins):
     self.openPlot(xres, yres, plain)
-    self.bins = numpy.arange(-128,128,1)
+    maxbin = nbins / 2
+    minbin = -1 * maxbin
+    self.bins = numpy.arange(minbin,maxbin,1)
     self.ax.plot(self.bins, real, color='red', label='real')
     self.ax.plot(self.bins, imag, color='green', label='imag')
+    self.ax.set_xlim((-128, 128))
     self.closePlot()
 
   def plot_binned_image (self, xres, yres, plain, data, nfreq, nbins):
@@ -132,7 +143,9 @@ class HistogramPlot (InlinePlot):
 
   def plot_binned4 (self, xres, yres, plain, real0, imag0, real1, imag1, nbins):
     self.openPlot(xres, yres, plain)
-    self.bins = numpy.arange(-128,128,1)
+    maxbin = nbins / 2
+    minbin = -1 * maxbin
+    self.bins = numpy.arange(minbin,maxbin,1)
     self.ax.plot(self.bins, real0, color='red', label='real0')
     self.ax.plot(self.bins, imag0, color='green', label='imag0')
     self.ax.plot(self.bins, real1, color='yellow', label='real1')
@@ -141,10 +154,12 @@ class HistogramPlot (InlinePlot):
 
   def plot (self, xres, yres, plain, real, imag, nbins):
     self.openPlot(xres, yres, plain)
+    maxbin = nbins / 2
+    minbin = -1 * maxbin
     if len(real) > 0:
-      self.ax.hist(real, nbins, range=[-128, 127], color='red', label='real', histtype='step')
+      self.ax.hist(real, nbins, range=[minbin, maxbin], color='red', label='real', histtype='step')
     if len(imag) > 0:
-      self.ax.hist(imag, nbins, range=[-128, 127], color='green', label='imag', histtype='step' )
+      self.ax.hist(imag, nbins, range=[minbin, maxbin], color='green', label='imag', histtype='step' )
     self.closePlot()
 
 # plot a complex timeseries
@@ -196,20 +211,27 @@ class BandpassPlot (InlinePlot):
 
   def __init__(self):
     super(BandpassPlot, self).__init__()
-    self.setLabels ('Bandpass', 'Channel', 'Power')
-    self.nchan = 0
-    self.xvals = numpy.arange (self.nchan)
-    self.configure (False, False, False, 0)
+    self.setLabels ('Power Spectral Density', 'Frequency (MHz)', 'Power (Arbitrary Units)')
+    self.nchan = 1
+    self.xvals = numpy.arange (0, 1, self.nchan, dtype=float)
+    self.configure (False, False, False)
 
-  def configure (self, log, zap, transpose, nchan):
+  def configure (self, log, zap, transpose):
     self.log = log
     self.zap = zap
     self.transpose = transpose
+
+  def plot (self, xres, yres, plain, nchan, freq, bw, spectrum):
+
+    self.xmin = freq-(bw/2)
+    self.xmax = freq+(bw/2)
+    self.xstep = bw/nchan
+
     if (self.nchan != nchan):
       self.nchan = nchan
-      self.xvals = numpy.arange(self.nchan)
+      self.xvals = numpy.arange (self.xmin, self.xmax, \
+                                 self.xstep, dtype=float)
 
-  def plot (self, xres, yres, plain, nchan, spectrum):
     self.openPlot (xres, yres, plain)
     if self.log: 
       self.ax.set_yscale ('log', nonposy='clip')
@@ -218,16 +240,17 @@ class BandpassPlot (InlinePlot):
     if self.zap:
       spectrum[0] = 0
     if self.transpose:
-      self.ax.plot(spectrum, self.xvals, c='w')
+      self.ax.plot(spectrum, self.xvals, c=self.fgcolor)
       self.ax.set_ylim((0, nchan))
     else:
       ymin = numpy.amin(spectrum)
       ymax = numpy.amax(spectrum)
+
       if ymax == ymin:
         ymax = ymin + 1
         spectrum[0] = 1
-      self.ax.plot(self.xvals, spectrum, c='w')
-      self.ax.set_xlim((0, nchan))
+      self.ax.plot(self.xvals, spectrum, color=self.fgcolor)
+      self.ax.set_xlim((self.xmin, self.xmax))
       self.ax.set_ylim((ymin, ymax))
 
     self.closePlot()
@@ -236,16 +259,22 @@ class FreqTimePlot (InlinePlot):
 
   def __init__(self):
     super(FreqTimePlot, self).__init__()
-    self.setLabels ('Waterfall', 'Time (sample)', 'Channel')
+    self.setLabels ('Waterfall', 'Time (micro seconds)', 'Frequency (MHz)')
     self.configure (False, False, False)
 
-  def configure (self,log, zap, transpose):
+  def configure (self, log, zap, transpose):
     self.log = log
     self.zap = zap
     self.transpose = transpose
 
-  def plot (self, xres, yres, plain, spectra, nchan, nsamps):
+  def plot (self, xres, yres, plain, spectra, nchan, freq, bw, tsamp, nsamps):
     self.openPlot(xres, yres, plain)
+
+    tmin = 0
+    tmax = nsamps * tsamp
+
+    fmin = freq - (bw/2)
+    fmax = freq + (bw/2)
 
     if numpy.amax(spectra) == numpy.amin(spectra):
       spectra[0][0] = 1
@@ -255,11 +284,11 @@ class FreqTimePlot (InlinePlot):
 
     if self.log:
       vmax = numpy.log(numpy.amax(spectra))
-      self.ax.imshow(spectra, extent=(0, nsamps, 0, nchan), aspect='auto', 
+      self.ax.imshow(spectra, extent=(tmin, tmax, fmin, fmax), aspect='auto', 
                      origin='lower', interpolation='nearest', norm=LogNorm(vmin=0.0001,vmax=vmax), 
                      cmap=cm.get_cmap('gray'))
     else:
-      self.ax.imshow(spectra, extent=(0, nsamps, 0, nchan), aspect='auto', 
+      self.ax.imshow(spectra, extent=(tmin, tmax, fmin, fmax), aspect='auto', 
                      origin='lower', interpolation='nearest', 
                      cmap=cm.get_cmap('gray'))
 
@@ -284,6 +313,7 @@ def createFigure(xdim, ydim):
 
 
 def set_foregroundcolor(ax, color):
+
   for tl in ax.get_xticklines() + ax.get_yticklines():
     tl.set_color(color)
   for spine in ax.spines:
@@ -292,6 +322,7 @@ def set_foregroundcolor(ax, color):
     tick.label1.set_color(color)
   for tick in ax.yaxis.get_major_ticks():
     tick.label1.set_color(color)
+
   ax.axes.xaxis.label.set_color(color)
   ax.axes.yaxis.label.set_color(color)
   ax.axes.xaxis.get_offset_text().set_color(color)
@@ -311,7 +342,7 @@ def set_foregroundcolor(ax, color):
 
 
 def set_backgroundcolor(ax, color):
-     ax.patch.set_facecolor(color)
+     #ax.patch.set_facecolor(color)
      ax.set_axis_bgcolor(color)
      lh = ax.get_legend()
      if lh != None:
