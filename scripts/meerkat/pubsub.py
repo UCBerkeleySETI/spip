@@ -36,6 +36,7 @@ class PubSubThread (threading.Thread):
 
     self.fengine_stream = 'i0'
     self.polh_stream = 'i0.tied-array-channelised-voltage.0x'
+    self.polv_stream = 'i0.tied-array-channelised-voltage.0y'
 
     self.logger = logging.getLogger('pubsub') 
     self.logger.setLevel(logging.INFO)
@@ -58,20 +59,30 @@ class PubSubThread (threading.Thread):
     sensors = {}
     sensors["TARGET"]            = {"comp": "cbf", "sensor": "target"}
     sensors["RA"]                = {"comp": "cbf", "sensor": "pos.request-base-ra"}
-    sensors["BMAJ"]              = {"comp": "cbf", "sensor": "beam-major-axis"}
-    sensors["BMIN"]              = {"comp": "cbf", "sensor": "beam-minor-axis"}
-    sensors["BPA"]               = {"comp": "cbf", "sensor": "beam-position"}
+    #sensors["BMAJ"]              = {"comp": "cbf", "sensor": "beam-major-axis"}
+    #sensors["BMIN"]              = {"comp": "cbf", "sensor": "beam-minor-axis"}
+    #sensors["BPA"]               = {"comp": "cbf", "sensor": "beam-position"}
     sensors["NCHAN"]             = {"comp": "cbf", "sensor": self.fengine_stream + '.antenna-channelised-voltage-n-chans'}
     sensors["ADC_SYNC_TIME"]     = {"comp": "cbf", "sensor": self.fengine_stream + '.synchronisation-epoch'}
     sensors["ITRF"]              = {"comp": "sub", "sensor": "reference-location-itrf"}
+    # this will change - check ICD
     sensors["SCHEDULE_BLOCK_ID"] = {"comp": "sub", "sensor": "active-sbs"}
     sensors["FREQ"]              = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.centre-frequency'}
     sensors["BW"]                = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.bandwidth'}
     sensors["SIDEBAND"]          = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.sideband'}
+    # PRECISE TIME SENSORS WILLL BE HERE
+    sensors["PRECISETIME_FRACTION_POLH"]    = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.precise-time.epoch-fraction'}
+    sensors["PRECISETIME_UNCERTAINTY_POLH"] = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.precise-time.uncertainty'}
+    sensors["PRECISETIME_FRACTION_POLV"]    = {"comp": "sub", "sensor": 'streams.' + self.polv_stream + '.precise-time.epoch-fraction'}
+    sensors["PRECISETIME_UNCERTAINTY_POLV"] = {"comp": "sub", "sensor": 'streams.' + self.polv_stream + '.precise-time.uncertainty'}
+    # there will be different sensors for V and H pols, but we need them to be the same, we should check this!
+
     sensors["EXPERIMENT_ID"]     = {"comp": "sub", "sensor": 'observation.script-experiment-id'}
     sensors["OBSERVER"]          = {"comp": "sub", "sensor": "observation.script-observer"}
     sensors["PROPOSAL_ID"]       = {"comp": "sub", "sensor": "observation.script-proposal-id"}
+    sensors["DESCRIPTION"]       = {"comp": "sub", "sensor": "observation.script-description"}
 
+    # there will be a anc.tfr.kttc that is the difference between KTT and UTC, less accurate, but immediate
     # TODO CAM ICD mandates observation.script-proposal-id
 
     self.script.log(3, "PubSubThread::configure sensors=" + str(sensors))

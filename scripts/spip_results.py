@@ -24,7 +24,7 @@ class ResultsReportingThread(ReportingThread):
 
   def __init__ (self, script, id):
     host = sockets.getHostNameShort()
-    port = int(script.cfg["STREAM_RESULTS_PORT"])
+    port = int(script.cfg["BEAM_RESULTS_PORT"])
     if id >= 0:
       port += int(id)
     ReportingThread.__init__(self, script, host, port)

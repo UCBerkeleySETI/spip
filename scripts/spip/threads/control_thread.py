@@ -30,6 +30,7 @@ class ControlThread(threading.Thread):
       sleep(1)
 
     self.script.log (2, "ControlThread::run keep_running == false")
+    self.script.quit_event.set()
 
     # terminate any binaries that are currently running
     self.script.log (2, "ControlThread::run self.script.killBinaries()")
@@ -37,7 +38,6 @@ class ControlThread(threading.Thread):
 
     if path.exists(self.script.quit_file):
       self.script.log (1, "ControlThread: quit request detected")
-      self.script.quit_event.set()
       unlink (self.script.quit_file)
 
     #if path.exists(self.script.reload_file):

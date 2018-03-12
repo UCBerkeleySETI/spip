@@ -161,8 +161,13 @@ void spip::SimReceiveDB::control_thread()
     fd = control_sock->accept_client (1);
     if (fd >= 0 )
     {
+      if (verbose > 1)
+        cerr << "control_thread : reading data from socket" << endl;
       string received = control_sock->read_client (DADA_DEFAULT_HEADER_SIZE);
       const char * cmds = received.c_str();
+      if (verbose)
+        cerr << "control_thread: bytes_read=" << strlen(cmds) << endl;
+
       control_sock->close_client();
       fd = -1;
 

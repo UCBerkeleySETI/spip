@@ -11,6 +11,7 @@ import socket, sys, traceback, re
 from select import select
 from xmltodict import parse
 from xml.parsers.expat import ExpatError
+from time import sleep
 
 from spip.config import Config
 from spip.daemons.bases import ServerBased,BeamBased
@@ -18,7 +19,7 @@ from spip.daemons.daemon import Daemon
 from spip.utils import sockets,times
 
 DAEMONIZE = True
-DL     = 1
+DL        = 1
 
 class LogsDaemon(Daemon):
 
@@ -28,19 +29,23 @@ class LogsDaemon(Daemon):
 
   # over ride the default log message so that 
   def log (self, level, message):
-
+  
     if level <= DL:
       if self.id == "-1":
-        file = self.log_dir + "/spip_logs.log"
+        file = self.log_dir + "/logs.log"
       else:
-        file = self.log_dir + "/spip_logs_" + str(self.id) + ".log"
+        file = self.log_dir + "/logs_" + str(self.id) + ".log"
       fptr = open(file, 'a')
-      fptr.write("logs: " + message + "\n")
+
+      prefix = "logs: [" + times.getCurrentTimeUS() + "] "
+      line = prefix + message
+
+      fptr.write(line + "\n")
       fptr.close()
 
   # override configure logs too
   def configureLogs (self, source, dest, type):
-    self.log (0, "socket logging disabled")
+   self.log (0, "socket logging disabled")
 
   def main (self):
 
@@ -52,8 +57,8 @@ class LogsDaemon(Daemon):
     self.log(2, "main: binding to " + log_host + ":" + log_port)
     sock.bind((log_host, int(log_port)))
 
-    # allow up to 10 queued connections
-    sock.listen(10)
+    # allow up to 128 queued connections
+    sock.listen (128)
 
     can_read = [sock]
     can_write = []
@@ -65,7 +70,24 @@ class LogsDaemon(Daemon):
     # todo fix this
     allowed_hosts = ["127.0.0.1", "130.155.182.74", "130.155.182.28", "130.155.182.31", "130.155.182.32", "130.155.182.33", "130.155.182.34", "130.155.182.35", "130.155.182.36", "130.155.182.37", "130.155.182.38"]
 
-    while (not self.quit_event.isSet()):
+    keep_logging = True
+    to_wait = 10
+
+    while keep_logging:
+
+      # if the script has been asked to quit
+      if self.quit_event.isSet():
+
+        # if only the listening socket and LMC socket remain
+        if len(can_read) == 2:
+          keep_logging = False
+
+        # some logging clients are still attached, wait 10 seconds before quitting
+        else:
+          to_wait -= 1
+
+        if to_wait <= 0: 
+          keep_logging = False
 
       self.log(3, "main: calling select len(can_read)="+str(len(can_read)))
       timeout = 1
@@ -108,7 +130,7 @@ class LogsDaemon(Daemon):
 
             # if the socket has been closed
             if len(message) == 0:
-              self.log(1, "commandThread: closing connection")
+              self.log(2, "commandThread: closing connection")
               if len(line_buffers[handle]) > 0:
                 line = line_buffers[handle]
                 self.processLine(line, headers[handle])

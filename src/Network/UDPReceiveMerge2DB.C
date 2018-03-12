@@ -208,8 +208,10 @@ void spip::UDPReceiveMerge2DB::set_control_cmd (spip::ControlCmd cmd)
   pthread_mutex_unlock (&mutex_db);
 
   if ((cmd == Stop) || (cmd == Quit))
+  {
+    spip::UDPSocketReceive::keep_receiving = false;
     send_terminal_packets();
-
+  }
 }
 
 // start a control thread that will receive commands from the TCS/LMC
@@ -232,13 +234,12 @@ void spip::UDPReceiveMerge2DB::control_thread()
 
   // open a listen sock on all interfaces for the control port
   if (verbose)
-  cerr << "opened control socket on port=" << control_port << endl;
+    cerr << "opened control socket on port=" << control_port << endl;
   control_sock->open ("any", control_port, 1);
 
   int fd = -1;
   int verbose = 1;
 
-  char * cmds = (char *) malloc (DADA_DEFAULT_HEADER_SIZE);
   char * cmd  = (char *) malloc (32);
 
   // wait for a connection
@@ -256,11 +257,10 @@ void spip::UDPReceiveMerge2DB::control_thread()
     {
       if (verbose > 1)
         cerr << "control_thread : reading data from socket" << endl;
-      ssize_t bytes_read = read (fd, cmds, DADA_DEFAULT_HEADER_SIZE);
-
+      string received = control_sock->read_client (DADA_DEFAULT_HEADER_SIZE);
+      const char * cmds = received.c_str();
       if (verbose)
-        cerr << "control_thread: bytes_read=" << bytes_read << endl;
-
+        cerr << "control_thread: bytes_read=" << strlen(cmds) << endl;
       control_sock->close_client();
       fd = -1;
 
@@ -466,7 +466,9 @@ void spip::UDPReceiveMerge2DB::close ()
 
 void spip::UDPReceiveMerge2DB::send_terminal_packets()
 {
+#ifdef _DEBUG
   cerr << "spip::UDPReceiveMerge2DB::send_terminal_packets()" << endl;
+#endif
 
 #ifdef HAVE_VMA
   pthread_t id = pthread_self();
@@ -477,27 +479,18 @@ void spip::UDPReceiveMerge2DB::send_terminal_packets()
   // create and open a UDP sending socket
   for (unsigned i=0; i<2; i++)
   {
-    cerr << "spip::UDPReceiveMerge2DB::send_terminal_packets i=" << i << " creating sock" << endl;
     UDPSocketSend * sock = new UDPSocketSend();
     if (data_mcasts[i].size() > 0)
     {
-      cerr << "spip::UDPReceiveMerge2DB::send_terminal_packets i=" << i << " opening " << data_mcasts[i] <<
-":" << data_ports[i] << endl;
       sock->open_multicast(data_mcasts[i], data_ports[i], data_hosts[i]);
     }
     else
     {
-      cerr << "spip::UDPReceiveMerge2DB::send_terminal_packets i=" << i << " opening " << data_hosts[i] <<
-":" << data_ports[i] << endl;
       sock->open (data_hosts[i], data_ports[i], data_hosts[i]);
     }
-    cerr << "spip::UDPReceiveMerge2DB::send_terminal_packets i=" << i << " sock->resize(32)" << endl;
     sock->resize (32);
-    cerr << "spip::UDPReceiveMerge2DB::send_terminal_packets i=" << i << " sock->send()" << endl;
     sock->send();
-    cerr << "spip::UDPReceiveMerge2DB::send_terminal_packets i=" << i << " sock->close_me()" << endl;
     sock->close_me();
-    cerr << "spip::UDPReceiveMerge2DB::send_terminal_packets i=" << i << " delete sock" << endl;
     delete sock;
   }
 }
@@ -518,6 +511,8 @@ void spip::UDPReceiveMerge2DB::start_threads (int c1, int c2)
 
   blocks[0] = NULL;
   blocks[1] = NULL;
+
+  spip::UDPSocketReceive::keep_receiving = true;
 
   pthread_create (&datablock_thread_id, NULL, datablock_thread_wrapper, this);
   pthread_create (&recv_thread1_id, NULL, recv_thread1_wrapper, this);

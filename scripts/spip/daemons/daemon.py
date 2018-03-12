@@ -57,10 +57,10 @@ class Daemon(object):
       sys.stderr.write ("ERROR: script requires " + self.req_host +", but was launched on " + self.hostname + "\n")
       return 1
 
-    self.log_file  = self.log_dir + "/" + self.name + ".log"
+    self.log_file  = self.log_dir + "/" + source + "_" + str(self.id) +  ".log"
     self.pid_file  = self.control_dir + "/" + self.name + ".pid"
     self.quit_file = self.control_dir + "/"  + self.name + ".quit"
-    #self.reload_file = self.control_dir + "/"  + self.name + ".reload"
+    self.reload_file = self.control_dir + "/"  + self.name + ".reload"
 
     if os.path.exists(self.quit_file):
       sys.stderr.write ("ERROR: quit file existed at launch: " + self.quit_file + "\n")
@@ -91,10 +91,10 @@ class Daemon(object):
     self.control_thread = ControlThread(self)
     self.control_thread.start()
 
-    self.log (3, "configure: log_file=" + self.log_file)
-    self.log (3, "configure: pid_file=" + self.pid_file)
-    self.log (3, "configure: quit_file=" + self.quit_file)
-    #self.log (3, "configure: reload_file=" + self.reload_file)
+    self.log (2, "Daemon::configure: log_file=" + self.log_file)
+    self.log (2, "Daemon::configure: pid_file=" + self.pid_file)
+    self.log (2, "Daemon::configure: quit_file=" + self.quit_file)
+    self.log (2, "Daemon::configure: reload_file=" + self.reload_file)
 
     return 0
 
@@ -104,6 +104,7 @@ class Daemon(object):
     stdin = "/dev/null"
     stdout = self.log_file
     stderr = self.log_file
+    self.log (1, "Daemon::daemonize log_file=" + self.log_file)
 
     try:
       pid = os.fork()

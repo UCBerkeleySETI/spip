@@ -89,7 +89,7 @@ class RecvDaemon(Daemon,StreamBased):
 
   def main (self):
 
-    self.log(2, "main: self.waitForSMRB()")
+    self.log(2, "RecvDaemon::main self.waitForSMRB()")
     smrb_exists = self.waitForSMRB()
 
     if not smrb_exists:
@@ -112,34 +112,36 @@ class RecvDaemon(Daemon,StreamBased):
     # external control loop to allow for reconfiguration of RECV
     while not self.quit_event.isSet():
     
-      self.log(3, "main: waiting for configuration")
+      self.log(2, "RecvDaemon::main waiting for configuration")
       while not self.quit_event.isSet() and not self.configured:
         sleep(1) 
       if self.quit_event.isSet():
         return
       Config.writeDictToCFGFile (self.local_config, self.local_config_file)
-      self.log(3, "main: configured")
+      self.log(2, "RecvDaemon:: configured")
 
       cmd = self.getCommand(self.local_config_file)
       self.binary_list.append (cmd)
 
-      self.log(3, "main: sleep(1)")
+      self.log(3, "RecvDaemon::main sleep(1)")
       sleep(1)
 
-      self.log(3, "main: log_pipe = LogSocket(recv_src)")
+      self.log(2, "RecvDaemon::main log_pipe = LogSocket(recv_src)")
       log_pipe = LogSocket ("recv_src", "recv_src", str(self.id), "stream",
                             self.cfg["SERVER_HOST"], self.cfg["SERVER_LOG_PORT"],
                             int(DL))
 
-      self.log(3, "main: log_pipe.connect()")
+      self.log(2, "RecvDaemon::main log_pipe.connect()")
       log_pipe.connect()
 
-      self.log(3, "main: sleep(1)")
+      self.log(2, "RecvDaemon::main sleep(1)")
       sleep(1)
 
       self.running = True
 
-      recv_cmd = "numactl -C 6 -- " + cmd
+      self.numa_core = self.cfg["STREAM_PROC_CORE_" + self.id]
+
+      recv_cmd = "numactl -C " +self.numa_core + " -- " + cmd
      
       # this should be a persistent / blocking command 
       rval = self.system_piped (recv_cmd, log_pipe.sock, int(DL), env)
@@ -156,7 +158,7 @@ class RecvDaemon(Daemon,StreamBased):
   # wait for the SMRB to be created
   def waitForSMRB (self):
 
-    db_id = self.cfg["PROCESSING_DATA_BLOCK"]
+    db_id = self.cfg["RECEIVING_DATA_BLOCK"]
     db_prefix = self.cfg["DATA_BLOCK_PREFIX"]
     num_stream = self.cfg["NUM_STREAM"]
     self.db_key = SMRBDaemon.getDBKey (db_prefix, self.id, num_stream, db_id)
@@ -186,14 +188,16 @@ class RecvDaemon(Daemon,StreamBased):
 
   # return the configuration
   def getConfiguration (self):
+    self.log(2, "RecvDaemon::getConfiguration()")
     local_config = self.config.getStreamConfigFixed (self.id)
     return local_config
 
   def getEnvironment (self):
+    self.log(2, "RecvDaemon::getEnvironment()")
     return environ.copy()
 
   def getCommand (self, config_file):
-
+    self.log(2, "RecvDaemon::getCommand()")
     (stream_ip, stream_port) =  self.cfg["STREAM_UDP_" + str(self.id)].split(":")
     cmd = self.cfg["STREAM_BINARY"] + " -k " + self.db_key \
             + " -v -b " + self.cpu_core \
