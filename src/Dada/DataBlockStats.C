@@ -49,6 +49,8 @@ spip::DataBlockStats::DataBlockStats(const char * key_string)
   verbose = false;
   poll_time = 5;
 
+  // assume 256 bins for histograms by default
+  nbin = 256;
 }
 
 spip::DataBlockStats::~DataBlockStats()
@@ -76,15 +78,18 @@ int spip::DataBlockStats::configure (const char * config)
   if (ascii_header_get (config, "NDIM", "%u", &ndim) != 1)
     throw invalid_argument ("NDIM did not exist in header");
 
-  if (ascii_header_get (config, "TSAMP", "%f", &tsamp) != 1)
+  if (ascii_header_get (config, "TSAMP", "%lf", &tsamp) != 1)
     throw invalid_argument ("TSAMP did not exist in header");
 
-  if (ascii_header_get (config, "BW", "%f", &bw) != 1)
+  if (ascii_header_get (config, "FREQ", "%lf", &freq) != 1)
+    throw invalid_argument ("FREQ did not exist in header");
+
+  if (ascii_header_get (config, "BW", "%lf", &bw) != 1)
     throw invalid_argument ("BW did not exist in header");
 
   channel_bw = bw / nchan;
 
-  bits_per_second  = (nchan * npol * ndim * nbit * 1000000) / tsamp;
+  bits_per_second  = unsigned(double(nchan * npol * ndim * nbit * 1000000) / tsamp);
   bytes_per_second = bits_per_second / 8;
 
   if (ascii_header_get (config, "START_CHANNEL", "%u", &start_chan) != 1)
@@ -121,8 +126,8 @@ void spip::DataBlockStats::prepare ()
 void spip::DataBlockStats::set_block_format (BlockFormat * fmt)
 {
   block_format = fmt;
+  nbin = block_format->get_nbin();
 }
-
 
 void spip::DataBlockStats::start_control_thread (int port)
 {
@@ -243,11 +248,10 @@ bool spip::DataBlockStats::monitor (std::string stats_dir, unsigned stream_id)
 
   keep_monitoring = true;
 
-  unsigned nbin = 256;
   unsigned ntime = 256;
   unsigned nfreq = 256;
 
-  block_format->prepare (nbin, ntime, nfreq);
+  block_format->prepare (nbin, ntime, nfreq, freq, bw, tsamp);
 
   if (verbose)
     cerr << "spip::DataBlockStats::monitor db->read (" << (void *) buffer << ", " << bufsz << ")" << endl;

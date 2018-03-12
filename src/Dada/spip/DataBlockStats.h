@@ -85,15 +85,19 @@ namespace spip {
 
       unsigned npol;
 
+      unsigned nbin;
+
       unsigned start_chan;
 
       unsigned end_chan;
 
-      float bw;
+      double freq;
 
-      float channel_bw;
+      double bw;
 
-      float tsamp;
+      double channel_bw;
+
+      double tsamp;
 
       unsigned bits_per_second;
 
