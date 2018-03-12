@@ -204,7 +204,7 @@ class tests extends spip_webpage
         if (strcmp($get["beam_state_".$i], "on") !== FALSE)
         {
           $tcs_beam_host = $beam_hosts[$i];
-          $tcs_beam_port = $this->config["TCS_INTERFACE_PORT"] + $i;
+          $tcs_beam_port = $this->config["TCS_INTERFACE_PORT_".$i];
   
           $beam_xml  = "<?xml version='1.0' encoding='ISO-8859-1'?>\n";
           $beam_xml .= "<obs_cmd>\n";
