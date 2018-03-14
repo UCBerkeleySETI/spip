@@ -259,7 +259,7 @@ class StatDaemon(Daemon,StreamBased):
        # initialize the threads
       stat_thread = dbstatsThread (stat_cmd, stat_dir, stat_log_pipe.sock, 2)
 
-      self.log (1, stat_cmd)
+      self.log (2, "StatDaemon::main cmd=" + stat_cmd)
 
       self.log (2, "StatDaemon::main starting stat thread")
       stat_thread.start()
