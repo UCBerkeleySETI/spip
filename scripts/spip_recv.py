@@ -32,7 +32,7 @@ class ConfiguringThread (ReportingThread):
     self.script = script
     host = getHostNameShort()
     port = int(script.cfg["STREAM_RECV_PORT"]) + int(id)
-    self.script.log (0, "ConfiguringThread listening on " + host + ":" + str(port))
+    self.script.log (2, "ConfiguringThread listening on " + host + ":" + str(port))
     ReportingThread.__init__(self, script, host, port)
 
   def parse_message (self, request):
@@ -43,24 +43,24 @@ class ConfiguringThread (ReportingThread):
     req = request["recv_cmd"]
 
     if req["command"] == "configure":
-      self.script.log (0, "ConfiguringThread:parse_message received configure command")
+      self.script.log (2, "ConfiguringThread:parse_message received configure command")
       if self.script.configured:
         self.deconfigure ()
       self.configure (req["params"]["param"])
       return (True, "ok")
 
     elif req["command"] == "deconfigure":
-      self.script.log (0, "ConfiguringThread:parse_message: deconfigure command")
+      self.script.log (2, "ConfiguringThread:parse_message: deconfigure command")
       self.deconfigure ()
       return (True, "ok")
 
     else:
 
-      self.script.log (0, "ConfiguringThread:parse_message: unrecognised command [" + req["command"] + "]")
+      self.script.log (-1, "ConfiguringThread:parse_message: unrecognised command [" + req["command"] + "]")
       return (True, "fail")
 
   def configure (self, params):
-    self.script.log (1, "ConfiguringThread:configure")
+    self.script.log (2, "ConfiguringThread:configure")
     for param in params:
       key = param["@key"]
       value = param["#text"]
@@ -69,7 +69,7 @@ class ConfiguringThread (ReportingThread):
       self.script.configured = True
 
   def deconfigure (self):
-    self.script.log (1, "ConfiguringThread:deconfigure")
+    self.script.log (2, "ConfiguringThread:deconfigure")
     self.script.configured = False
     if self.script.running:
       for binary in self.script.binary_list:
@@ -139,19 +139,24 @@ class RecvDaemon(Daemon,StreamBased):
 
       self.running = True
 
-      self.numa_core = self.cfg["STREAM_PROC_CORE_" + self.id]
+      self.numa_core = self.cfg["STREAM_RECV_CORE_" + self.id]
 
-      recv_cmd = "numactl -C " +self.numa_core + " -- " + cmd
-     
+      recv_cmd = "numactl -C " + self.numa_core + " -- " + cmd
+ 
+      self.log(1, "START  " + cmd)
+    
       # this should be a persistent / blocking command 
-      rval = self.system_piped (recv_cmd, log_pipe.sock, int(DL), env)
+      rval = self.system_piped (recv_cmd, log_pipe.sock, 2, env)
+
+      self.log(1, "END    " + cmd)
 
       self.running = False 
       self.binary_list.remove (cmd)
 
       if rval:
-        if self.quit_event.isSet():
+        if not self.quit_event.isSet():
           self.log (-2, cmd + " failed with return value " + str(rval))
+
       log_pipe.close ()
 
 
