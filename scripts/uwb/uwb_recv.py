@@ -62,7 +62,7 @@ if __name__ == "__main__":
   if state != 0:
     sys.exit(state)
 
-  script.log(2, "STARTING SCRIPT")
+  script.log(1, "STARTING SCRIPT")
 
   try:
 
@@ -81,6 +81,6 @@ if __name__ == "__main__":
     traceback.print_exc(file=sys.stdout)
     print '-'*60
 
-  script.log(2, "STOPPING SCRIPT")
+  script.log(1, "STOPPING SCRIPT")
   script.conclude()
   sys.exit(0)

@@ -16,6 +16,7 @@ from spip.config import Config
 from spip_smrb import SMRBDaemon
 from spip.utils.core import system_piped,system
 from spip.utils.sockets import getHostNameShort
+from os import environ
 
 DL        = 2
 
@@ -23,16 +24,20 @@ DL        = 2
 # thread for executing processing commands
 class UWBProcThread (threading.Thread):
 
-  def __init__ (self, cmd, dir, pipe, dl):
+  def __init__ (self, script, cmd, pipe, env, dl):
     threading.Thread.__init__(self)
+    self.script = script
     self.cmd = cmd
     self.pipe = pipe
-    self.dir = dir  
+    self.dir = script.out_dir
+    self.env = env
     self.dl = dl
 
   def run (self):
     cmd = "cd " + self.dir + "; " + self.cmd
-    rval = system_piped (cmd, self.pipe, self.dl <= DL)
+    self.script.log (2, "UWBProcThread::run " + self.cmd)
+    rval = self.script.system_piped (cmd, self.pipe, 2, self.env)
+    self.script.log (2, "UWBProcThread::run rval=" + str(rval))
     
     if rval == 0:
       rval2, lines = system ("touch " + self.dir + "/obs.finished")
@@ -48,6 +53,7 @@ class UWBProcDaemon (Daemon, StreamBased):
   def __init__ (self, name, id):
     Daemon.__init__(self, name, str(id))
     StreamBased.__init__(self, id, self.cfg)
+    self.tag = "unset"
 
   def configure_child (self):
 
@@ -61,7 +67,7 @@ class UWBProcDaemon (Daemon, StreamBased):
 
     self.db_key = SMRBDaemon.getDBKey (self.db_prefix, self.stream_id, self.num_stream, self.db_id)
 
-    self.log (0, "UWBProcDaemon::configure db_key=" + self.db_key)
+    self.log (2, "UWBProcDaemon::configure db_key=" + self.db_key)
 
     # GPU to use for signal processing
     self.gpu_id = self.cfg["GPU_ID_" + str(self.id)]
@@ -70,7 +76,7 @@ class UWBProcDaemon (Daemon, StreamBased):
     (self.cfreq, self.bw, self.nchan) = self.cfg["SUBBAND_CONFIG_" + self.subband_id].split(":")
     self.beam = self.cfg["BEAM_" + str(self.beam_id)]
 
-    self.log (0, "UWBProcDaemon::configure done")
+    self.log (2, "UWBProcDaemon::configure done")
 
   def wait_for_smrb (self):
 
@@ -93,6 +99,10 @@ class UWBProcDaemon (Daemon, StreamBased):
                   "key=" + self.db_key)
       self.quit_event.set()
 
+  def getEnvironment (self):
+    self.log(2, "UWBProcDaemon::getEnvironment()")
+    return environ.copy()
+
   # main method 
   def main (self):
 
@@ -110,14 +120,15 @@ class UWBProcDaemon (Daemon, StreamBased):
     while (not self.quit_event.isSet()):
 
       # wait for the header to determine if folding is required
-      cmd = "dada_header -k " + self.db_key
-      self.log(0, cmd)
+      cmd = "dada_header -k " + self.db_key + " -t " + self.tag
+      self.log(2, "UWBProcDaemon::main " + cmd)
       self.binary_list.append (cmd)
-      rval, lines = self.system (cmd)
+      rval, lines = self.system (cmd, 2, True)
       self.binary_list.remove (cmd)
 
       # if the command returned ok and we have a header
       if rval != 0:
+        time.sleep(0.1)
         if self.quit_event.isSet():
           self.log (2, "UWBProcDaemon::main " + cmd + " failed, but quit_event true")
         else:
@@ -146,51 +157,69 @@ class UWBProcDaemon (Daemon, StreamBased):
 
         # call the child class prepare method
         self.log (2, "UWBProcDaemon::main prepare()")
-        self.prepare()
+        valid = self.prepare()
 
-        # ensure the output directory exists
-        self.log (2, "UWBProcDaemon::main creating out_dir: " + self.out_dir)
-        if not os.path.exists (self.out_dir):
-          os.makedirs (self.out_dir, 0755)
+        if valid:
 
-        # write the sub-bands header to the out_dir
-        header_file = self.out_dir + "/obs.header"
-        self.log (2, "UWBProcDaemon::main writing obs.header to out_dir")
-        Config.writeDictToCFGFile (self.header, header_file)
-  
-        # configure the output pipe
-        self.log (2, "UWBProcDaemon::main configuring output log pipe")
-        log_host = self.cfg["SERVER_HOST"]
-        log_port = int(self.cfg["SERVER_LOG_PORT"])
-        log_pipe = LogSocket (self.log_prefix, self.log_prefix,
-                              str(self.id), "stream",
-                              log_host, log_port, int(DL))
-        log_pipe.connect()
+          # ensure the output directory exists
+          self.log (2, "UWBProcDaemon::main creating out_dir: " + self.out_dir)
+          if not os.path.exists (self.out_dir):
+            os.makedirs (self.out_dir, 0755)
 
-        # add the binary command to the kill list
-        self.binary_list.append (self.cmd)
+          # write the sub-bands header to the out_dir
+          header_file = self.out_dir + "/obs.header"
+          self.log (2, "UWBProcDaemon::main writing obs.header to out_dir")
+          Config.writeDictToCFGFile (self.header, header_file)
+    
+          # configure the output pipe
+          self.log (2, "UWBProcDaemon::main configuring output log pipe")
+          log_host = self.cfg["SERVER_HOST"]
+          log_port = int(self.cfg["SERVER_LOG_PORT"])
+          log_pipe = LogSocket (self.log_prefix, self.log_prefix,
+                                str(self.id), "stream",
+                                log_host, log_port, int(DL))
+          log_pipe.connect()
 
-        # create processing threads
-        self.log (1, "UWBProcDaemon::main creating processing threads")      
-        cmd = "numactl -C " + self.cpu_core + " -- " + self.cmd
-        proc_thread = UWBProcThread (cmd, self.out_dir, log_pipe.sock, 1)
+          # get any modifications to the environment
+          env = self.getEnvironment()
 
-        # start processing threads
-        self.log (1, "UWBProcDaemon::main starting processing thread")
-        proc_thread.start()
+          # add the binary command to the kill list
+          self.binary_list.append (self.cmd)
 
-        # join processing threads
-        self.log (2, "UWBProcDaemon::main waiting for proc thread to terminate")
-        rval = proc_thread.join() 
-        self.log (2, "UWBProcDaemon::main proc thread joined")
+          # create processing threads
+          self.log (2, "UWBProcDaemon::main creating processing threads")      
+          cmd = "numactl -C " + self.cpu_core + " -- " + self.cmd
+          proc_thread = UWBProcThread (self, cmd, log_pipe.sock, env, 1)
 
-        # remove the binary command from the list
-        self.binary_list.remove (self.cmd)
+          # start processing threads
+          self.log (2, "UWBProcDaemon::main starting processing thread")
+          proc_thread.start()
 
-        if rval:
-          self.log (-2, "UWBProcDaemon::main proc thread failed")
-          quit_event.set()
+          self.log (1, "START " + self.cmd)
 
-        log_pipe.close()
+          # join processing threads
+          self.log (2, "UWBProcDaemon::main waiting for proc thread to terminate")
+          rval = proc_thread.join() 
+          self.log (2, "UWBProcDaemon::main proc thread joined")
 
-      self.log (1, "UWBProcDaemon::main processing completed")
+          self.log (1, "END   " + self.cmd)
+
+          # remove the binary command from the list
+          self.binary_list.remove (self.cmd)
+
+          if rval:
+            self.log (-2, "UWBProcDaemon::main proc thread failed")
+            quit_event.set()
+
+          log_pipe.close()
+
+          # good practise in case the proc thread always fails
+          time.sleep(1)
+
+        else:
+
+          self.log (2, "MEERKATProcDaemon::main skip this processing")
+          time.sleep(10)
+
+      self.log (2, "UWBProcDaemon::main processing loop completed")
+

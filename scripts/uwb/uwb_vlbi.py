@@ -27,6 +27,7 @@ class UWBVlbiDaemon (UWBProcDaemon):
 
   def __init__ (self, name, id):
     UWBProcDaemon.__init__(self, name , id)
+    self.tag = "vlbi"
 
   # called once the header has been received, and must prepare the self.cmd to be run
   def prepare (self):

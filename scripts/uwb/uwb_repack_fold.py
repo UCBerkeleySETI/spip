@@ -373,12 +373,12 @@ class RepackFoldStreamDaemon (RepackFoldDaemon, StreamBased):
 
   def configure (self, become_daemon, dl, source, dest):
  
-    self.log(1, "RepackFoldStreamDaemon::configure()")
+    self.log(2, "RepackFoldStreamDaemon::configure()")
     Daemon.configure(self, become_daemon, dl, source, dest)
 
-    self.log(1, "RepackFoldStreamDaemon::configure stream_id=" + self.id)
-    self.log(1, "RepackFoldStreamDaemon::configure beam_id=" + self.beam_id)
-    self.log(1, "RepackFoldStreamDaemon::configure subband_id=" + self.subband_id)
+    self.log(3, "RepackFoldStreamDaemon::configure stream_id=" + self.id)
+    self.log(3, "RepackFoldStreamDaemon::configure beam_id=" + self.beam_id)
+    self.log(3, "RepackFoldStreamDaemon::configure subband_id=" + self.subband_id)
   
     # beam_name
     self.beam = self.cfg["BEAM_" + str(self.beam_id)]
@@ -403,7 +403,7 @@ class RepackFoldStreamDaemon (RepackFoldDaemon, StreamBased):
     self.rsync_server = "medusa-srv0.atnf.csiro.au"
     self.rsync_module = "TBD"
 
-    self.log(1, "RepackFoldStreamDaemon::configure done")
+    self.log(3, "RepackFoldStreamDaemon::configure done")
 
     return 0
 
