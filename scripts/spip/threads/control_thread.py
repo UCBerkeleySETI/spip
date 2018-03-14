@@ -21,7 +21,7 @@ class ControlThread(threading.Thread):
     return (not path.exists(self.script.quit_file)) and (not self.script.quit_event.isSet())
 
   def run (self):
-    self.script.log (1, "ControlThread: starting")
+    self.script.log (2, "ControlThread: starting")
     self.script.log (2, "ControlThread: pid_file=" + self.script.pid_file)
     self.script.log (2, "ControlThread: quit_file=" + self.script.quit_file)
     #self.script.log (2, "ControlThread: reload_file=" + self.script.reload_file)
@@ -37,7 +37,7 @@ class ControlThread(threading.Thread):
     self.script.killBinaries()
 
     if path.exists(self.script.quit_file):
-      self.script.log (1, "ControlThread: quit request detected")
+      self.script.log (2, "ControlThread: quit request detected")
       unlink (self.script.quit_file)
 
     #if path.exists(self.script.reload_file):
