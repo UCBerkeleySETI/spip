@@ -34,7 +34,7 @@ class RepackReportingThread(ReportingThread):
     with open (script.cfg["WEB_DIR"] + "/spip/images/blankimage.gif", mode='rb') as file:
       self.no_data = file.read()
 
-    self.script.log (1, "RepackReportingThread::ReportingThread listening on " + host + ":" + str(port))
+    self.script.log (2, "RepackReportingThread::ReportingThread listening on " + host + ":" + str(port))
 
   def parse_message (self, request):
 
@@ -399,7 +399,7 @@ class RepackDaemon(Daemon):
 
       self.results[beam]["utc_start"] = utc
       self.results[beam]["source"] = source
-      self.log (1, "load_finished: utc_start=" + utc + " source=" + source)
+      self.log (2, "load_finished: utc_start=" + utc + " source=" + source)
     
       cmd = "psrstat -jFDp -c snr " + freq_file + " | awk -F= '{printf(\"%f\",$2)}'"
       rval, lines = self.system (cmd, 3)
