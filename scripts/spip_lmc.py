@@ -22,7 +22,7 @@ from spip.utils.sockets import getHostNameShort
 from spip.config import Config
 from spip.utils.core import system
 
-DAEMONIZE = False
+DAEMONIZE = True
 DL = 1
 
 #################################################################
@@ -84,7 +84,7 @@ class lmcThread (threading.Thread):
         for rank in self.ranks:
           for daemon in self.daemons[rank]:
             cmd = "pgrep -f '^python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "' | wc -l"
-            rval, lines = self.parent.system (cmd, 3)
+            rval, lines = self.parent.system (cmd, 3, True)
             self.states[daemon] = (rval == 0)
         counter = 5
         while (self.sustain and counter > 0):
@@ -154,7 +154,7 @@ class lmcThread (threading.Thread):
         self.parent.system_lock.acquire()
         for daemon in self.daemons[rank]:
           cmd = "pgrep -f '^python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "'"
-          rval, lines = self.parent.system (cmd, 3)
+          rval, lines = self.parent.system (cmd, 3, True)
           if rval == 0 and len(lines) > 0:
             daemon_running = 1
             self.parent.log(2, self.prefix + "daemon " + daemon + " with rank " +
@@ -342,15 +342,16 @@ class LMCReportingThread (ReportingThread):
         self.script.log (3, "LMCReportingThread::run script.quit_event.isSet() == True")
         for i, x in enumerate(self.can_read):
           if (x == sock):
-            self.script.log (1, "LMCReportingThread::run closing listening socket at index[" + str(i) + "]")
+            self.script.log (2, "LMCReportingThread::run closing listening socket at index[" + str(i) + "]")
             sock.close()
             del self.can_read[i]
 
-        self.script.log (1, "LMCReportingThread::run concluding, len(can_read)=" + str(len(self.can_read)) + " can_read=" + str(self.can_read))
+        self.script.log (2, "LMCReportingThread::run concluding, len(can_read)=" + \
+                         str(len(self.can_read)) + " can_read=" + str(self.can_read))
         if len(self.can_read) == 0:
           serve_requests = False
 
-    self.script.log (1, "LMCReportingThread::run exiting")
+    self.script.log (2, "LMCReportingThread::run exiting")
 
   def parse_message (self, request):
 
@@ -530,7 +531,8 @@ class LMCDaemon (Daemon, HostBased):
       self.server_thread.start()
       self.log(2, "main: server_thread["+str(stream)+"] started")
 
-    sleep(1)
+    sleep(5)
+    self.log(1, "Server threads started: " + str(len(self.host_servers)))
 
     # start a thread for each stream
     for stream in self.host_streams:
@@ -542,6 +544,8 @@ class LMCDaemon (Daemon, HostBased):
       self.stream_threads[stream].start()
       self.log(2, "main: stream_thread["+str(stream)+"] started!")
 
+    self.log(1, "Stream threads started: " + str(len(self.host_streams)))
+
     # start a thread for each beam
     for beam in self.host_beams:
       self.beam_daemon_states[beam] = {}
@@ -552,8 +556,10 @@ class LMCDaemon (Daemon, HostBased):
       self.beam_threads[beam].start()
       self.log(2, "main: beam_thread["+str(beam)+"] started!")
 
+    self.log(1, "Beam threads started: " + str(len(self.host_beams)))
+
     # main thread
-    if len(host_servers) > 0:
+    if len(self.host_servers) > 0:
       disks_to_monitor = [self.cfg["SERVER_DIR"]]
     else:
       disks_to_monitor = [self.cfg["CLIENT_DIR"]]
@@ -561,9 +567,9 @@ class LMCDaemon (Daemon, HostBased):
     hw_poll = 5
     counter = 0 
 
-    self.log(2, "main: starting main loop")
     first_time = True
 
+    self.log(2, "main: starting main loop")
     # control loop
     while not self.quit_event.isSet():
 
@@ -618,13 +624,16 @@ class LMCDaemon (Daemon, HostBased):
   #
   def concludeThreads (self):
 
-    script.log(1, "LMCDaemon::concludeThreads()")
+    script.log(2, "LMCDaemon::concludeThreads()")
+
     for beam in self.beam_threads.keys():
       self.beam_threads[beam].conclude()
+    for beam in self.beam_threads.keys():
       self.beam_threads[beam].join()
 
     for stream in self.stream_threads.keys():
       self.stream_threads[stream].conclude()
+    for stream in self.stream_threads.keys():
       self.stream_threads[stream].join()
 
     if self.server_thread:
