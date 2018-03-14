@@ -236,7 +236,7 @@ class controls extends spip_webpage
     # are used together (i.e. for a multi-beam survey), only 1 set of server daemons
     # will be used
 
-    echo "<table cellpadding='5px' border=1 width='900px'>\n";
+    echo "<table class='config' border=1 width='98%'>\n";
 
     echo "<tr>\n";
     echo "<th>Host</th>\n";
@@ -293,7 +293,7 @@ class controls extends spip_webpage
           {
             echo "<span style='padding-right: 10px;'>\n";
             $id = $host."_".$d["daemon"]."_".$stream["stream_id"];
-            echo "<img border='0' id='".$id."_light' src='/spip/images/grey_light.png' width='15px' height='15px'>\n";
+            echo "<img border='0' id='".$id."_light' src='/spip/images/grey_light.png' width='15px' height='15px'>&nbsp;";
             echo $d["daemon"];
             echo "</span>\n";
           }
