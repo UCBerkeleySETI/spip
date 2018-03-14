@@ -13,6 +13,9 @@ def getCurrentTimeUS():
   now_str = now.strftime("%Y-%m-%d-%H:%M:%S.%f")
   return now_str
 
+def getCurrentTimeMS():
+  return getCurrentTimeUS()[:-3]
+
 def getCurrentTime(toadd=0):
   now = datetime.today()
   if (toadd > 0):

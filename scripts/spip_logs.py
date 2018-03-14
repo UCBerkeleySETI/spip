@@ -25,9 +25,9 @@ class LogsDaemon(Daemon):
 
   def __init__ (self, name, id):
     Daemon.__init__(self, name, str(id))
-    self.timestamp_re = re.compile ("^\[\d\d\d\d-\d\d-\d\d-\d\d:\d\d:\d\d\.\d\d\d\d\d\d\]")
+    self.timestamp_re = re.compile ("^\[\d\d\d\d-\d\d-\d\d-\d\d:\d\d:\d\d\.\d\d\d\]")
 
-  # over ride the default log message so that 
+  # over ride the default log message for this daemon
   def log (self, level, message):
   
     if level <= DL:
@@ -37,7 +37,7 @@ class LogsDaemon(Daemon):
         file = self.log_dir + "/logs_" + str(self.id) + ".log"
       fptr = open(file, 'a')
 
-      prefix = "logs: [" + times.getCurrentTimeUS() + "] "
+      prefix = "[" + times.getCurrentTimeMS() + "] "
       line = prefix + message
 
       fptr.write(line + "\n")
@@ -45,7 +45,7 @@ class LogsDaemon(Daemon):
 
   # override configure logs too
   def configureLogs (self, source, dest, type):
-   self.log (0, "socket logging disabled")
+   self.log (2, "LogsDaemon::configureLogs socket logging disabled")
 
   def main (self):
 
@@ -100,7 +100,7 @@ class LogsDaemon(Daemon):
           if (handle == sock):
             (new_conn, addr) = sock.accept()
             ip, port = addr
-            self.log(1, "main: accept connection from " + ip + ":" + str(port))
+            self.log(2, "main: accept connection from " + ip + ":" + str(port))
 
             if len(allowed_hosts) > 0 and not (ip in allowed_hosts):
               self.log(1, "main: rejecting connection from " + ip + " not in " + str(allowed_hosts))
@@ -159,21 +159,31 @@ class LogsDaemon(Daemon):
 
 
   def processLine (self, line, header):
-    
+
     source = header['log_stream']['source']
     dest   = header['log_stream']['dest']
     id     = header['log_stream']['id']['#text']
-   
+
+    # add a time stamp if it was missing
     if not self.timestamp_re.match (line):
-      prefix = "[" + times.getCurrentTimeUS() + "] "
+      prefix = "[" + times.getCurrentTimeMS() + "] "
       line = prefix + line
 
-    if id == "-1":
-      file = self.log_dir + "/" + dest + ".log"
-    else:
-      file = self.log_dir + "/" + dest + "_" + id + ".log"
+    # determine if the log file needs a prefix
+    id_prefix = ""
+    try:
+      intid = int(id)
+      # id was an integer
+      if intid >= 0:
+        id_prefix = format(intid, "02d ")
+      else:
+        id_prefix = ""
+    except ValueError:
+      id_prefix = id + " "
+
+    file = self.log_dir + "/" + dest + ".log"
     fptr = open(file, 'a')
-    fptr.write(source + ": " + line.decode('utf-8', 'replace') + "\n")
+    fptr.write (id_prefix + line.decode('utf-8', 'replace') + "\n")
     fptr.close()
 
 

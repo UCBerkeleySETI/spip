@@ -57,7 +57,7 @@ class LogSocket(object):
         self.connected = False
         self.connect(1)
       if self.connected:
-        prefix = "[" + times.getCurrentTimeUS() + "] "
+        prefix = "[" + times.getCurrentTimeMS() + "] "
         if level == -1:
           prefix += "W "
         if level == -2:
