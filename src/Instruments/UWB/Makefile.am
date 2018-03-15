@@ -20,8 +20,8 @@ LDADD = libinstuwb.la \
   $(top_builddir)/src/Affinity/libspipaffinity.la \
   -lpthread
 
-AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@
-LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@
+AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @FFTW_CFLAGS@
+LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @FFTW_LIBS@
 
 uwb_continuum_pipeline_SOURCES = uwb_continuum_pipeline.C
 
