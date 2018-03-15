@@ -6,7 +6,6 @@
  ***************************************************************************/
 
 #include "spip/AdaptiveFilterCUDA.h"
-#include "spip/Container.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -184,8 +183,7 @@ void spip::AdaptiveFilterCUDA::set_input_ref (Container * _input_ref)
 {
   input_ref = dynamic_cast<spip::ContainerCUDADevice *>(_input_ref);
   if (!input_ref)
-    throw Error (InvalidState, "spip::AdaptiveFilterCUDA::set_input_ref",
-                 "RFI input was not castable to spip::ContainerCUDADevice *");
+    throw invalid_argument ("spip::AdaptiveFilterCUDA::set_input_ref RFI input was not castable to spip::ContainerCUDADevice");
 }
 
 // configure the pipeline prior to runtime
