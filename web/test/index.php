@@ -9,7 +9,6 @@ include_once("../spip_socket.lib.php");
 
 class tests extends spip_webpage
 {
-
   function tests ()
   {
     spip_webpage::spip_webpage ();
@@ -17,7 +16,116 @@ class tests extends spip_webpage
     $this->title = "Test System";
     $this->nav_item = "test";
 
+    # configuration definition for the observation
+    $this->source_config = $this->get_source_config();
+    $this->obs_config = $this->get_obs_config();
+    $this->beam_config = $this->get_beam_config();
+    $this->custom_config = $this->get_custom_config();
+    $this->proc_modes = $this->get_proc_modes();
+    $this->fold_config = $this->get_fold_config();
+    $this->search_config = $this->get_search_config();
+    $this->continuum_config = $this->get_continuum_config();
+    $this->baseband_config = $this->get_baseband_config();
   }
+  
+  function build_hash ($prefix, $xml, $key, $name, $type, $value, $size, $attr="", $onchange="")
+  {
+    return array ("prefix" => $prefix, "tag" => $xml, "key" => $key, "name" => $name, 
+                  "type" => $type, "value" => $value, "attr" => $attr, "size" => $size, 
+                  "maxlength" => "", "onchange" => $onchange);
+  }
+
+  function get_source_config()
+  {
+    $a = array();
+    array_push($a, $this->build_hash("source", "name", "SOURCE", "Source Name", "text", "J0437-4715", "16", "epoch='J2000'"));
+    array_push($a, $this->build_hash("source", "ra", "RA", "Right Ascension", "text", "04:37", "16", "units='hh:mm:ss'"));
+    array_push($a, $this->build_hash("source", "dec", "DEC", "Declination", "text", "47:15", "16", "units='dd:mm:ss'"));
+    return $a;
+  }
+
+  function get_obs_config()
+  {
+    $a = array();
+    array_push($a, $this->build_hash("obs", "observer", "OBSERVER", "Observer", "text", "Andrew", "16"));
+    array_push($a, $this->build_hash("obs", "pid", "PID", "Project ID", "text", "P999", "8"));
+    array_push($a, $this->build_hash("obs", "tobs", "TOBS", "Expected Length [s]", "text", "60", "8"));
+    array_push($a, $this->build_hash("obs", "calfreq", "CALFREQ", "Calibrator Frequency [Hz]", "text", "11.123", "8"));
+    return $a;
+  }
+
+  function get_beam_config()
+  {
+    $nbeam = $this->config["NUM_BEAM"];
+    $a = array();
+    array_push($a, $this->build_hash("beam", "nbeam", "NBEAM", "Number of beams", "text", $nbeam, "4"));
+    for ($i=0; $i<$nbeam; $i++)
+    {
+      array_push($a, $this->build_hash("beam", "beam_state_".$i, "BEAM_STATE_".$i,  "Beam ".$i, "bool", ($i == 0), "4", "name='".$this->config["BEAM_".$i]."'"));
+    }
+    return $a;
+  }
+
+  function get_custom_config()
+  {
+    $a = array();
+    array_push($a, $this->build_hash("custom", "adaptive_filter_epsilon", "ADAPTIVE_FILTER_EPSILON", "Adaptive Filter Epsilon", "text", "0.1", "4"));
+    array_push($a, $this->build_hash("custom", "adaptive_filter_nchan", "ADAPTIVE_FILTER_NCHAN", "Adaptive Filter Channels", "text", "128", "5"));
+    return $a;
+  }
+
+  function get_proc_modes()
+  {
+    $a = array();
+    array_push($a, $this->build_hash("proc", "fold", "PERFORM_FOLD", "Fold Mode", "bool", "true", "2", "", "showProcessingMode('fold')"));
+    array_push($a, $this->build_hash("proc", "search", "PERFORM_SEARCH", "Search Mode", "bool", "false", "2", "", "showProcessingMode('search')"));
+    array_push($a, $this->build_hash("proc", "continuum", "PERFORM_CONTINUUM", "Continuum Mode", "bool", "false", "2", "", "showProcessingMode('continuum')"));
+    array_push($a, $this->build_hash("proc", "spectral_line", "PERFORM_SPECTRAL_LINE", "Spectral Line Mode", "bool", "false", "2", "", "showProcessingMode('spectral_line')"));
+    array_push($a, $this->build_hash("proc", "vlbi", "PERFORM_VLBI", "VLBI Mode", "bool", "false", "2", "", "showProcessingMode('vlbi')"));
+    array_push($a, $this->build_hash("proc", "baseband", "PERFORM_BASEBAND", "Baseband Mode", "bool", "false", "2", "", "showProcessingMode('baseband')"));
+    return $a;
+  }
+
+  function get_fold_config()
+  {
+    $a = array();
+    array_push($a, $this->build_hash("fold", "output_nchan", "OUTNCHAN", "Number of output channels", "text", "128", "8"));
+    array_push($a, $this->build_hash("fold", "custom_dm", "DM", "Custom DM", "text", "-1", "8"));
+    array_push($a, $this->build_hash("fold", "output_nbin", "OUTNBIN", "Number of output phase bins", "text", "1024", "8"));
+    array_push($a, $this->build_hash("fold", "output_tsubint", "OUTTSUBINT", "Output subint length [s]", "text", "10", "8"));
+    array_push($a, $this->build_hash("fold", "output_nstokes", "OUTNSTOKES", "Number of Stokes parameters", "text", "4", "1"));
+    array_push($a, $this->build_hash("fold", "mode", "MODE", "Observing Type", "radio", array("PSR" => "true", "CAL" => false), "8"));
+    return $a;
+  }
+
+  function get_search_config()
+  {
+    $a = array();
+    array_push($a, $this->build_hash("search", "output_nchan", "OUTNCHAN", "Output channels", "text", "1024", "8"));
+    array_push($a, $this->build_hash("search", "custom_dm", "DM", "Custom DM", "text", "-1", "8"));
+    array_push($a, $this->build_hash("search", "output_nbit", "OUTNBIT", "Output bits per sample", "text", "8", "2"));
+    array_push($a, $this->build_hash("search", "output_tdec", "OUTTDEC", "Sample integration factor", "text", "512", "8"));
+    array_push($a, $this->build_hash("search", "output_tsubint", "OUTTSUBINT", "Output subint length [s]", "text", "10", "8"));
+    array_push($a, $this->build_hash("search", "output_nstokes", "OUTNSTOKES", "Number of Stokes parameters", "text", "4", "1"));
+    return $a;
+  }
+
+  function get_continuum_config()
+  {
+    $a = array();
+    array_push($a, $this->build_hash("continuum", "output_nchan", "OUTNCHAN", "Output channels", "text", "32768", "8"));
+    array_push($a, $this->build_hash("continuum", "output_tsubint", "OUTTSUBINT", "Output integration length [s]", "text", "10", "8"));
+    array_push($a, $this->build_hash("continuum", "output_nstokes", "OUTNSTOKES", "Number of Stokes parameters", "text", "4", "1"));
+    return $a;
+  }
+
+  function get_baseband_config()
+  {
+    $a = array();
+    array_push($a, $this->build_hash("baseband", "output_nbit", "OUTNBIT", "Output bits per sample", "text", "16", "2"));
+    return $a;
+  }
+
 
   function printJavaScriptHead()
   {
@@ -40,6 +148,23 @@ class tests extends spip_webpage
         document.getElementById("command").value = "stop";
         document.tcs.submit();
       }
+
+      function showProcessingMode(mode)
+      {
+        var modes = Array("fold", "search", "continuum", "spectral_line", "vlbi", "baseband");
+        for (i=0; i<modes.length; i++)
+        {
+          if (mode == modes[i])
+          {
+            document.getElementById(modes[i]).style.display = "table";
+          }
+          else
+          {
+            document.getElementById(modes[i]).style.display = "none";
+            document.getElementById("proc_" + modes[i]).checked = false;
+          }
+        }
+      }
     </script>
 <?php
   } 
@@ -54,37 +179,38 @@ class tests extends spip_webpage
 <form name="tcs" target="spip_response" method="GET">
 
 <input type="hidden" name="command" id="command" value=""/>
-<table cellpadding='3px' border=0 cellspacing=20px width='80%'>
-
-<tr>
-  <th width=33%>Observation Configuration</th>
-  <th width=33%>Instrument Configuration</th>
-  <th width=33%>Stream Configuration</th>
-</tr>
+<table cellpadding='3px' border=0 cellspacing=20px width='100%'>
 
 <tr>
   <td valign=top>
 
-    <table width='100%'>
-      <tr>
-        <td><b>Key</b></td>
-        <td><b>Value</b></td>
-      </tr>
-  
-      <tr> 
-        <td>SOURCE</td>
-        <td><input type="text" name="source" size="16" value="J0437-4715"></td>
-      </tr>
-<tr> <td>RA</td>           <td><input type="text" name="ra" size="16" value="04:37:00.0"></td> </tr>
-<tr> <td>DEC</td>          <td><input type="text" name="dec" size="16" value="-47:15:00.0"></td> </tr>
-<tr> <td>OBSERVER</td>     <td><input type="text" name="observer" size="16" value=""/></td> </tr>
-<tr> <td>PROJECT ID</td>   <td><input type="text" name="project_id" size="8" value="" /></td> </tr>
-<tr> <td>TOBS</td>         <td><input type="text" name="tobs" size="4" value="10"/></td> </tr>
-<tr> <td>MODE</td>         <td><input type="text" name="mode" size="4" value="PSR"/></td> </tr>
-<tr> <td>PROC FILE</td>    <td><input type="text" name="processing_file" size="16" value=""/></td> </tr>
-<tr> <td>NBEAM</td>        <td><input type="text" name="nbeam" size="2" value="<?php echo $this->config["NUM_BEAM"]?>" readonly/></td> </tr>
-<tr> <td>CALFREQ</td>      <td><input type="text" name="calfreq" size="8" value="11.123"/></td> </tr>
 <?php
+
+  $this->renderSourceConfig();
+  $this->renderObsConfig();
+  $this->renderCustomConfig();
+  $this->renderBeamConfig();
+?>
+
+  </td>
+  <td valign=top>
+
+<?php
+  $this->renderProcModes();
+  $this->renderFoldMode();
+  $this->renderSearchMode();
+  $this->renderContinuumMode();
+  $this->renderSpectralLineMode();
+  $this->renderVLBIMode();
+  $this->renderBasebandMode();
+
+/*
+  if ($this->config["NUM_BEAM"] == "1")
+  {
+    echo "<input type='hidden' name='beam_state_0' id='beam_state_0' value=on'>\n";
+  }
+  else
+  {
     for ($i=0; $i<$this->config["NUM_BEAM"]; $i++)
     {
       echo "<tr>";
@@ -96,35 +222,37 @@ class tests extends spip_webpage
       echo   "</td>";
       echo "</tr>\n";
     }
+  }
+*/
 
 ?>
+    </td>
 
-    </table>
-  </td>
+    <td valign=top>
 
-  <td valign=top>
-    <table width='100%'>
+    <table class='config' width='100%'>
       <tr>
-        <td><b>Key</b></td>
-        <td><b>Value</b></td>
+        <th colspan=2>Instrument Configuration</th>
       </tr>
 <?php
-      $this->printInstrumentRow("NBIT", "nbit", "NBIT", 2);
-      $this->printInstrumentRow("NDIM", "ndim", "NDIM", 2);
-      $this->printInstrumentRow("NPOL", "npol", "NPOL", 2);
-      $this->printInstrumentRow("OSRATIO", "oversampling_ratio", "OVERSAMPLING RATIO", 8);
-      $this->printInstrumentRow("TSAMP", "sampling_time", "SAMPING TIME", 8);
-      $this->printInstrumentRow("CHANBW", "channel_bandwidth", "CHANNEL BW", 8);
-      $this->printInstrumentRow("DSB", "dual_sideband", "DUAL SIDEBAND", 8);
-      $this->printInstrumentRow("RESOLUTION", "resolution", "RESOLUTION", 8);
-      $this->printInstrumentRow("INDEPENDENT_BEAMS", "independent_beams", "INDEPENDENT_BEAMS", 8);
+      $this->renderInstrumentRow("NUM_BEAM", "NBEAM", "Number of Beams", 1);
+      $this->renderInstrumentRow("NBIT", "NBIT", "Bits per sample", 2);
+      $this->renderInstrumentRow("NDIM", "NDIM", "Dimensions (complex / real)", 2);
+      $this->renderInstrumentRow("NPOL", "NPOL", "Number of polarisations", 2);
+      $this->renderInstrumentRow("OSRATIO", "OSRATIO", "Oversampling Ratio", 8);
+      $this->renderInstrumentRow("TSAMP", "TSAMP", "Sampling Interval [us]", 8);
+      $this->renderInstrumentRow("CHANBW", "CHANBW", "Channel Bandwidth", 8);
+      $this->renderInstrumentRow("DSB", "DSB", "Dual Sideband", 8);
+      $this->renderInstrumentRow("RESOLUTION", "RESOLUTION", "Byte resolution", 8);
+      $this->renderInstrumentRow("INDEPENDENT_BEAMS", "INDEPENDENT_BEAMS", "Beam Independence", 8);
 ?>
     </table>
-  </td>
 
-  <td valign=top>
-    <table width='100%'>
-      <tr><td><b>Stream</b></td><td><b>Host</b></td><td><b>Beam</b></td><td><b>FREQ</b></td><td><b>BW</b></td><td><b>NCHAN</b></td></tr>
+    <table class='config' width='100%'>
+      <tr>
+        <th colspan=6>Stream Configuration</th>
+      </tr>
+      <tr><th>Stream</th><th>Host</th><th>Beam</th><th>FREQ</th><th>BW</th><th>NCHAN</th></tr>
 <?php
       for ($i=0; $i<$this->config["NUM_STREAM"]; $i++)
       {
@@ -134,18 +262,16 @@ class tests extends spip_webpage
 ?>
     </table>
   </td>
+
 </tr>
-
-
 
 <tr> 
- <td colspan=2>
-  <input type='button' onClick='javascript:configureButton()' value='Configure'/>
-  <input type='button' onClick='javascript:startButton()' value='Start'/>
-  <input type='button' onClick='javascript:stopButton()' value='Stop'/>
- </tr>
+  <td colspan=3>
+    <input type='button' onClick='javascript:configureButton()' value='Configure'/>
+    <input type='button' onClick='javascript:startButton()' value='Start'/>
+    <input type='button' onClick='javascript:stopButton()' value='Stop'/>
+  </td>
 </tr>
-
 
 </table>
 </form>
@@ -157,34 +283,252 @@ class tests extends spip_webpage
 <?php
   }
 
+  function renderConfigHeader($title, $id)
+  {
+    echo "    <table class='config' id='".$id."' border=0 width=100%>\n";
+    echo "      <tr><th colspan=2>".$title."</th></tr>\n";
+  }
+
+  function renderConfigFooter()
+  {
+    echo "    </table>\n";
+  }
+
+  function renderProcessingModeHeader($title, $id, $show)
+  {
+    if ($show) 
+      $style = "style='display: table;'";
+    else
+      $style = "style='display: none;'";
+    echo "    <table class='config' id='".$id."' ".$style." border=0 width=100%>\n";
+    echo "      <tr><th colspan=2>".$title."</th></tr>\n";
+  }
+
+  function renderProcessingModeFooter()
+  {
+    echo "    </table>\n";
+  }
+
+  function renderSourceConfig()
+  {
+    $this->renderConfigHeader("Source Configuration", "source_config");
+    $this->renderProcessingRows($this->source_config);
+    $this->renderConfigFooter();
+  }
+
+  function renderObsConfig()
+  {
+    $this->renderConfigHeader("Observation Configuration", "obs_config");
+    $this->renderProcessingRows($this->obs_config);
+    $this->renderConfigFooter();
+  }
+
+  function renderBeamConfig()
+  {
+    $this->renderConfigHeader("Beam Configuration", "beam_config");
+    $this->renderProcessingRows($this->beam_config);
+    $this->renderConfigFooter();
+  }
+
+  function renderCustomConfig()
+  {
+    $this->renderConfigHeader("Custom Configuration", "custom_config");
+    $this->renderProcessingRows($this->custom_config);
+    $this->renderConfigFooter();
+  }
+
+  function renderProcModes ()
+  {
+    $this->renderProcessingModeHeader("Processing Modes", "proc_modes", 1);
+    $this->renderProcessingRows($this->proc_modes);
+    $this->renderProcessingModeFooter();
+  }
+
+  function renderFoldMode ()
+  {
+    $this->renderProcessingModeHeader("Fold Processing Mode Parameters", "fold", 1);
+    $this->renderProcessingRows($this->fold_config);
+    $this->renderProcessingModeFooter();
+  }
+
+  function renderSearchMode ()
+  {
+    $this->renderProcessingModeHeader("Search Processing Mode Parameters", "search", 0);
+    $this->renderProcessingRows($this->search_config);
+    $this->renderProcessingModeFooter();
+  }
+
+  function renderContinuumMode ()
+  {
+    $this->renderProcessingModeHeader("Continnum Processing Mode Parameters", "continuum", 0);
+    $this->renderProcessingRows($this->continuum_config);
+    $this->renderProcessingModeFooter();
+  }
+
+  function renderBasebandMode ()
+  {
+    $this->renderProcessingModeHeader("Baseband Processing Mode Parameters", "baseband", 0);
+    $this->renderProcessingRows($this->baseband_config);
+    $this->renderProcessingModeFooter();
+  }
+
+  function renderSpectralLineMode ()
+  {
+    $this->renderProcessingModeHeader("Spectral Line Processing Mode Parameters", "spectral_line", 0);
+    $this->renderProcessingModeFooter();
+  }
+  function renderVLBIMode ()
+  {
+    $this->renderProcessingModeHeader("VLBI Processing Mode Parameters", "vlbi", 0);
+    $this->renderProcessingModeFooter();
+  }
+
   function printSPIPResponse($get)
   {
-    $xmls = array();
+    $xml = "";
 
-    $xml = "<source_parameters>\n";
-    $xml .=   "<name epoch='J2000'>".$get["source"]."</name>\n";
-    $xml .=   "<ra units='hh:mm:ss'>".$get["ra"]."</ra>\n";
-    $xml .=   "<dec units='hh:mm:ss'>".$get["dec"]."</dec>\n";
-    $xml .= "</source_parameters>\n";
+    # configuration of beams
+    $xml .= "<beam_configuration>";
+    foreach ($this->beam_config as $c)
+    {
+      $val = $get[$c["prefix"]."_".$c["tag"]];
+      $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+    }
+    $xml .= "</beam_configuration>";
 
-    $xml .= "<observation_parameters>\n";
-    $xml .=   "<observer>".$get["observer"]."</observer>\n";
-    $xml .=   "<project_id>".$get["project_id"]."</project_id>\n";
-    $xml .=   "<tobs>".$get["tobs"]."</tobs>\n";
-    $xml .=   "<mode>".$get["mode"]."</mode>\n";
-    $xml .=   "<processing_file>".$get["processing_file"]."</processing_file>\n";
-    $xml .=   "<calfreq>".$get["calfreq"]."</calfreq>\n";
-    $xml .=   "<utc_start></utc_start>\n";
-    $xml .=   "<utc_stop></utc_stop>\n";
-    $xml .= "</observation_parameters>\n";
+    if ($get["command"] == "configure")
+    {
+      $xml .= "<source_parameters>";
+      foreach ($this->source_config as $c)
+      {
+        $val = $get[$c["prefix"]."_".$c["tag"]];
+        $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+      }
+      $xml .= "</source_parameters>";
 
-    $xml .= "<instrument_parameters>\n";
-    $xml .=   "<adc_sync_time>0</adc_sync_time>\n";
-    $xml .= "</instrument_parameters>\n";
+      $xml .= "<observation_parameters>";
+      foreach ($this->obs_config as $c)
+      {
+        $val = $get[$c["prefix"]."_".$c["tag"]];
+        $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+      } 
+      $xml .=   "<utc_start key='UTC_START'>None</utc_start>";
+      $xml .=   "<utc_stop key='UTC_STOP'>None</utc_stop>";
+      $xml .= "</observation_parameters>";
 
-    $xml .= "<custom_parameters>\n";
-    $xml .=   "<fields></fields>\n";
-    $xml .= "</custom_parameters>\n";
+      $xml .= "<custom_parameters>";
+      foreach ($this->custom_config as $c)
+      {
+        $val = $get[$c["prefix"]."_".$c["tag"]];
+        $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+      }
+      $xml .= "</custom_parameters>";
+
+      $modes = array();
+      $xml .= "<processing_modes>";
+      foreach ($this->proc_modes as $c)
+      {
+        $k = $c["prefix"]."_".$c["tag"];
+        if (array_key_exists($c["prefix"]."_".$c["tag"], $get))
+        {
+          if ($get[$c["prefix"]."_".$c["tag"]] == "on")
+            $val ="1";
+          else
+            $val = "0";
+        }
+        else
+          $val = "0";
+        $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+        if ($val == "1")
+          array_push ($modes, $c["tag"]);
+      }
+
+      $xml .= "</processing_modes>";
+
+      if (in_array("fold", $modes))
+      {
+        $xml .= "<fold_processing_parameters>";
+        foreach ($this->fold_config as $c)
+        {
+          $val = $get[$c["prefix"]."_".$c["tag"]];
+          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+        }
+        $xml .= "</fold_processing_parameters>";
+      }
+   
+      if (in_array("search", $modes))
+      {
+        $xml .= "<search_processing_parameters>";
+        foreach ($this->search_config as $c)
+        {
+          $val = $get[$c["prefix"]."_".$c["tag"]];
+          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+        }
+        $xml .= "</search_processing_parameters>";
+      }
+
+      if (in_array("continuum", $modes))
+      {
+        $xml .= "<continuum_processing_parameters>";
+        foreach ($this->continuum_config as $c)
+        {
+          $val = $get[$c["prefix"]."_".$c["tag"]];
+          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+        }
+        $xml .= "</continuum_processing_parameters>";
+      }
+
+      if (in_array("spectral_line", $modes))
+      {
+        $xml .= "<spectral_line_processing_parameters>";
+        foreach ($this->spectral_line_config as $c)
+        {
+          $val = $get[$c["prefix"]."_".$c["tag"]];
+          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+        }
+        $xml .= "</spectral_line_processing_parameters>";
+      }
+
+      if (in_array("vlbi", $modes))
+      {
+        $xml .= "<vlbi_processing_parameters>";
+        foreach ($this->vlbi_config as $c)
+        {
+          $val = $get[$c["prefix"]."_".$c["tag"]];
+          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+        }
+        $xml .= "</vlbi_processing_parameters>";
+      }
+
+      if (in_array("baseband", $modes))
+      {
+        $xml .= "<baseband_processing_parameters>";
+        foreach ($this->baseband_config as $c)
+        {
+          $val = $get[$c["prefix"]."_".$c["tag"]];
+          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+        }
+        $xml .= "</baseband_processing_parameters>";
+      }
+
+    }
+    else if ($get["command"] == "start")
+    {
+      $xml .= "<observation_parameters>";
+      $xml .=   "<utc_start key='UTC_START'>None</utc_start>";
+      $xml .= "</observation_parameters>";
+    }
+    else if ($get["command"] == "stop")
+    {
+      $xml .= "<observation_parameters>";
+      $xml .=   "<utc_stop key='UTC_STOP'>None</utc_stop>";
+      $xml .= "</observation_parameters>";
+    }
+    else
+    {
+      echo "ERROR: command [".$get["command"]."] not reconized<br/>\n";
+      return;
+    }
 
     $html = "";
 
@@ -244,12 +588,6 @@ class tests extends spip_webpage
       $beam_xml .= "<obs_cmd>\n";
       $beam_xml .= "<command>".$get["command"]."</command>\n";
       $beam_xml .= $xml;
-
-      $beam_xml .=   "<beam_configuration>\n";
-      $beam_xml .=   "<nbeam>".$get["nbeam"]."</nbeam>\n";
-      for ($i=0; $i<$get["nbeam"]; $i++)
-        $beam_xml .=   "<beam_state_".$i." name='".$this->config["BEAM_".$i]."'>".$get["beam_state_".$i]."</beam_state_".$i.">\n";
-      $beam_xml .=   "</beam_configuration>\n";
       $beam_xml .= "</obs_cmd>\n";
 
       $tcs_socket = new spip_socket();
@@ -265,15 +603,69 @@ class tests extends spip_webpage
       }
       $tcs_socket->close();
     }
-
     echo $html;
   }
 
-  function printInstrumentRow($key, $name, $title, $size, $maxlength="")
+  function renderProcessingRows($array)
+  {
+    foreach ($array as $c)
+    {
+      $this->renderProcessingRow($c);
+    }
+  }
+
+  function renderProcessingRow($c)
   {
     echo "<tr>\n";
+    echo "  <td>".$c["name"]."</td>";
+    echo "  <td>";
+    $id = $c["prefix"]."_".$c["tag"];
+    $name = $id;
+    if ($c["type"] == "text")
+    {
+      echo "<input type='text' name='".$name."' id='".$id."' size='".$c["size"]."' value='".$c["value"]."'";
+      if ($c["maxlength"] != "")
+        echo " maxlength=".$c["maxlength"];
+      echo "/>";
+    }
+    else if ($c["type"] == "bool")
+    {
+      echo "<input type='checkbox' name='".$name."' id='".$id."'";
+      if ($c["value"] == "true")
+        echo " checked";
+      if ($c["onchange"] != "")
+        echo " onchange=\"".$c["onchange"]."\"";
+      echo "/>";
+    }
+    else if ($c["type"] == "radio")
+    {
+      foreach ($c["value"] as $key => $val)
+      {
+        $checked = "";
+        if ($val == "true") $checked = " checked";
+        echo "<input type='radio' name='".$name."' id='".$id."'".$checked."/>";
+        echo "<label for='".$c["tag"]."'>".$key."</label>";
+      }
+    }
+    else
+    {
+      echo $c["value"];
+    }
+    echo "</td>\n";
+    echo "</tr>\n";
+  }
+
+
+  function renderInstrumentRow($cfg, $key, $title, $size, $maxlength="")
+  {
+    $val = "";
+    if (array_key_exists($cfg, $this->config))
+      $val = $this->config[$cfg];
+    $name = strtolower($key);
+
+    echo "<tr>\n";
     echo "  <td>".$title."</td>";
-    echo "  <td>".$this->config[$key]."<input type='hidden' name='".$name."' id='".$name."' value='".$this->config[$key]."' size=".$size;
+    echo "  <td>".$val."<input type='hidden' name='".$name."' id='".$name."' value='".$val."' size=".$size;
     if ($maxlength != "")
       echo " maxlength=".$maxlength;
     echo "/ readonly></td>\n";

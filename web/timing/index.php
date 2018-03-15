@@ -105,21 +105,28 @@ class timing extends spip_webpage
                 params   = beam.getElementsByTagName("observation_parameters")[0];
                 observer = get_node_value(params.getElementsByTagName("observer")[0]);
                 pid      = get_node_value(params.getElementsByTagName("pid")[0]);
-                mode     = get_node_value(params.getElementsByTagName("mode")[0]);
                 tobs     = get_node_value(params.getElementsByTagName("expected_length")[0]);
 
                 start    = get_node_value(params.getElementsByTagName("utc_start")[0]);
                 elapsed  = get_node_value(params.getElementsByTagName("elapsed_time")[0]);
+
+                params   = beam.getElementsByTagName("fold_processing_parameters")[0];
 
                 document.getElementById(beam_name + "_source").innerHTML = name;
                 document.getElementById(beam_name + "_ra").innerHTML = ra;
                 document.getElementById(beam_name + "_dec").innerHTML = dec;
                 document.getElementById(beam_name + "_observer").innerHTML = observer;
                 document.getElementById(beam_name + "_pid").innerHTML = pid;
-                document.getElementById(beam_name + "_mode").innerHTML = mode;
                 document.getElementById(beam_name + "_start").innerHTML = start;
                 document.getElementById(beam_name + "_elapsed").innerHTML = elapsed;
                 document.getElementById(beam_name + "_tobs").innerHTML = tobs;
+
+                params   = beam.getElementsByTagName("fold_processing_parameters")
+                if (params.length == 1)
+                {
+                  mode     = get_node_value(params.getElementsByTagName("mode")[0]);
+                  document.getElementById(beam_name + "_mode").innerHTML = mode;
+                }
 
                 //if (beam_state == "Recording")
                   tcs_utcs[beam_name] = start

@@ -88,7 +88,7 @@ class SocketedThread (threading.Thread):
               else:
                 raise
 
-    self.script.log (1, "SocketedThread::run exiting")
+    self.script.log (2, "SocketedThread::run exiting")
     # ensure any sockets that are open are closed and flushed
     for i, x in enumerate(self.can_read):
       x.close()

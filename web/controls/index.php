@@ -72,6 +72,39 @@ class controls extends spip_webpage
 ?>
     <script type='text/javascript'>
 
+      function examine_daemons (host, id, daemons)
+      { 
+        for (i=0; i<daemons.length; i++)
+        {
+          var daemon = daemons[i];
+          var daemon_name = daemon.getAttribute("name");
+          var daemon_running = daemon.childNodes[0].nodeValue;
+          var daemon_id = host + "_" + daemon_name + "_" + id + "_light";
+          try {
+            var daemon_light = document.getElementById(daemon_id)
+            if (daemon_running == "True")
+              daemon_light.src = "/spip/images/green_light.png";
+            else
+              daemon_light.src = "/spip/images/red_light.png";
+          } catch (e) {
+            alert("ERROR: id=" + daemon_id + " Error=" + e)
+          }
+        }
+      }
+
+      function disable_daemons (host)
+      {
+        daemons = document.getElementsByTagName("img");
+        for (i=0; i<daemons.length; i++)
+        {
+          var daemon = daemons[i];
+          if ((daemon.id != host + "_lmc_light") && (daemon.id.indexOf(host) != -1))
+          {
+            daemon.src = "/spip/images/grey_light.png";
+          }
+        }
+      }
+
       function handle_control_request(c_xml_request)
       {
         if (c_xml_request.readyState == 4)
@@ -97,34 +130,31 @@ class controls extends spip_webpage
               var state = lmc.getElementsByTagName("state")[0];
               var lmc_light = document.getElementById(host + "_lmc_light")
               if (state.childNodes[0].nodeValue == "Running")
-                lmc_light.src = "/spip/images/green_light.png";
-              else
-                lmc_light.src = "/spip/images/red_light.png";
-
-              var streams = lmc.getElementsByTagName("stream")
-              for (j=0; j<streams.length; j++)
               {
-                var stream = streams[j];
-                var stream_id = stream.getAttribute("id")
+                lmc_light.src = "/spip/images/green_light.png";
 
-                daemons = stream.getElementsByTagName("daemon");
-                for (k=0; k<daemons.length; k++)
+                var servers = lmc.getElementsByTagName("server")
+                for (j=0; j<servers.length; j++)
                 {
-                  var daemon = daemons[k];
-                  var daemon_name = daemon.getAttribute("name");
-                  var daemon_running = daemon.childNodes[0].nodeValue;
-                  var daemon_id = host + "_" + daemon_name + "_" + stream_id + "_light";
-                  try {
-                    var daemon_light = document.getElementById(daemon_id)
-                    if (daemon_running == "True")
-                      daemon_light.src = "/spip/images/green_light.png";
-                    else
-                      daemon_light.src = "/spip/images/red_light.png";
-                  } catch (e) {
-                    alert("ERROR: id=" + daemon_id + " Error=" + e)
-                  }
-                  
+                  var server = servers[j];
+                  var server_id = server.getAttribute("id")
+                  daemons = server.getElementsByTagName("daemon");
+                  examine_daemons (host, server_id, daemons)
                 }
+
+                var streams = lmc.getElementsByTagName("stream")
+                for (j=0; j<streams.length; j++)
+                {
+                  var stream = streams[j];
+                  var stream_id = stream.getAttribute("id")
+                  daemons = stream.getElementsByTagName("daemon");
+                  examine_daemons (host, stream_id, daemons)
+                }
+              }
+              else
+              {
+                lmc_light.src = "/spip/images/red_light.png";
+                disable_daemons (host);
               }
             }
           }
@@ -206,7 +236,7 @@ class controls extends spip_webpage
     # are used together (i.e. for a multi-beam survey), only 1 set of server daemons
     # will be used
 
-    echo "<table cellpadding='5px' border=1 width='900px'>\n";
+    echo "<table class='config' border=1 width='98%'>\n";
 
     echo "<tr>\n";
     echo "<th>Host</th>\n";
@@ -263,7 +293,7 @@ class controls extends spip_webpage
           {
             echo "<span style='padding-right: 10px;'>\n";
             $id = $host."_".$d["daemon"]."_".$stream["stream_id"];
-            echo "<img border='0' id='".$id."_light' src='/spip/images/grey_light.png' width='15px' height='15px'>\n";
+            echo "<img border='0' id='".$id."_light' src='/spip/images/grey_light.png' width='15px' height='15px'>&nbsp;";
             echo $d["daemon"];
             echo "</span>\n";
           }

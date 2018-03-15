@@ -19,7 +19,7 @@ from spip.utils.sockets import getHostNameShort
 from uwb_proc import UWBProcThread, UWBProcDaemon
 
 DAEMONIZE = True
-DL        = 3
+DL        = 1
 
 ###############################################################################
 # Baseband Daemon that extends the UWBProcDaemon
@@ -27,13 +27,13 @@ class UWBBasebandDaemon (UWBProcDaemon):
 
   def __init__ (self, name, id):
     UWBProcDaemon.__init__(self, name , id)
+    self.tag = "baseband"
 
   # called once the header has been received, and must prepare the self.cmd to be run
   def prepare (self):
 
     utc_start = self.header["UTC_START"]
-    self.log (1, "UTC_START=" + self.header["UTC_START"])
-    self.log (1, "RESOLUTION=" + self.header["RESOLUTION"])
+    self.log (2, "UWBBasebandDaemon::prepare UTC_START=" + self.header["UTC_START"])
 
     # default processing commands
     self.cmd = "dada_dbnull -s -k " + self.db_key
@@ -44,23 +44,23 @@ class UWBBasebandDaemon (UWBProcDaemon):
     except KeyError as e:
       baseband = False
     
-    self.log (1, "always baseband == True")
-    baseband = True
-
     # if no has been requested return
     if not baseband:
-      return
+      self.log (2, "UWBBasebandDaemon::prepare baseband not requested")
+      return False
 
     beam = self.cfg["BEAM_" + str(self.beam_id)]
     source = self.header["SOURCE"]
 
     # output directory for BASEBAND mode
-    self.out_dir = self.cfg["CLIENT_RECORDING_DIR"] + "/processing/" + beam + "/" + utc_start + "/" + source + "/" + self.cfreq
+    self.out_dir = self.cfg["CLIENT_RECORDING_DIR"] + "/processing/" + \
+                   beam + "/" + utc_start + "/" + source + "/" + self.cfreq
 
     # configure the command to be run
     self.cmd = "dada_dbdisk -k " + self.db_key + " -s -z -D " + self.out_dir
 
     self.log_prefix = "baseband_src"
+    return True
 
 ###############################################################################
 

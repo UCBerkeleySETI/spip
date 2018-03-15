@@ -43,12 +43,14 @@ class ReportingThread (SocketedThread):
       self.script.log (2, "ReportingThread::process_message_on_handle message="+str(message))
 
       if len(message) == 0:
+        self.script.log (2, "ReportingThread::process_message_on_handle length=0, closing handle")
         handle.close()
         for i, x in enumerate(self.can_read):
           if (x == handle):
             del self.can_read[i]
 
       else:
+        self.script.log (2, "ReportingThread::process_message_on_handle parsing message to XML")
         try:
           xml = parse(message)
         except ExpatError as e:
@@ -60,6 +62,7 @@ class ReportingThread (SocketedThread):
 
         self.script.log(3, "<- " + str(xml))
 
+        self.script.log (2, "ReportingThread::process_message_on_handle self.parse_mesasge(xml)")
         retain, reply = self.parse_message (xml)
 
         if retain:

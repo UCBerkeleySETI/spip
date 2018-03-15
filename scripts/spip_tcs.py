@@ -18,21 +18,23 @@ from spip.utils import sockets,times
 from spip.threads.reporting_thread import ReportingThread
 
 DAEMONIZE = True
-DL = 2
+DL = 1
 
 ###############################################################
 # thread for reporting state of 
 class TCSReportingThread (ReportingThread):
 
   def __init__ (self, script, id):
+    script.log(0, "TCSReportingThread::__init__ reporting on " + \
+                    script.host + ":" + str(script.report_port))
     ReportingThread.__init__(self, script, script.host, script.report_port)
     self.beam_states = script.beam_states
-    self.script.log(0, "beam_states=" + str(self.beam_states))
+    self.script.log(2, "TCSReportingThread::__init__ beam_states=" + str(self.beam_states))
     self.beams = self.beam_states.keys()
-    self.script.log(0, "beams=" + str(self.beams))
-
+    self.script.log(2, "TCSReportingThread::__init__ beams=" + str(self.beams))
 
   def parse_message (self, xml):
+
     self.script.log (2, "TCSReportingThread::parse_message: " + str(xml))
 
     xml  = "<tcs_state>"
@@ -44,33 +46,31 @@ class TCSReportingThread (ReportingThread):
 
       xml += "<beam name='" + str(beam) + "' state='" + self.beam_states[beam]["state"] + "'>"
 
-      s = self.beam_states[beam]["config"]["source_parameters"]
+      s = c["source_parameters"]
       xml += "<source>"
-      xml += "<name epoch='" + s["name"]["epoch"] + "'>" + s["name"]["#text"] + "</name>"
-      xml += "<ra units='" + s["ra"]["units"] + "'>" + s["ra"]["#text"] + "</ra>"
-      xml += "<dec units='" + s["dec"]["units"] + "'>" + s["dec"]["#text"] + "</dec>"
+      xml += "<name epoch='" + s["name"]["@epoch"] + "'>" + s["name"]["#text"] + "</name>"
+      xml += "<ra units='" + s["ra"]["@units"] + "'>" + s["ra"]["#text"] + "</ra>"
+      xml += "<dec units='" + s["dec"]["@units"] + "'>" + s["dec"]["#text"] + "</dec>"
       xml += "</source>"        
 
-      o = self.beam_states[beam]["config"]["observation_parameters"]
+      o = c["observation_parameters"]
       xml += "<observation_parameters>"
       xml += "<observer>" + o["observer"]["#text"] + "</observer>"
       xml += "<pid>" + o["pid"]["#text"] + "</pid>"
-      xml += "<mode>" + o["mode"]["#text"] + "</mode>"
 
-      if len(o["utc_start"]["#text"]) and o["utc_start"]["#text"] != None:
+      utc_start = ""
+      utc_stop = ""
+      elapsed_time = ""
+
+      if len(o["utc_start"]["#text"]) and o["utc_start"]["#text"] != None and  o["utc_start"]["#text"] != "None":
         utc_start = o["utc_start"]["#text"]
-        self.script.log (2, "TCSReportingThread::parse_message: utc_start=" + utc_start)
         elapsed_time = str(times.diffUTCTime(utc_start))
 
-        if len(o["utc_stop"]["#text"]) > 0 and o["utc_stop"]["#text"] != None:
+        if len(o["utc_stop"]["#text"]) > 0 and o["utc_stop"]["#text"] != None and o["utc_stop"]["#text"] != "None":
           utc_stop = o["utc_stop"]["#text"]
           elapsed_time = str(times.diffUTCTimes(utc_start, utc_stop))
         else:
           utc_stop = ""
-      else:
-        utc_start = ""
-        utc_stop = ""
-        elapsed_time = ""
 
       xml += "<utc_start>" + utc_start + "</utc_start>"
       xml += "<utc_stop>" + utc_stop + "</utc_stop>"
@@ -78,6 +78,22 @@ class TCSReportingThread (ReportingThread):
       xml += "<expected_length units='seconds'>" + o["tobs"]["#text"] + "</expected_length>"
       xml += "</observation_parameters>"
 
+      modes = c["processing_modes"]
+      for k in modes.keys():
+        key = modes[k]["@key"]
+        val = modes[k]["#text"]
+
+        # inject processing parameters into header
+        if val == "true" or val == "1":
+          xml += "<" + k + "_processing_parameters>"
+          p = c[k + "_processing_parameters"]
+          for l in p.keys():
+            try:
+              pval = p[l]["#text"]
+            except KeyError as e:
+              val = ''
+            xml += "<" + l + ">" + pval + "</" + l + ">"
+          xml += "</" + k + "_processing_parameters>"
       xml += "</beam>"
       
       self.beam_states[beam]["lock"].release()
@@ -123,12 +139,12 @@ class TCSDaemon(Daemon):
         self.beam_states[b]["lock"].acquire()
 
         self.beam_states[b]["config"]["source_parameters"]["name"]["#text"] = header["SOURCE"]
-        self.beam_states[b]["config"]["source_parameters"]["name"]["epoch"] = "J2000"
+        self.beam_states[b]["config"]["source_parameters"]["name"]["@epoch"] = "J2000"
 
         self.beam_states[b]["config"]["source_parameters"]["ra"]["#text"] = header["RA"]
-        self.beam_states[b]["config"]["source_parameters"]["ra"]["units"] = "hh:mm:ss"
+        self.beam_states[b]["config"]["source_parameters"]["ra"]["@units"] = "hh:mm:ss"
         self.beam_states[b]["config"]["source_parameters"]["dec"]["#text"] = header["DEC"]
-        self.beam_states[b]["config"]["source_parameters"]["dec"]["units"] = "dd:mm:ss"
+        self.beam_states[b]["config"]["source_parameters"]["dec"]["@units"] = "dd:mm:ss"
 
         self.beam_states[b]["config"]["observation_parameters"]["observer"]["#text"] = header["OBSERVER"]
         self.beam_states[b]["config"]["observation_parameters"]["pid"]["#text"] = header["PID"]
@@ -203,6 +219,9 @@ class TCSDaemon(Daemon):
                 # Parse XML for correctness
                 (valid, command, error) = self.parse_obs_cmd (xml, id)
 
+                self.log(1, "commandThread: valid=" + str(valid) \
+                         + " command=" + command + " error=" + str(error))
+
                 if valid :
                   if command == "start":
                     self.log(1, "commandThread: issue_start_cmd message="+message)
@@ -212,7 +231,9 @@ class TCSDaemon(Daemon):
                     self.issue_stop_cmd (xml)
                   elif command == "configure":
                     self.log(1, "commandThread: no action for configure command")
-            
+                  else:
+                    self.log(-1, "Unrecognized command [" + command + "]")
+           
                 else:
                   self.log(-1, "failed to parse xml: " + error)
 
@@ -251,7 +272,7 @@ class TCSDaemon(Daemon):
       command = xml['obs_cmd']['command']
 
       # determine which beams this command corresponds to
-      for ibeam in range(int(xml['obs_cmd']['beam_configuration']['nbeam'])):
+      for ibeam in range(int(xml['obs_cmd']['beam_configuration']['nbeam']['#text'])):
         if xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['#text'] == "on":
 
           b = xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['@name']
@@ -264,28 +285,25 @@ class TCSDaemon(Daemon):
 
               self.log(2, "parse_obs_cmd: received configuration for beam " + b)
               self.beam_states[b]["lock"].acquire()
-
               self.beam_states[b]["config"] = copy.deepcopy(xml['obs_cmd'])
-
               self.log (3, "parse_obs_cmd: config=" + str(self.beam_states[b]["config"]))
-
               self.beam_states[b]["state"]     = "Configured"
-
               self.beam_states[b]["lock"].release()
 
             elif command == "start":
 
               self.beam_states[b]["lock"].acquire()
               self.beam_states[b]["state"] = "Starting"
-              self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"] = xml['obs_cmd']['observation_parameters']['utc_start']['#text']
+              utc_start = xml['obs_cmd']['observation_parameters']['utc_start']['#text']
+              self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"] = utc_start
               self.beam_states[b]["lock"].release()
 
             elif command == "stop":
   
               self.beam_states[b]["lock"].acquire()
               self.beam_states[b]["state"] = "Stopping"
-              self.beam_states[b]["config"]["observation_parameters"]["utc_stop"]["#text"] = xml['obs_cmd']['observation_parameters']['utc_stop']['#text']
-
+              utc_stop = xml['obs_cmd']['observation_parameters']['utc_stop']['#text']
+              self.beam_states[b]["config"]["observation_parameters"]["utc_stop"]["#text"] = utc_stop
               self.beam_states[b]["lock"].release()
 
             else:
@@ -302,7 +320,7 @@ class TCSDaemon(Daemon):
   def issue_start_cmd (self, xml):
 
     # determine which beams this command corresponds to
-    for ibeam in range(int(xml['obs_cmd']['beam_configuration']['nbeam'])):
+    for ibeam in range(int(xml['obs_cmd']['beam_configuration']['nbeam']['#text'])):
       if xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['#text'] == "on":
         b = xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['@name']
         if b in self.beam_states.keys():
@@ -322,6 +340,7 @@ class TCSDaemon(Daemon):
           # if no UTC_START has been specified, set it to +5 seconds
           if o["utc_start"]["#text"] == "None":
             o["utc_start"]["#text"] = times.getUTCTime(5)
+            self.log(1, "issue_start_cmd: utc_start=" + o["utc_start"]["#text"])
 
           for k in o.keys():
             key = o[k]["@key"]
@@ -352,6 +371,7 @@ class TCSDaemon(Daemon):
             
             # inject processing parameters into header
             if val == "true" or val == "1":
+              self.log (1, "issue_start_cmd: mode=" + k)
               p = self.beam_states[b]["config"][k + "_processing_parameters"]
               for l in p.keys():
                 pkey = p[l]["@key"]
@@ -412,8 +432,10 @@ class TCSDaemon(Daemon):
   # issue_stop_cmd
   def issue_stop_cmd (self, xml):
 
+    self.log(2, "issue_stop_cmd()")
+
     # determine which beams this command corresponds to
-    for ibeam in range(int(xml['obs_cmd']['beam_configuration']['nbeam'])):
+    for ibeam in range(int(xml['obs_cmd']['beam_configuration']['nbeam']['#text'])):
       if xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['#text'] == "on":
         b = xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['@name']
         if b in self.beam_states.keys():
@@ -476,7 +498,7 @@ class TCSDaemon(Daemon):
 class TCSServerDaemon (TCSDaemon, ServerBased):
 
   def __init__ (self, name):
-    TCSDaemon.__init__(self,name, "-1")
+    TCSDaemon.__init__(self, name, "-1")
     ServerBased.__init__(self, self.cfg)
     self.interface_port = int(self.cfg["TCS_INTERFACE_PORT"])
     self.report_port = int(self.cfg["TCS_REPORT_PORT"])
@@ -486,22 +508,23 @@ class TCSServerDaemon (TCSDaemon, ServerBased):
     for i in range(int(self.cfg["NUM_BEAM"])):
       b = self.cfg["BEAM_"+str(i)]
       self.beam_states[b] = {}
+      self.beam_states[b]["config"] = {}
 
       self.beam_states[b]["config"]["source_parameters"] = {}
       self.beam_states[b]["config"]["observation_parameters"] = {}
       self.beam_states[b]["config"]["custom_parameters"] = {}
-      self.beam_states[b]["config"]["processing_parameters"] = {}
+      self.beam_states[b]["config"]["processing_modes"] = {}
 
-      self.beam_states[b]["config"]["source_parameters"]["name"] = {"key":"SOURCE", "epoch":"J2000", "#text":""}
-      self.beam_states[b]["config"]["source_parameters"]["ra"] = {"key":"RA", "units":"hhmmss", "#text":""}
-      self.beam_states[b]["config"]["source_parameters"]["dec"] = {"key":"DEC", "units":"ddmmss", "#text":""}
-      self.beam_states[b]["config"]["observation_parameters"]["pid"] = {"key":"PID", "#text":""}
-      self.beam_states[b]["config"]["observation_parameters"]["observer"] = {"key":"OBSERVER", "#text":""}
-      self.beam_states[b]["config"]["observation_parameters"]["utc_start"] = {"key":"UTC_START", "#text":"None"}
-      self.beam_states[b]["config"]["observation_parameters"]["utc_stop"] = {"key":"UTC_STOP", "#text":"None"}
-      self.beam_states[b]["config"]["observation_parameters"]["tobs"] = {"key":"TOBS", "#text":""}
-      self.beam_states[b]["config"]["observation_parameters"]["mode"] = {"key":"MODE", "#text":""}
-      self.beam_states[b]["config"]["observation_parameters"]["calfreq"] = {"key":"CALFREQ", "#text":""}
+      self.beam_states[b]["config"]["source_parameters"]["name"] = {"@key":"SOURCE", "@epoch":"J2000", "#text":""}
+      self.beam_states[b]["config"]["source_parameters"]["ra"] = {"@key":"RA", "@units":"hhmmss", "#text":""}
+      self.beam_states[b]["config"]["source_parameters"]["dec"] = {"@key":"DEC", "@units":"ddmmss", "#text":""}
+      self.beam_states[b]["config"]["observation_parameters"]["pid"] = {"@key":"PID", "#text":""}
+      self.beam_states[b]["config"]["observation_parameters"]["observer"] = {"@key":"OBSERVER", "#text":""}
+      self.beam_states[b]["config"]["observation_parameters"]["utc_start"] = {"@key":"UTC_START", "#text":"None"}
+      self.beam_states[b]["config"]["observation_parameters"]["utc_stop"] = {"@key":"UTC_STOP", "#text":"None"}
+      self.beam_states[b]["config"]["observation_parameters"]["tobs"] = {"@key":"TOBS", "#text":""}
+      self.beam_states[b]["config"]["observation_parameters"]["mode"] = {"@key":"MODE", "#text":""}
+      self.beam_states[b]["config"]["observation_parameters"]["calfreq"] = {"@key":"CALFREQ", "#text":""}
 
       self.beam_states[b]["state"] = "Idle"
       self.beam_states[b]["lock"] = threading.Lock()
@@ -523,16 +546,16 @@ class TCSBeamDaemon (TCSDaemon, BeamBased):
     self.beam_states[b]["config"]["custom_parameters"] = {}
     self.beam_states[b]["config"]["processing_parameters"] = {}
 
-    self.beam_states[b]["config"]["source_parameters"]["name"] = {"key":"SOURCE", "epoch":"J2000", "#text":""}
-    self.beam_states[b]["config"]["source_parameters"]["ra"] = {"key":"RA", "units":"hhmmss", "#text":""}
-    self.beam_states[b]["config"]["source_parameters"]["dec"] = {"key":"DEC", "units":"ddmmss", "#text":""}
-    self.beam_states[b]["config"]["observation_parameters"]["pid"] = {"key":"PID", "#text":""}
-    self.beam_states[b]["config"]["observation_parameters"]["observer"] = {"key":"OBSERVER", "#text":""}
-    self.beam_states[b]["config"]["observation_parameters"]["utc_start"] = {"key":"UTC_START", "#text":"None"}
-    self.beam_states[b]["config"]["observation_parameters"]["utc_stop"] = {"key":"UTC_STOP", "#text":"None"}
-    self.beam_states[b]["config"]["observation_parameters"]["tobs"] = {"key":"TOBS", "#text":""}
-    self.beam_states[b]["config"]["observation_parameters"]["mode"] = {"key":"MODE", "#text":""}
-    self.beam_states[b]["config"]["observation_parameters"]["calfreq"] = {"key":"CALFREQ", "#text":""}
+    self.beam_states[b]["config"]["source_parameters"]["name"] = {"@key":"SOURCE", "@epoch":"J2000", "#text":""}
+    self.beam_states[b]["config"]["source_parameters"]["ra"] = {"@key":"RA", "@units":"hhmmss", "#text":""}
+    self.beam_states[b]["config"]["source_parameters"]["dec"] = {"@key":"DEC", "@units":"ddmmss", "#text":""}
+    self.beam_states[b]["config"]["observation_parameters"]["pid"] = {"@key":"PID", "#text":""}
+    self.beam_states[b]["config"]["observation_parameters"]["observer"] = {"@key":"OBSERVER", "#text":""}
+    self.beam_states[b]["config"]["observation_parameters"]["utc_start"] = {"@key":"UTC_START", "#text":"None"}
+    self.beam_states[b]["config"]["observation_parameters"]["utc_stop"] = {"@key":"UTC_STOP", "#text":"None"}
+    self.beam_states[b]["config"]["observation_parameters"]["tobs"] = {"@key":"TOBS", "#text":""}
+    self.beam_states[b]["config"]["observation_parameters"]["mode"] = {"@key":"MODE", "#text":""}
+    self.beam_states[b]["config"]["observation_parameters"]["calfreq"] = {"@key":"CALFREQ", "#text":""}
 
     self.beam_states[b]["state"] = "Idle"
     self.beam_states[b]["lock"] = threading.Lock()

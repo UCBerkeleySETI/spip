@@ -44,8 +44,7 @@ class Daemon(object):
     self.control_dir = self.cfg["SERVER_CONTROL_DIR"]
 
     # append the streamid/beamid/hostname
-    if self.id != -1:
-      self.name += "_" + str (self.id)
+    self.name += "_" + str (self.id)
 
   def configure (self, become_daemon, dl, source, dest):
 
@@ -57,7 +56,11 @@ class Daemon(object):
       sys.stderr.write ("ERROR: script requires " + self.req_host +", but was launched on " + self.hostname + "\n")
       return 1
 
-    self.log_file  = self.log_dir + "/" + source + "_" + str(self.id) +  ".log"
+    if str(self.id) == "-1":
+      self.log_file  = self.log_dir + "/" + dest + ".log"
+    else:
+      self.log_file  = self.log_dir + "/" + dest + "_" + str(self.id) +  ".log"
+
     self.pid_file  = self.control_dir + "/" + self.name + ".pid"
     self.quit_file = self.control_dir + "/"  + self.name + ".quit"
     self.reload_file = self.control_dir + "/"  + self.name + ".reload"
@@ -73,6 +76,8 @@ class Daemon(object):
     # optionally daemonize script
     if become_daemon: 
       self.daemonize ()
+
+    self.log (2, "Daemon::configure: log_file=" + self.log_file)
 
     # instansiate a threaded event signal
     self.quit_event = threading.Event()
@@ -104,7 +109,7 @@ class Daemon(object):
     stdin = "/dev/null"
     stdout = self.log_file
     stderr = self.log_file
-    self.log (1, "Daemon::daemonize log_file=" + self.log_file)
+    self.log (2, "Daemon::daemonize log_file=" + self.log_file)
 
     try:
       pid = os.fork()
@@ -197,7 +202,7 @@ class Daemon(object):
       # if the binary exists, then kill with the specified signal
       if not rval:
         cmd = "pkill -SIG" + signal + " -f '^" + binary + "'"
-        rval, lines = self.system (cmd, 1)
+        rval, lines = self.system (cmd, 2)
 
       # check if the binary is still running
       cmd = "pgrep -f '^" + binary + "'"
@@ -324,7 +329,7 @@ class Daemon(object):
 
     return_code = 0
 
-    self.log(dl, "system_piped: " + command)
+    self.log (dl, "system_piped: dl=" + str(dl) + " self.dl=" + str(self.dl) + " " + command)
 
     # setup the module object
     proc = subprocess.Popen(command,
@@ -340,7 +345,7 @@ class Daemon(object):
     # discard the return code
     return_code = proc.returncode
 
-    if return_code:
-      self.log (0, "system_pipe: " + command + " failed")
+    if return_code and not self.quit_event.isSet():
+      self.log (0, "system_piped: " + command + " failed")
 
     return return_code
