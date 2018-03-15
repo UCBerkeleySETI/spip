@@ -58,6 +58,7 @@ libspipdsp_la_SOURCES += ForwardFFTFFTW.C \
 AM_CXXFLAGS += @FFTW_CFLAGS@
 
 libspipdsp_la_LIBADD += @FFTW_LIBS@
+LDADD += @FFTW_LIBS@
 
 endif
 
@@ -70,6 +71,7 @@ libspipdsp_la_SOURCES += ForwardFFTCUDA.cu \
 AM_CXXFLAGS += @CUFFT_CFLAGS@
 
 libspipdsp_la_LIBADD += @CUFFT_LIBS@
+LDADD += @CUFFT_LIBS@
 
 endif
 
@@ -89,6 +91,7 @@ libspipdsp_la_SOURCES += CUDAtoRAMTransfer.C \
 
 AM_CXXFLAGS += @CUDA_CFLAGS@
 libspipdsp_la_LIBADD += @CUDA_LIBS@
+LDADD += @CUDA_LIBS@
 
 include $(top_srcdir)/config/Makefile.cuda
 
