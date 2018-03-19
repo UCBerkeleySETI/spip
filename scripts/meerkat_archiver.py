@@ -86,7 +86,7 @@ class MeerKATArchiverDaemon(Daemon):
 
   def main (self):
 
-    self.ftp_server = "hdd-pod1.kat.ac.za"
+    self.ftp_server = "hdd-pod2.kat.ac.za"
     self.ftp_username = "kat"
     self.ftp_password = "kat"
     self.local_path = self.completed_dir
@@ -149,7 +149,17 @@ class MeerKATArchiverDaemon(Daemon):
             self.log (2, "main: ftp_agent.remote_path=" + self.ftp_agent.remote_path)
 
             self.log (2, "main: creating ftp_agent.connecting to " + self.ftp_server)
-            self.ftp_agent.connect()
+            try:
+              self.ftp_agent.connect()
+            except socket.error as e:
+              if e.errno == errno.EHOSTUNREACH:
+                self.log (-1, "FTP Agent error: No route to host")
+                sleep(1)
+                continue
+              else:
+                raise
+
+          
           
             self.log (2, "main: transferring " + str(len(files)) + " files")
 
