@@ -64,10 +64,10 @@ class PubSubThread (threading.Thread):
     self.subs.append ('product')
     self.subs.append ('subarray')
 
-    self.adc_start_re = re.compile ("cbf_roach_[0-9]+_[a-zA-Z0-9]*_synchronisation_epoch")
-    self.bandwidth_re = re.compile ("cbf_roach_[0-9]+_[a-zA-Z0-9]*_bandwidth")
-    self.centerfreq_re = re.compile ("cbf_roach_[0-9]+_[a-zA-Z0-9]*_delay_centre_frequency")
-    self.channels_re = re.compile ("cbf_roach_[0-9]+_[a-zA-Z0-9]*_n_chans")
+    self.adc_start_re = re.compile ("cbf[_roach]*_[0-9]+_[a-zA-Z0-9]*_synchronisation_epoch")
+    self.bandwidth_re = re.compile ("cbf[_roach]*_[0-9]+_[a-zA-Z0-9]*_bandwidth")
+    self.centerfreq_re = re.compile ("cbf[_roach]*_[0-9]+_[a-zA-Z0-9]*_delay_centre_frequency")
+    self.channels_re = re.compile ("cbf[_roach]*_[0-9]+_[a-zA-Z0-9]*_n_chans")
     self.target_re = re.compile ("subarray_[0-9]+_script_target")
     self.ra_re = re.compile ("subarray_[0-9]+_script_ra")
     self.dec_re = re.compile ("subarray_[0-9]+_script_dec")
@@ -166,7 +166,7 @@ class PubSubThread (threading.Thread):
 
   def update_subarray_config (self, isub, key, name, value):
     if self.script.subarray_configs[isub][key] != value:
-      self.script.log(1, "PubSubThread::update_subarray_config " + key + "=" + value + " from " + name)
+      self.script.log(1, "PubSubThread::update_subarray_config [" + str(isub) + "] " + key + "=" + value + " from " + name)
       self.script.subarray_configs[isub][key] = value
 
   def update_subarrays_config (self, nsubarray, key, name, value):
@@ -1010,16 +1010,16 @@ class KATCPServer (DeviceServer):
           new_state = "ready"
 
       elif command == "capture_done":
-        if state != "ready":
-          message = "received " + command + " command when in " + state + " state"
-        else:
+        if state == "ready" or state == "configured":
           new_state = "configured"
+        else:
+          message = "received " + command + " command when in " + state + " state"
 
       elif command == "deconfigure":
-        if state != "configured":
-          message = "received " + command + " command when in " + state + " state"
-        else:
+        if state == "configured":
           new_state = "unconfigured"
+        else:
+          message = "received " + command + " command when in " + state + " state"
 
       if message == "":
         self.script.log (1, "change_state: " + self._data_products[data_product_id]["state"] + " -> " + new_state)
@@ -1172,7 +1172,10 @@ class KATCPServer (DeviceServer):
     def request_target_stop (self, req, data_product_id, beam_id):
       """Cease data processing with target_name."""
       self.script.log (1, "request_target_stop(" + data_product_id+","+beam_id+")")
+      return self.target_stop (data_product_id, beam_id)
 
+    def target_stop (self, data_product_id, beam_id):
+      self.script.log (1, "target_stop(" + data_product_id+","+beam_id+")")
       (result, message) = self.test_beam_valid (data_product_id, beam_id)
       if result == "fail":
         return (result, message)
@@ -1222,7 +1225,12 @@ class KATCPServer (DeviceServer):
         return ("fail", "data product " + str (data_product_id) + " was not configured")
 
       # assume beam 0 is the valid beam for now
-      beam = self._data_products[data_product_id]['beams'][0]
+      beam = str(self._data_products[data_product_id]['beams'][0])
+
+      # in case the observing was terminated early
+      if self._data_products[data_product_id]['state'] == "recording":
+        self.target_stop (data_product_id, beam)
+
       (result, message) = self.change_state (data_product_id, beam, "capture_done")
       if result != "ok":
         self.script.log (-1, "capture_done: change_state failed: " + message) 
