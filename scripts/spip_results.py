@@ -24,7 +24,7 @@ class ResultsReportingThread(ReportingThread):
 
   def __init__ (self, script, id):
     host = sockets.getHostNameShort()
-    port = int(script.cfg["STREAM_RESULTS_PORT"])
+    port = int(script.cfg["BEAM_RESULTS_PORT"])
     if id >= 0:
       port += int(id)
     ReportingThread.__init__(self, script, host, port)
@@ -464,11 +464,12 @@ class ResultsDaemon(Daemon):
       elif plot == "bandpass":
         cmd = "psrplot -jD -p b -x -lpol=0,1 -N2,1 " + self.results[utc_start][source]["band_last"] + opts
       rval, bin_data = self.system_raw (cmd, 3)
+      self.results_lock.release()
 
     except KeyError as e:
       self.log(-1, "freq_plot: results["+utc_start+"]["+source+"][*] did not exist")
+      self.results_lock.release()
 
-    self.results_lock.release()
     return rval, bin_data
 
 class ResultsServerDaemon (ResultsDaemon, ServerBased):
@@ -494,9 +495,11 @@ class ResultsServerDaemon (ResultsDaemon, ServerBased):
   def conclude (self):
     for i in range(int(self.cfg["NUM_BEAM"])):
       bid = self.cfg["BEAM_" + str(i)]
-    self.results_lock.release()
-
-    ResultsDaemon.conclude()
+    try:
+      self.results_lock.release()
+    except:
+      self.log(2, "ResultsServerDaemon::conclude did not need to release lock")
+    ResultsDaemon.conclude(self)
 
 
 class ResultsBeamDaemon (ResultsDaemon, BeamBased):

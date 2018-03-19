@@ -5,12 +5,13 @@ libuwb_headers = spip/BlockFormatUWB.h
 
 libuwb_la_SOURCES = BlockFormatUWB.C
 
-bin_PROGRAMS = uwb_dbstats uwb_udprecv uwb_udpdb uwb_simdb
+bin_PROGRAMS = uwb_dbstats uwb_udprecv uwb_udpdb uwb_simdb uwb_udpmergedb
 
 uwb_dbstats_SOURCES = uwb_dbstats.C
 uwb_udprecv_SOURCES = uwb_udprecv.C
 uwb_udpdb_SOURCES = uwb_udpdb.C
 uwb_simdb_SOURCES = uwb_simdb.C
+uwb_udpmergedb_SOURCES = uwb_udpmergedb.C
 
 AM_CXXFLAGS = -I. \
 	-I$(top_builddir)/src/Affinity \
@@ -26,5 +27,6 @@ LDADD = libuwb.la \
 	$(top_builddir)/src/Formats/VDIF/libvdif.la \
 	$(top_builddir)/src/libspip.la -lpthread 
 
-AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @VDIFIO_CFLAGS@ @CUDA_CFLAGS@
-LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @VDIFIO_LIBS@ @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@
+AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @VDIFIO_CFLAGS@ @CUDA_CFLAGS@ @FFTW_CFLAGS@
+LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @VDIFIO_LIBS@ @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@ @FFTW_LIBS@
+

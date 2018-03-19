@@ -18,7 +18,7 @@ namespace spip {
 
       ~BlockFormat();
 
-      void prepare (unsigned _nbin, unsigned _ntime, unsigned _nfreq);
+      void prepare (unsigned _nbin, unsigned _ntime, unsigned _nfreq, double freq, double bw, double tsamp);
 
       void reset();
 
@@ -32,23 +32,37 @@ namespace spip {
 
       virtual void unpack_ms (char * buffer, uint64_t nbytes) = 0;
 
+      unsigned get_nbin() { return nbin; };
+
       void set_resolution (uint64_t _resolution) { resolution = _resolution; };
 
     protected:
+
+      float scale;
 
       unsigned ndim;
 
       unsigned npol;
 
+      // number of input channels in the data block
       unsigned nchan;
 
       unsigned nbit;
+
+      double freq;
+
+      double bw;
+
+      double tsamp;
 
       unsigned nbin;
 
       unsigned ntime;
 
-      unsigned nfreq;
+      // number of output channels
+      unsigned nfreq_hg;
+
+      unsigned nfreq_ft;
 
       unsigned bits_per_sample;
 

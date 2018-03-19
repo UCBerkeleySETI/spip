@@ -30,7 +30,9 @@ spip::HardwareAffinity::~HardwareAffinity ()
 
 void spip::HardwareAffinity::bind_thread_to_cpu_core (int cpu_core)
 {
+#ifdef HAVE_HWLOC
   bind_to_cpu_core (cpu_core, HWLOC_CPUBIND_THREAD);
+#endif
 }
 
 void spip::HardwareAffinity::bind_process_to_cpu_core (int cpu_core)

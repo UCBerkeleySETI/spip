@@ -24,12 +24,6 @@ spip::BatchedBackwardFFTFFTW::~BatchedBackwardFFTFFTW ()
   plan = 0;
 }
 
-void spip::BatchedBackwardFFTFFTW::configure ()
-{
-  spip::BatchedBackwardFFT::configure ();
-}
-
-
 void spip::BatchedBackwardFFTFFTW::prepare ()
 {
   spip::BatchedBackwardFFT::prepare ();

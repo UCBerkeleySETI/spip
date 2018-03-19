@@ -25,7 +25,7 @@ namespace spip {
 
       ~CUDAtoRAMTransfer ();
 
-      void configure ();
+      void configure (Ordering output_order);
 
       void prepare ();
 

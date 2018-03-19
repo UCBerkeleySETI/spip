@@ -21,7 +21,7 @@ spip::RAMtoCUDATransfer::~RAMtoCUDATransfer ()
 }
 
 //! intial configuration at the start of the data stream
-void spip::RAMtoCUDATransfer::configure ()
+void spip::RAMtoCUDATransfer::configure (spip::Ordering output_order)
 {
   ndat  = input->get_ndat ();
 
@@ -59,6 +59,10 @@ void spip::RAMtoCUDATransfer::transformation ()
   void * host = (void *) input->get_buffer();
   void * device = (void *) output->get_buffer();
   size_t nbytes = input->calculate_buffer_size();
+
+  if (verbose)
+    cerr << "spip::RAMtoCUDATransfer::transformation cudaMemcpyAsync (" << (void *) device << ", "
+         << (void *) host << ", " << nbytes << " cudaMemcpyHostToDevice, stream)" << endl;
 
   // perform host to device transfer TODO check for smaller buffesr
   cudaError_t err = cudaMemcpyAsync (device, host, nbytes, cudaMemcpyHostToDevice, stream);

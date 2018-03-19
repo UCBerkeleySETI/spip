@@ -5,6 +5,8 @@
  *
  ***************************************************************************/
 
+//#define _DEBUG
+
 #include "spip/UDPSocketReceive.h"
 
 #include <arpa/inet.h>
@@ -61,7 +63,9 @@ void spip::UDPSocketReceive::open (string ip_address, int port)
     udp_sock.sin_addr.s_addr = htonl (INADDR_ANY);
   }
   else
+  {
     udp_sock.sin_addr.s_addr = inet_addr (ip_address.c_str());
+  }
 
   // bind socket to file descriptor
   if (bind(fd, (struct sockaddr *)&udp_sock, sizeof(udp_sock)) == -1) 
@@ -173,7 +177,7 @@ size_t spip::UDPSocketReceive::resize_kernel_buffer (size_t pref_size)
     throw runtime_error("could not get SO_RCVBUF size");
 
   // Check the size. n.b. linux actually sets the size to DOUBLE the value
-  if (value*2 != pref_size && value/2 != pref_size)
+  if (value*2 != int(pref_size) && value/2 != int(pref_size))
   {
     len = sizeof(value);
     value = 131071;
@@ -241,11 +245,20 @@ size_t spip::UDPSocketReceive::recv ()
   return received;
 }
 
-size_t spip::UDPSocketReceive::recv_from()
+ssize_t spip::UDPSocketReceive::recv_from()
 {
+#ifdef _DEBUG 
+  cerr << "spip::UDPSocketReceive::recv_from()" << endl;
+#endif
   while (!have_packet && keep_receiving)
   {
-    pkt_size = (int) recvfrom (fd, buf, bufsz, 0, NULL, NULL);
+#ifdef _DEBUG
+    cerr << "spip::UDPSocketReceive::recv_from recv_from(" << fd << ", " << (void*) buf << ", " << bufsz << ", 0, NULL, NULL)" << endl;
+#endif
+    pkt_size = recvfrom (fd, buf, bufsz, 0, NULL, NULL);
+#ifdef _DEBUG
+    cerr << "spip::UDPSocketReceive::recv_from pkt_size=" << pkt_size << endl;
+#endif
     if (pkt_size > 32)
     {
       have_packet = true;
@@ -253,10 +266,10 @@ size_t spip::UDPSocketReceive::recv_from()
     else if (pkt_size == -1)
     {
       nsleeps++;
-      if (nsleeps > 1000)
-      {
-        nsleeps -= 1000;
-      }
+      //if (nsleeps > 1000)
+      //{
+      //  nsleeps -= 1000;
+      //}
     }
     else
     {

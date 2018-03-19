@@ -27,6 +27,19 @@ class spip_socket
     $this->close();
   }
 
+  function create ()
+  {
+    if ($this->sock != 0)
+    {
+      $this->close();
+    }
+    $this->sock = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+    if ($this->sock === FALSE)
+    {
+      echo "ERROR: failed to create socket<br>\n";
+    }
+  } 
+
   public function get_error ()
   {
     if ($this->errno == 0)
@@ -41,6 +54,9 @@ class spip_socket
   {
     $time = time();
     $connected = false;
+
+    # ensure the socket is created
+    $this->create();
 
     while (!$connected)
     {

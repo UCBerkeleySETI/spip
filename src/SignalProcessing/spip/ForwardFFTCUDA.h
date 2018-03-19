@@ -28,12 +28,19 @@ namespace spip {
       
       void prepare ();
 
-      void prepare_plan (uint64_t ndat);
+      void configure_plan ();
       
       void reserve ();
       
-      void transform ();
-      
+      void transform_SFPT_to_TFPS ();
+
+      void transform_SFPT_to_TSPF ();
+
+      void transform_SFPT_to_SFPT ();
+
+      void normalize_output ();
+
+
     protected:
     
     private:
@@ -41,8 +48,6 @@ namespace spip {
       cudaStream_t stream;
 
       cufftHandle plan;
-
-      unsigned nbatch;
 
       void * work_area;
 

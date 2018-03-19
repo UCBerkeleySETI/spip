@@ -5,9 +5,6 @@
  *
  ***************************************************************************/
 
-// Assume heaps arrive in order
-//#define _DEBUG
-
 #include "spip/UDPFormatMeerKATSPEAD.h"
 #include "spip/Time.h"
 
@@ -32,6 +29,7 @@ spip::UDPFormatMeerKATSPEAD::UDPFormatMeerKATSPEAD()
 {
   packet_header_size = 56 + 8;
   packet_data_size   = 4096;
+  packet_size = packet_header_size + packet_data_size;
 
   obs_start_sample = 0;
   npol = 1;
@@ -68,12 +66,12 @@ void spip::UDPFormatMeerKATSPEAD::configure(const spip::AsciiHeader& config, con
     throw invalid_argument ("END_CHANNEL did not exist in config");
   if (config.get ("TSAMP", "%lf", &tsamp) != 1)
     throw invalid_argument ("TSAMP did not exist in config");
-  if (config.get ("TSAMP", "%lf", &tsamp) != 1)
-    throw invalid_argument ("TSAMP did not exist in config");
   if (config.get ("ADC_SAMPLE_RATE", "%lu", &adc_sample_rate) != 1)
     throw invalid_argument ("ADC_SAMPLE_RATE did not exist in config");
   if (config.get ("BW", "%lf", &bw) != 1)
     throw invalid_argument ("BW did not exist in config");
+  //if (config.get ("NUM_PARTITIONS", "%d", &num_spead_streams) != 1)
+  //  throw invalid_argument ("NUM_PARTITIONS did not exist in config");
 
   num_spead_streams = 1;
   nchan = (end_channel - start_channel) + 1;
@@ -109,6 +107,8 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
     }
   }
 
+  half_num_spead_streams = num_spead_streams / 2;
+  
 #ifdef _DEBUG
   cerr << "spip::UDPFormatMeerKATSPEAD::prepare num_spead_streams=" << num_spead_streams << endl;
 #endif
@@ -199,8 +199,10 @@ void spip::UDPFormatMeerKATSPEAD::generate_signal ()
 
 uint64_t spip::UDPFormatMeerKATSPEAD::get_samples_for_bytes (uint64_t nbytes)
 {
+#ifdef _DEBUG
   cerr << "spip::UDPFormatMeerKATSPEAD::get_samples_for_bytes npol=" << npol 
        << " ndim=" << ndim << " nchan=" << nchan << endl;
+#endif
   uint64_t nsamps = nbytes / (npol * ndim * nchan);
   return nsamps;
 }
@@ -245,7 +247,7 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
   // we have multiple SPEAD streams now, 1 per B-engine
 
   // check if this packet belongs to a heap that is currently being accepted
-  int spead_stream = -1;
+  spead_stream = -1;
   for (int i=0; i<num_spead_streams; i++)
   {
     if (header.heap_cnt == curr_heap_cnts[i])
@@ -284,18 +286,19 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
       // if this packet pre-dates our start time, ignore
       if (obs_sample < 0)
         return -1;
+#ifdef _DEBUG
       if (curr_heap_cnts[spead_stream] == -1)
       {
-#ifdef _DEBUG
         if (offset == 1)
           cerr << "FIRST HEAP timestamp=" << timestamps[spead_stream]
                << " adc_sample=" << adc_sample << " obs_start_sample=" << obs_start_sample 
                << " obs_sample=" << obs_sample
                << " samples_to_byte_offset=" << samples_to_byte_offset
                << " curr_heap_offset=" << (int64_t) (obs_sample * samples_to_byte_offset)
-               << " spead_stream=" << spead_stream << endl;
-#endif
+               << " spead_stream=" << spead_stream 
+               << " heap_cnt=" << header.heap_cnt << endl;
       }
+#endif
 
       curr_heap_cnts[spead_stream] = header.heap_cnt;
       curr_heap_offsets[spead_stream] = (uint64_t) (obs_sample * samples_to_byte_offset) + (spead_stream * header.heap_length);
@@ -310,7 +313,6 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
 #ifdef _DEBUG
       cerr << "header.n_items == " << header.n_items << " && header.heap_length == " << header.heap_length << endl;
       print_packet_header();
-      sleep(1);
 #endif
       // check for the end of stream
       if (check_stream_stop ())
@@ -337,7 +339,10 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
 
 inline int64_t spip::UDPFormatMeerKATSPEAD::get_subband (int64_t byte_offset, int nsubband)
 {
-  return (header.payload_offset * nsubband) / header.heap_length;
+  if (spead_stream >= half_num_spead_streams)
+    return 1;
+  else
+    return 0;
 }
 
 inline int spip::UDPFormatMeerKATSPEAD::insert_last_packet (char * buffer)

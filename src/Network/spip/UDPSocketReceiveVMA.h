@@ -31,7 +31,7 @@ namespace spip {
 
       struct vma_api_t * vma_api;
 
-      struct vma_packets_t* pkts = NULL;
+      struct vma_packets_t* vma_pkts = NULL;
 
   };
 

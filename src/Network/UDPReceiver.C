@@ -7,10 +7,18 @@
 
 //#define _DEBUG
 
+#include "config.h"
+
 #include "spip/Time.h"
 #include "spip/AsciiHeader.h"
 #include "spip/UDPReceiver.h"
 #include "sys/time.h"
+
+#ifdef HAVE_VMA
+#include "spip/UDPSocketReceiveVMA.h"
+#else
+#include "spip/UDPSocketReceive.h"
+#endif
 
 #include <unistd.h>
 #include <cstring>
@@ -81,6 +89,7 @@ void spip::UDPReceiver::configure (const char * config_str)
 
   if (!format)
     throw runtime_error ("format was not allocated");
+  cerr << "spip::UDPReceiver::configure format->configure()" << endl;
   format->configure (header, "");
 }
 
@@ -88,32 +97,6 @@ void spip::UDPReceiver::prepare ()
 {
   if (verbose)
     cerr << "spip::UDPReceiver::prepare()" << endl;
-
-  // create and open a UDP receiving socket
-#ifdef HAVE_VMA
-  sock = new UDPSocketReceiveVMA ();
-#else
-  sock = new UDPSocketReceive ();
-#endif
-
-  if (data_mcast.size() > 0)
-  {
-    cerr << "spip::UDPReceiver::prepare sock->open_multicast (" << data_host << ", " << data_mcast << ", " << data_port << ")" << endl;
-    sock->open_multicast (data_host, data_mcast, data_port);
-  }
-  else
-  {
-    if (verbose)
-      cerr << "spip::UDPReceiver::prepare sock->open(" << data_host << ", " << data_port << ")" << endl;
-    sock->open (data_host, data_port);
-  }
-  
-  size_t packet_size = format->get_header_size() + format->get_data_size();
-  size_t sock_size = packet_size * 2;
-  if (verbose)
-    cerr << "spip::UDPReceiver::prepare sock->resize(" << sock_size << ")" << endl;
-  sock->resize (sock_size);
-  sock->resize_kernel_buffer (64*1024*1024);
 
   stats = new UDPStats (format->get_header_size(), format->get_data_size());
 
@@ -152,14 +135,44 @@ void spip::UDPReceiver::receive ()
   if (verbose)
     cerr << "spip::UDPReceiver::receive()" << endl;
 
-  int got;
+  ssize_t got;
   uint64_t nsleeps = 0;
 
-  // expected size of a UDP packet
-  size_t packet_size = format->get_header_size() + format->get_data_size();
+  if (verbose)
+    cerr << "spip::UDPReceiver::receive()" << endl;
 
-  // virtual block
-  size_t data_bufsz = 32768l * nchan * ndim * npol;
+  // create and open a UDP receiving socket
+#ifdef HAVE_VMA
+  UDPSocketReceiveVMA * sock = new UDPSocketReceiveVMA ();
+#else
+  UDPSocketReceive * sock = new UDPSocketReceive ();
+#endif
+
+  if (data_mcast.size() > 0)
+  {
+    cerr << "spip::UDPReceiver::receive sock->open_multicast (" << data_host << ", " << data_mcast << ", " << data_port << ")" << endl;
+    sock->open_multicast (data_host, data_mcast, data_port);
+  }
+  else
+  {
+    if (verbose)
+      cerr << "spip::UDPReceiver::receive sock->open(" << data_host << ", " << data_port << ")" << endl;
+    sock->open (data_host, data_port);
+  }
+
+  // expected size of a UDP packet
+  int packet_size = int(format->get_packet_size());
+  size_t sock_size = packet_size + 64;
+  if (verbose)
+    cerr << "spip::UDPReceiver::receive sock->resize(" << sock_size << ")" << endl;
+  sock->resize (sock_size);
+  sock->resize_kernel_buffer (16*1024*1024);
+
+  // virtual block, make about 128 MB
+  size_t data_bufsz = nchan * ndim * npol;
+  while (data_bufsz < 128*1024*1024)
+    data_bufsz *= 2;
+
   char * block = (char *) malloc (data_bufsz);
   bool need_next_block = false;
 
@@ -173,7 +186,10 @@ void spip::UDPReceiver::receive ()
 #endif
 
   // overflow buffer
-  const int64_t overflow_bufsz = 2097152 * 2;
+  int64_t overflow_bufsz = nchan * ndim * npol;
+  while (overflow_bufsz < 2*1024*1024)
+    overflow_bufsz *= 2;
+
   int64_t overflow_lastbyte = 0;
   int64_t overflow_maxbyte = next_byte_offset + overflow_bufsz;
   int64_t overflowed_bytes = 0;
@@ -267,7 +283,7 @@ void spip::UDPReceiver::receive ()
 #ifdef _DEBUG
         cerr << "ELSE byte_offset=" << byte_offset << " [" << curr_byte_offset <<" - " << next_byte_offset << " - " << overflow_maxbyte << "] bytes_received=" << bytes_received << " bytes_this_buf=" << bytes_this_buf << endl; 
 #endif
-        need_next_block = true;
+      need_next_block = true;
       }
 
       if (bytes_this_buf >= data_bufsz || need_next_block)

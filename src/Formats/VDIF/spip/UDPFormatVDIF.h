@@ -58,6 +58,8 @@ namespace spip {
       //! encode header with config data
       void compute_header ();
 
+      inline int64_t get_subband (int64_t byte_offset, int nsubband) { return 0; };
+
     private:
 
       vdif_header header;
@@ -69,6 +71,12 @@ namespace spip {
       unsigned nsamp_per_packet;
 
       unsigned packets_per_second;
+
+      unsigned udp_nsamp;
+
+      unsigned header_npol;
+
+      unsigned offset;
 
       uint64_t bytes_per_second;
 

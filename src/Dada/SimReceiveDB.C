@@ -93,6 +93,7 @@ int spip::SimReceiveDB::configure (const char * config_str)
 
   if (verbose)
     cerr << "spip::SimReceiveDB::configure configured" << endl;
+  return 0;
 }
 
 void spip::SimReceiveDB::prepare ()
@@ -151,7 +152,6 @@ void spip::SimReceiveDB::control_thread()
   int fd = -1;
   int verbose = 1;
 
-  char * cmds = (char *) malloc (DEFAULT_HEADER_SIZE);
   char * cmd  = (char *) malloc (32);
 
   // wait for a connection
@@ -161,8 +161,13 @@ void spip::SimReceiveDB::control_thread()
     fd = control_sock->accept_client (1);
     if (fd >= 0 )
     {
+      if (verbose > 1)
+        cerr << "control_thread : reading data from socket" << endl;
       string received = control_sock->read_client (DADA_DEFAULT_HEADER_SIZE);
       const char * cmds = received.c_str();
+      if (verbose)
+        cerr << "control_thread: bytes_read=" << strlen(cmds) << endl;
+
       control_sock->close_client();
       fd = -1;
 
@@ -302,7 +307,6 @@ void spip::SimReceiveDB::update_stats()
     double gb_recv_ps = (mb_recv_ps * 8)/1000;
 
     double mb_drop_ps = (double) bytes_drop_ps / 1000000;
-    double gb_drop_ps = (mb_drop_ps * 8)/1000;
 
     if (control_state == Active)
       cerr << "In: " << gb_recv_ps << "Gb/s\tDropped:" << mb_drop_ps << " Mb/s" << endl;
@@ -389,7 +393,7 @@ bool spip::SimReceiveDB::generate (int tobs)
       control_state = Active;
       gettimeofday (&timestamp, 0);
       start_second = timestamp.tv_sec + DELTA_START;
-      cerr << "Setting startt second=" << start_second << endl;
+      cerr << "Setting start second=" << start_second << endl;
     }
 
     // if started

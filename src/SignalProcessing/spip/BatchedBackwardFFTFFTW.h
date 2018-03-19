@@ -25,8 +25,6 @@ namespace spip {
       
       ~BatchedBackwardFFTFFTW ();
  
-      void configure ();
-
       void prepare ();
       
       void reserve ();

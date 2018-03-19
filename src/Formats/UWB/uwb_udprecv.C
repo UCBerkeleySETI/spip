@@ -6,6 +6,7 @@
  ****************************************************************************/
 
 #include "config.h"
+
 #include "spip/AsciiHeader.h"
 #include "spip/UDPReceiver.h"
 #include "spip/UDPFormatVDIF.h"
@@ -100,11 +101,7 @@ int main(int argc, char *argv[])
       cerr << "uwb_udprecv: Loading configuration from " << argv[optind] << endl;
 
     // config file for this data stream
-    if (config.load_from_file (argv[optind]) < 0)
-    {
-      cerr << "ERROR: could not read ASCII header from " << argv[optind] << endl;
-      return (EXIT_FAILURE);
-    }
+    config.load_from_file (argv[optind]);
 
     if (udprecv->verbose)
       cerr << "uwb_udprecv: configuring using fixed config" << endl;
@@ -117,7 +114,7 @@ int main(int argc, char *argv[])
     if (udprecv->verbose)
       cerr << "uwb_udprecv: starting stats thread" << endl;
     pthread_t stats_thread_id;
-    int rval = pthread_create (&stats_thread_id, 0, stats_thread, (void *) recv);
+    int rval = pthread_create (&stats_thread_id, 0, stats_thread, (void *) udprecv);
     if (rval != 0)
     {
       cerr << "uwb_udprecv: failed to start stats thread" << endl;
@@ -195,9 +192,9 @@ void * stats_thread (void * arg)
   while (!quit_threads)
   {
     // get a snapshot of the data as quickly as possible
-    b_recv_curr = udprecv->get_stats()->get_data_transmitted();
-    b_drop_curr = udprecv->get_stats()->get_data_dropped();
-    s_curr = udprecv->get_stats()->get_nsleeps();
+    b_recv_curr = recv->get_stats()->get_data_transmitted();
+    b_drop_curr = recv->get_stats()->get_data_dropped();
+    s_curr      = recv->get_stats()->get_nsleeps();
 
     // calc the values for the last second
     b_recv_1sec = b_recv_curr - b_recv_total;
@@ -214,6 +211,8 @@ void * stats_thread (void * arg)
     fprintf (stderr,"Recv %6.3f [Gb/s] Sleeps %lu Dropped %lu B\n", gb_recv_ps, s_1sec, b_drop_curr);
     sleep(1);
   }
+ 
   cerr << "stats_thread: exiting" << endl;
+  return (void *) 0;
 }
 

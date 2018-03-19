@@ -21,7 +21,7 @@ from spip.utils import sockets
 from spip.utils import catalog
 
 DAEMONIZE = True
-DL = 1
+DL = 2
 
 ##############################################################
 # Actual KATCP server implementation
@@ -44,6 +44,7 @@ class KATCPServer (DeviceServer):
     self._beam_sensors = {}
     self._data_product = {}
     self._data_product["id"] = "None"
+    self._data_product["state"] = "None"
 
     self.data_product_res = []
     self.data_product_res.append(re.compile ("^[a-zA-Z]+_1"))
@@ -79,7 +80,22 @@ class KATCPServer (DeviceServer):
       default="")
     self.add_sensor(self._host_name)
 
-    self.script.log(2, "KATCPServer::setup_sensors lmc="+str(self.script.lmc))
+    # GUI URL TODO remove hardcoding
+    guis = [ { "title": "PTUSE Web Interface",
+               "description": "Live Pulsar timing monitoring plots", 
+               "href": "http://192.168.6.235/spip/timing/" } ]
+    encoded = json.dumps(guis)
+    self._gui_urls = Sensor.string("gui-urls",
+      description="PTUSE GUI URL",
+      unit="",
+      default=encoded)
+    self.add_sensor(self._gui_urls) 
+    self._gui_urls.set_value(encoded)
+
+    # give LMC some time to prepare the socket
+    time.sleep(5)
+
+    self.script.log(1, "KATCPServer::setup_sensors lmc="+str(self.script.lmc))
     (host, port) = self.script.lmc.split(":")
     self.setup_sensors_host (host, port)
 
@@ -89,7 +105,7 @@ class KATCPServer (DeviceServer):
   # add sensors based on the reply from the specified host
   def setup_sensors_host (self, host, port):
 
-    self.script.log(2, "KATCPServer::setup_sensors_host ("+host+","+port+")")
+    self.script.log(1, "KATCPServer::setup_sensors_host ("+host+","+port+")")
     sock = sockets.openSocket (DL, host, int(port), 1)
 
     if sock:
@@ -140,7 +156,7 @@ class KATCPServer (DeviceServer):
         unit="",
         default=0)
 
-      self._host_sensors["local_time_synced"] = Sensor.boolean(host+".local_time_synced",
+      self._host_sensors["local_time_synced"] = Sensor.boolean("local_time_synced",
         description=host+": NTP server synchronisation",
         unit="",
         default=0)
@@ -219,7 +235,7 @@ class KATCPServer (DeviceServer):
     b = str(beam)
     self._beam_sensors = {}
 
-    self.script.log(2, "KATCPServer::setup_sensors_beam ="+b)
+    self.script.log(2, "KATCPServer::setup_sensors_beam beam="+b)
 
     self._beam_sensors["observing"] = Sensor.boolean("observing",
       description="Beam " + b + " is observing",
@@ -234,11 +250,19 @@ class KATCPServer (DeviceServer):
       default=0)
     self.add_sensor(self._beam_sensors["snr"])
 
-    self._beam_sensors["power"] = Sensor.float("power",
-      description="Power Level of Beam "+b,
+    self._beam_sensors["beamformer_stddev_polh"] = Sensor.float("beamformer_stddev_polh",
+      description="Standard deviation of beam voltages for pol H",
       unit="",
+      params=[0,127],
       default=0)
-    self.add_sensor(self._beam_sensors["power"])
+    self.add_sensor(self._beam_sensors["beamformer_stddev_polh"])
+
+    self._beam_sensors["beamformer_stddev_polv"] = Sensor.float("beamformer_stddev_polv",
+      description="Standard deviation of beam voltages for pol V",
+      unit="",
+      params=[0,127],
+      default=0)
+    self.add_sensor(self._beam_sensors["beamformer_stddev_polv"])
 
     self._beam_sensors["integrated"] = Sensor.float("integrated",
       description="Length of integration for Beam "+b,
@@ -268,13 +292,13 @@ class KATCPServer (DeviceServer):
   @return_reply(Float())
   def request_beamformer_stddev_polh(self, req):
     """Return the standard deviation of the 8-bit power level of pol H."""
-    return ("ok", self._beam_sensors["power_polh"].value())
+    return ("ok", self._beam_sensors["beamformer_stddev_polh"].value())
 
   @request()
   @return_reply(Float())
   def request_beamformer_stddev_polv(self, req):
     """Return the standard deviation of the 8-bit power level of pol V."""
-    return ("ok", self._beam_sensors["power_polv"].value())
+    return ("ok", self._beam_sensors["beamformer_stddev_polv"].value())
 
   @request()
   @return_reply(Float())
@@ -282,38 +306,96 @@ class KATCPServer (DeviceServer):
     """Return the sychronisation with NTP time"""
     return ("ok", self._beam_sensors["local_time_synced"].value())
 
-  @request(Str(), Float())
+  @request(Float())
   @return_reply(Str())
-  def request_sync_time (self, req, data_product_id, adc_sync_time):
-    """Set the ADC_SYNC_TIME for beam of the specified data product."""
-    if not data_product_id == self._data_product["id"]:
-      return ("fail", "data product " + str (data_product_id) + " was not configured")
+  def request_sync_time (self, req, adc_sync_time):
+    """Set the ADC_SYNC_TIME for beam of the data product."""
+    if self._data_product["id"] == "None":
+      return ("fail", "data product was not configured")
     self.script.beam_config["lock"].acquire()
     self.script.beam_config["ADC_SYNC_TIME"] = str(adc_sync_time)
     self.script.beam_config["lock"].release()
     return ("ok", "")
 
-  @request(Str(), Str())
+  @request(Str())
   @return_reply(Str())
-  def request_proposal_id(self, req, data_product_id, proposal_id):
-    """Set the PROPOSAL_ID for the specified data product."""
-
+  def request_proposal_id (self, req, proposal_id):
+    """Set the PROPOSAL_ID for the data product."""
+    if self._data_product["id"] == "None":
+      return ("fail", "data product was not configured")
     self.script.beam_config["lock"].acquire()
     self.script.beam_config["PROPOSAL_ID"] = proposal_id
     self.script.beam_config["lock"].release()
-
     return ("ok", "")
 
+  # ensure state changes work
+  def change_state (self, command):
 
-  @request(Str(), Str())
+    state = self._data_product["state"]
+
+    reply = "ok"
+    message = ""
+
+    if command == "configure":
+      if state != "unconfigured":
+        message = "received " + command + " command when in " + state + " state"
+      else:
+        new_state = "configured"
+
+    elif command == "capture_init":
+      if state != "configured":
+        message = "received " + command + " command when in " + state + " state"
+      else:
+        new_state = "ready"
+
+    elif command == "target_start":
+      if state != "ready":
+        message = "received " + command + " command when in " + state + " state"
+      else:
+        new_state = "recording"
+
+    elif command == "target_stop":
+      if state != "recording":
+        message = "received " + command + " command when in " + state + " state"
+      else:
+        new_state = "ready"
+
+    elif command == "capture_done":
+      if state != "ready" and state != "configured":
+        message = "received " + command + " command when in " + state + " state"
+      else:
+        new_state = "configured"
+
+    elif command == "deconfigure":
+      if state != "configured":
+        message = "received " + command + " command when in " + state + " state"
+      else:
+        new_state = "unconfigured"
+
+    if message == "":
+      self.script.log (1, "change_state: " + self._data_product["state"] + " -> " + new_state)
+      self._data_product["state"] = new_state
+    else:
+      self.script.log (-1, "change_state: " + message)
+      reply = "fail"
+
+    return (reply, message)
+
+
+  @request(Str())
   @return_reply(Str())
-  def request_target_start (self, req, data_product_id, target_name):
-    """Commence data processing on specific data product and beam using target."""
-    self.script.log (1, "request_target_start(" + data_product_id + "," + target_name+")")
+  def request_target_start (self, req, target_name):
+    """Commence data processing using target."""
+    self.script.log (1, "request_target_start(" + target_name+")")
+    if self._data_product["id"] == "None":
+      return ("fail", "data product was not configured")
+
+    self.script.log (1, "request_target_start ADC_SYNC_TIME=" + self.script.cam_config["ADC_SYNC_TIME"])
 
     self.script.beam_config["lock"].acquire()
     self.script.beam_config["TARGET"] = self.script.cam_config["TARGET"]
-    self.script.beam_config["ADC_SYNC_TIME"] = self.script.cam_config["ADC_SYNC_TIME"]
+    if self.script.cam_config["ADC_SYNC_TIME"] != "0":
+      self.script.beam_config["ADC_SYNC_TIME"] = self.script.cam_config["ADC_SYNC_TIME"]
     self.script.beam_config["OBSERVER"] = self.script.cam_config["OBSERVER"]
     self.script.beam_config["ANTENNAE"] = self.script.cam_config["ANTENNAE"]
     self.script.beam_config["SCHEDULE_BLOCK_ID"] = self.script.cam_config["SCHEDULE_BLOCK_ID"]
@@ -329,6 +411,12 @@ class KATCPServer (DeviceServer):
     # check the ADC_SYNC_TIME is valid for this beam
     if self.script.beam_config["ADC_SYNC_TIME"] == "0":
       return ("fail", "ADC Synchronisation Time was not valid")
+
+    # change the state 
+    (result, message) = self.change_state ("target_start")
+    if result != "ok":
+      self.script.log (-1, "target_start: change_state failed: " + message)
+      return (result, message)
   
     # set the pulsar name, this should include a check if the pulsar is in the catalog
     self.script.beam_config["lock"].acquire()
@@ -338,29 +426,45 @@ class KATCPServer (DeviceServer):
     host = self.script.tcs_host
     port = self.script.tcs_port
 
-    self.script.log (2, "request_target_start: opening socket for beam " + beam_id + " to " + host + ":" + str(port))
+    self.script.log (2, "request_target_start: opening socket to " + host + ":" + str(port))
     sock = sockets.openSocket (DL, host, int(port), 1)
     if sock:
       xml = self.script.get_xml_config()
+      self.script.log (2, "request_target_start: get_xml_config=" + str(xml))
       sock.send(xml + "\r\n")
       reply = sock.recv (65536)
+      self.script.log (2, "request_target_start: reply=" + str(reply))
 
       xml = self.script.get_xml_start_cmd()
+      self.script.log (2, "request_target_start: get_xml_start_cmd=" + str(xml))
       sock.send(xml + "\r\n")
       reply = sock.recv (65536)
+      self.script.log (2, "request_target_start: reply=" + str(reply))
 
       sock.close()
       return ("ok", "")
     else:
       return ("fail", "could not connect to TCS")
 
-  @request(Str())
+  @request()
   @return_reply(Str())
-  def request_target_stop (self, req, data_product_id):
+  def request_target_stop (self, req):
     """Cease data processing with target_name."""
-    self.script.log (1, "request_target_stop(" + data_product_id+")")
+    self.script.log (1, "request_target_stop()")
+    return self.target_stop()
 
-    self.script.reset_beam_config (self.script.beam_config)
+  def target_stop (self):
+
+    if self._data_product["id"] == "None":
+      return ("fail", "data product was not configured")
+
+    # change the state 
+    (result, message) = self.change_state ("target_stop")
+    if result != "ok":
+      self.script.log (-1, "target_stop: change_state failed: " + message)
+      return (result, message)
+
+    self.script.reset_beam_config ()
 
     host = self.script.tcs_host
     port = self.script.tcs_port
@@ -374,22 +478,36 @@ class KATCPServer (DeviceServer):
     else:
       return ("fail", "could not connect to tcs[beam]")
 
-  @request(Str())
+  @request()
   @return_reply(Str())
-  def request_capture_init (self, req, data_product_id):
+  def request_capture_init (self, req):
     """Prepare the ingest process for data capture."""
-    self.script.log (1, "request_capture_init: " + str(data_product_id) )
-    if not data_product_id == self._data_product["id"]:
-      return ("fail", "data product " + str (data_product_id) + " was not configured")
+    self.script.log (1, "request_capture_init()")
+
+    # change the state 
+    (result, message) = self.change_state ("capture_init")
+    if result != "ok":
+      self.script.log (-1, "capture_init: change_state failed: " + message)
+      return (result, message)
+
     return ("ok", "")
 
-  @request(Str())
+  @request()
   @return_reply(Str())
-  def request_capture_done(self, req, data_product_id):
-    """Terminte the ingest process for the specified data_product_id."""
-    self.script.log (1, "request_capture_done: " + str(data_product_id))
-    if not data_product_id == self._data_product["id"]:
-      return ("fail", "data product " + str (data_product_id) + " was not configured")
+  def request_capture_done(self, req):
+    """Terminte the ingest process."""
+    self.script.log (1, "request_capture_done()")
+
+    # in case the observing was terminated early
+    if self._data_product["state"] == "recording":
+      (result, message) = self.target_stop ()
+
+    # change the state
+    (result, message) = self.change_state ("capture_done")
+    if result != "ok":
+      self.script.log (-1, "capture_done: change_state failed: " + message)
+      return (result, message)
+
     return ("ok", "")
 
   @return_reply(Str())
@@ -457,10 +575,12 @@ class KATCPServer (DeviceServer):
         self.script.log (2, "configure: streams="+str(streams))
 
         # check if the number of existing + new beams > available
-        (cfreq, bwd, nchan) = self.script.cfg["SUBBAND_CONFIG_0"].split(":")
-        if nchan != n_channels:
+        (cfreq, bwd, nchan1) = self.script.cfg["SUBBAND_CONFIG_0"].split(":")
+        (cfreq, bwd, nchan2) = self.script.cfg["SUBBAND_CONFIG_1"].split(":")
+        nchan = int(nchan1) + int(nchan2)
+        if nchan != int(n_channels):
           self._data_product.pop(data_product_id, None)
-          response = "PTUSE configured for " + nchan + " channels"
+          response = "PTUSE configured for " + str(nchan) + " channels"
           self.script.log (-1, "configure: " + response)
           return ("fail", response)
 
@@ -470,6 +590,13 @@ class KATCPServer (DeviceServer):
         self._data_product['cbf_source'] = cbf_source
         self._data_product['streams'] = str(streams)
         self._data_product['proxy_name'] = proxy_name
+        self._data_product['state'] = "unconfigured"
+
+        # change the state
+        (result, message) = self.change_state ("configure")
+        if result != "ok":
+          self.script.log (-1, "configure: change_state failed: " + message)
+          return (result, message)
 
         # determine the CAM metadata server and update pubsub
         cam_server = "None"
@@ -497,6 +624,9 @@ class KATCPServer (DeviceServer):
           self.script.pubsub.update_cam (cam_server, fengine_stream, polh_stream)
         else:
           response = "Could not extract streams[cam.http][camdata]"
+          self.script.log (1, "configure: cam_server=" + cam_server)
+          self.script.log (1, "configure: fengine_stream=" + fengine_stream)
+          self.script.log (1, "configure: polh_stream=" + polh_stream)
           self.script.log (-1, "configure: " + response)
           return ("fail", response)
         
@@ -505,13 +635,15 @@ class KATCPServer (DeviceServer):
         self.script.pubsub.restart()
 
         # determine the X and Y tied array channelised voltage streams
+        mcasts = {}
+        ports = {}
         key = 'cbf.tied_array_channelised_voltage'
         if key in streams.keys():
           stream = 'i0.tied-array-channelised-voltage.0x'
           if stream in streams[key].keys():
             (mcast, port) = self.parseStreamAddress (streams[key][stream])
-            mcasts[0] = mcast
-            ports[0] = int(port)
+            mcasts['x'] = mcast
+            ports['x'] = int(port)
           else:
             response = "Could not extract streams["+key+"]["+stream+"]"
             self.script.log (-1, "configure: " + response)
@@ -520,8 +652,8 @@ class KATCPServer (DeviceServer):
           stream = 'i0.tied-array-channelised-voltage.0y'
           if stream in streams[key].keys():
             (mcast, port) = self.parseStreamAddress (streams[key][stream])
-            mcasts[1] = mcast
-            ports[1] = int(port)
+            mcasts['y'] = mcast
+            ports['y'] = int(port)
           else:
             response = "Could not extract streams["+key+"]["+stream+"]"
             self.script.log (-1, "configure: " + response)
@@ -532,6 +664,7 @@ class KATCPServer (DeviceServer):
         for istream in range(int(self.script.cfg["NUM_STREAM"])):
           (host, beam_idx, subband) = self.script.cfg["STREAM_" + str(istream)].split(":")
           beam = self.script.cfg["BEAM_" + beam_idx]
+          self.script.log (1, "configure: istream="+str(istream)+ " beam=" + beam + " script.beam_name=" + self.script.beam_name)
           if beam == self.script.beam_name:
 
             # reset ADC_SYNC_TIME on the beam
@@ -540,29 +673,35 @@ class KATCPServer (DeviceServer):
             self.script.beam_config["lock"].release()
 
             port = int(self.script.cfg["STREAM_RECV_PORT"]) + istream
-            self.script.log (3, "configure: connecting to " + host + ":" + str(port))
+            self.script.log (1, "configure: connecting to " + host + ":" + str(port))
             sock = sockets.openSocket (DL, host, port, 1)
             if sock:
               req =  "<?req version='1.0' encoding='ISO-8859-1'?>"
               req += "<recv_cmd>"
               req +=   "<command>configure</command>"
               req +=   "<params>"
-              req +=     "<param key='DATA_MCAST_0'>" + mcasts[0] + "</param>"
-              req +=     "<param key='DATA_MCAST_1'>" + mcasts[1] + "</param>"
-              req +=     "<param key='DATA_PORT_0'>" + str(ports[0]) + "</param>"
-              req +=     "<param key='DATA_PORT_1'>" + str(ports[1]) + "</param>"
-              req +=     "<param key='META_MCAST_0'>" + mcasts[0] + "</param>"
-              req +=     "<param key='META_MCAST_1'>" + mcasts[1] + "</param>"
-              req +=     "<param key='META_PORT_0'>" + str(ports[0]) + "</param>"
-              req +=     "<param key='META_PORT_1'>" + str(ports[1]) + "</param>"
+
+              req +=     "<param key='DATA_MCAST_0'>" + mcasts['x'] + "</param>"
+              req +=     "<param key='DATA_PORT_0'>" + str(ports['x']) + "</param>"
+              req +=     "<param key='META_MCAST_0'>" + mcasts['x'] + "</param>"
+              req +=     "<param key='META_PORT_0'>" + str(ports['x']) + "</param>"
+              req +=     "<param key='DATA_MCAST_1'>" + mcasts['y'] + "</param>"
+              req +=     "<param key='DATA_PORT_1'>" + str(ports['y']) + "</param>"
+              req +=     "<param key='META_MCAST_1'>" + mcasts['y'] + "</param>"
+              req +=     "<param key='META_PORT_1'>" + str(ports['y']) + "</param>"
+
               req +=   "</params>"
               req += "</recv_cmd>"
 
-              self.script.log (1, "configure: sending XML req")
+              self.script.log (1, "configure: sending XML req ["+req+"]")
               sock.send(req)
               recv_reply = sock.recv (65536)
               self.script.log (1, "configure: received " + recv_reply)
               sock.close()
+            else:
+              response = "configure: could not connect to stream " + str(istream) + " at " + host + ":" + str(port)
+              self.script.log (-1, "configure: " + response)
+              return ("fail", response)
 
       return ("ok", "data product " + str (data_product_id) + " configured")
 
@@ -585,20 +724,29 @@ class KATCPServer (DeviceServer):
   def request_deconfigure(self, req, msg):
     """Deconfigure for the data_product."""
 
-    if len(msg.arguments) == 0:
-      self.script.log (-1, "request_deconfigure: no arguments provided")
-      return ("fail", "expected 1 argument")
+    #if len(msg.arguments) == 0:
+    #  self.script.log (-1, "request_deconfigure: no arguments provided")
+    #  return ("fail", "expected 1 argument")
 
     # the sub-array identifier
-    data_product_id = msg.arguments[0]
+    #data_product_id = msg.arguments[0]
 
-    self.script.log (1, "configure: deconfiguring " + str(data_product_id))
+    #self.script.log (1, "configure: deconfiguring " + str(data_product_id))
+
+    # hack for now
+    data_product_id = self._data_product["id"]
 
     # check if the data product was previously configured
     if not data_product_id == self._data_product["id"]:
       response = str(data_product_id) + " did not match configured data product [" + self._data_product["id"] + "]"
       self.script.log (-1, "configure: " + response)
       return ("fail", response)
+
+    # change the state
+    (result, message) = self.change_state ("deconfigure")
+    if result != "ok":
+      self.script.log (-1, "deconfigure: change_state failed: " + message)
+      return (result, message)
 
     for istream in range(int(self.script.cfg["NUM_STREAM"])):
       (host, beam_idx, subband) = self.script.cfg["STREAM_" + str(istream)].split(":")
@@ -634,10 +782,13 @@ class KATCPServer (DeviceServer):
   @return_reply(Str())
   def request_output_channels (self, req, nchannels):
     """Set the number of output channels."""
+    self.script.log (1, "request_output_channels: nchannels=" + str(nchannels))
     if not self.test_power_of_two (nchannels):
+      self.script.log (-1, "request_output_channels: " + str(nchannels) + " not a power of two")
       return ("fail", "number of channels not a power of two")
     if nchannels < 64 or nchannels > 4096:
-      return ("fail", "number of channels not within range 64 - 2048")
+      self.script.log (-1, "request_output_channels: " + str(nchannels) + " not within range 64 - 4096")
+      return ("fail", "number of channels not within range 64 - 4096")
     self.script.beam_config["lock"].acquire()
     self.script.beam_config["OUTNCHAN"] = str(nchannels)
     self.script.beam_config["lock"].release()
@@ -648,8 +799,10 @@ class KATCPServer (DeviceServer):
   def request_output_bins(self, req, nbin):
     """Set the number of output phase bins."""
     if not self.test_power_of_two(nbin):
+      self.script.log (-1, "request_output_bins: " + str(nbin) + " not a power of two")
       return ("fail", "nbin not a power of two")
     if nbin < 64 or nbin > 2048:
+      self.script.log (-1, "request_output_bins: " + str(nbin) + " not within range 64 - 2048")
       return ("fail", "nbin not within range 64 - 2048")
     self.script.beam_config["lock"].acquire()
     self.script.beam_config["OUTNBIN"] = str(nbin)
@@ -661,7 +814,8 @@ class KATCPServer (DeviceServer):
   def request_output_tsubint (self, req, tsubint):
     """Set the length of output sub-integrations."""
     if tsubint < 10 or tsubint > 60:
-      return ("fail", "length of output subints must be between 10 and 600 seconds")
+      self.script.log (-1, "request_output_tsubint: " + str(tsubint) + " not within range 10 - 60")
+      return ("fail", "length of output subints must be between 10 and 60 seconds")
     self.script.beam_config["lock"].acquire()
     self.script.beam_config["OUTTSUBINT"] = str(tsubint)
     self.script.beam_config["lock"].release()
@@ -671,8 +825,9 @@ class KATCPServer (DeviceServer):
   @return_reply(Str())
   def request_dispersion_measure (self, req, dm):
     """Set the value of dispersion measure to be removed"""
-    if dm < 0 or dm > 2000:
-      return ("fail", "dm not within range 0 - 2000")
+    if dm > 2000:
+      self.script.log (-1, "request_dispersion_measure: " + str(dm) + " > 2000")
+      return ("fail", "dm greater than limit of 2000")
     self.script.beam_config["lock"].acquire()
     self.script.beam_config["DM"] = str(dm)
     self.script.beam_config["lock"].release()
@@ -690,6 +845,62 @@ class KATCPServer (DeviceServer):
       self.script.beam_config["MODE"] = "PSR"
     else:
       self.script.beam_config["MODE"] = "CAL"
+    self.script.beam_config["lock"].release()
+    return ("ok", "")
+
+  @request(Int())
+  @return_reply(Str())
+  def request_output_nstoke(self, req, outnstokes):
+    """Set the number of output stokes parameters."""
+    if outnstokes != 1 and outnstokes != 2 and outnstokes != 4:
+      self.script.log (-1, "request_output_nstokes: " + str(outnstokes) + " not 1, 2 or 4")
+      return ("fail", "output nstokes must be between 1, 2 or 4")
+    self.script.beam_config["lock"].acquire()
+    self.script.beam_config["OUTNSTOKES"] = str(outnstokes)
+    self.script.beam_config["lock"].release()
+    return ("ok", "")
+
+  @request(Int())
+  @return_reply(Str())
+  def request_output_nbit(self, req, outnbit):
+    """Set the number of bits per output sample."""
+    if outnbit != 1 and outnbit != 2 and outnbit != 4 and outnbit != 8:
+      self.script.log (-1, "request_output_nbit: " + str(outnbit) + " not 1, 2, 4 or 8")
+      return ("fail", "output nbit must be between 1, 2, 4 or 8")
+    self.script.beam_config["lock"].acquire()
+    self.script.beam_config["OUTNBIT"] = str(outnbit)
+    self.script.beam_config["lock"].release()
+    return ("ok", "")
+
+  @request(Int())
+  @return_reply(Str())
+  def request_output_tdec(self, req, outtdec):
+    """Set the number of input samples integrated into 1 output sample."""
+    if outtdec < 16 or outtdec > 131072:
+      self.script.log (-1, "request_output_tdec: " + str(outtdec) + " not in range [16..131072]")
+      return ("fail", "output tdec must be between 16 and 131072")
+    self.script.beam_config["lock"].acquire()
+    self.script.beam_config["OUTTDEC"] = str(outnbit)
+    self.script.beam_config["lock"].release()
+    return ("ok", "")
+
+  @request()
+  @return_reply(Str())
+  def request_fold_mode (self, req):
+    """Set the processing mode to produce folded archives."""
+    self.script.beam_config["lock"].acquire()
+    self.script.beam_config["PERFORM_FOLD"] = "1"
+    self.script.beam_config["PERFORM_SEARCH"] = "0"
+    self.script.beam_config["lock"].release()
+    return ("ok", "")
+
+  @request()
+  @return_reply(Str())
+  def request_search_mode (self, req):
+    """Set the processing mode to produce filterbank data."""
+    self.script.beam_config["lock"].acquire()
+    self.script.beam_config["PERFORM_FOLD"] = "0"
+    self.script.beam_config["PERFORM_SEARCH"] = "1"
     self.script.beam_config["lock"].release()
     return ("ok", "")
 

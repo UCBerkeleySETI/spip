@@ -14,7 +14,7 @@ libspiptelescope_la_SOURCES = Antenna.C \
 
 AM_CXXFLAGS = \
   -I$(top_builddir)/src/Affinity \
-  -I$(top_builddir)/src/SignalProcessing \ 
+  -I$(top_builddir)/src/SignalProcessing \
   -I$(top_builddir)/src/Util
 
 LDADD = \

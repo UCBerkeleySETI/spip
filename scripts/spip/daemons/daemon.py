@@ -44,8 +44,7 @@ class Daemon(object):
     self.control_dir = self.cfg["SERVER_CONTROL_DIR"]
 
     # append the streamid/beamid/hostname
-    if self.id != -1:
-      self.name += "_" + str (self.id)
+    self.name += "_" + str (self.id)
 
   def configure (self, become_daemon, dl, source, dest):
 
@@ -57,10 +56,14 @@ class Daemon(object):
       sys.stderr.write ("ERROR: script requires " + self.req_host +", but was launched on " + self.hostname + "\n")
       return 1
 
-    self.log_file  = self.log_dir + "/" + self.name + ".log"
+    if str(self.id) == "-1":
+      self.log_file  = self.log_dir + "/" + dest + ".log"
+    else:
+      self.log_file  = self.log_dir + "/" + dest + "_" + str(self.id) +  ".log"
+
     self.pid_file  = self.control_dir + "/" + self.name + ".pid"
     self.quit_file = self.control_dir + "/"  + self.name + ".quit"
-    #self.reload_file = self.control_dir + "/"  + self.name + ".reload"
+    self.reload_file = self.control_dir + "/"  + self.name + ".reload"
 
     if os.path.exists(self.quit_file):
       sys.stderr.write ("ERROR: quit file existed at launch: " + self.quit_file + "\n")
@@ -73,6 +76,8 @@ class Daemon(object):
     # optionally daemonize script
     if become_daemon: 
       self.daemonize ()
+
+    self.log (2, "Daemon::configure: log_file=" + self.log_file)
 
     # instansiate a threaded event signal
     self.quit_event = threading.Event()
@@ -91,10 +96,10 @@ class Daemon(object):
     self.control_thread = ControlThread(self)
     self.control_thread.start()
 
-    self.log (3, "configure: log_file=" + self.log_file)
-    self.log (3, "configure: pid_file=" + self.pid_file)
-    self.log (3, "configure: quit_file=" + self.quit_file)
-    #self.log (3, "configure: reload_file=" + self.reload_file)
+    self.log (2, "Daemon::configure: log_file=" + self.log_file)
+    self.log (2, "Daemon::configure: pid_file=" + self.pid_file)
+    self.log (2, "Daemon::configure: quit_file=" + self.quit_file)
+    self.log (2, "Daemon::configure: reload_file=" + self.reload_file)
 
     return 0
 
@@ -104,6 +109,7 @@ class Daemon(object):
     stdin = "/dev/null"
     stdout = self.log_file
     stderr = self.log_file
+    self.log (2, "Daemon::daemonize log_file=" + self.log_file)
 
     try:
       pid = os.fork()
@@ -162,29 +168,93 @@ class Daemon(object):
         self.log_sock.connect(1)
       self.log_sock.log (level, message)
 
+  # check if any binaries exist
+  def checkBinaries (self):
 
-  def tryKill (self, signal):
+    self.log (2, "Daemon::checkBinaries")
     existed = False
+
     for binary in self.binary_list:
       cmd = "pgrep -f '^" + binary + "'"
       rval, lines = self.system (cmd, 3, quiet=True)
-      self.log (2, "tryKill: cmd="+cmd+ " rval=" + str(rval) + " lines=" + str(lines))
+      self.log (2, "Daemon::checkBinaries cmd="+cmd+ " rval=" + str(rval) + " lines=" + str(lines))
+
+      # if the binary exists, rval will be non zero
+      existed = not rval
+
+    return existed
+
+
+  def tryKill (self, signal):
+
+    self.log (2, "Daemon::tryKill signal="+signal)
+
+    existed = False
+
+    # check each binary in the list
+    for binary in self.binary_list:
+
+      # check if the binary is running
+      cmd = "pgrep -f '^" + binary + "'"
+      rval, lines = self.system (cmd, 3, quiet=True)
+      self.log (3, "Daemon::tryKill cmd="+cmd+ " rval=" + str(rval) + " lines=" + str(lines))
+
+      # if the binary exists, then kill with the specified signal
+      if not rval:
+        cmd = "pkill -SIG" + signal + " -f '^" + binary + "'"
+        rval, lines = self.system (cmd, 2)
+
+      # check if the binary is still running
+      cmd = "pgrep -f '^" + binary + "'"
+      rval, lines = self.system (cmd, 3, quiet=True)
+      self.log (2, "Daemon::tryKill cmd="+cmd+ " rval=" + str(rval) + " lines=" + str(lines))
       if not rval:
         existed = True
-        cmd = "pkill -SIG" + signal + " -f '^" + binary + "'"
-        rval, lines = self.system (cmd, 1)
+
     return existed 
 
-    
+  def killBinaries(self):
+
+    signal_required = "None"
+
+    self.log (2, "Daemon::killBinaries checkBinaries()")
+    existed = self.checkBinaries()
+    self.log (3, "Daemon::killBinaries checkBinaries() existed=" + str(existed))
+
+    # if a binary is running
+    if existed:
+      signal_required = "INT"
+      self.log (3, "Daemon::killBinaries tryKill(INT)")
+      existed = self.tryKill ("INT")
+      self.log (3, "Daemon::killBinaries tryKill(INT) success=" + str(not existed))
+
+      # if a binary is running after SIGINT
+      if existed:
+        time.sleep(2)
+        signal_required = "TERM"
+        self.log (3, "Daemon::killBinaries tryKill(TERM)")
+        existed = self.tryKill ("TERM")
+        self.log (3, "Daemon::killBinaries tryKill(TERM) success=" + str(not existed))
+
+        # if a binary is running after SIGTERM
+        if existed:
+          time.sleep(2)
+          signal_required = "KILL"
+          self.log (3, "Daemon::killBinaries tryKill(KILL)")
+          existed = self.tryKill ("KILL")
+          self.log (3, "Daemon::killBinaries tryKill(KILL) success=" + str(not existed))
+
+    self.log (2, "Daemon::killBinaries signal_required=" + signal_required + \
+                 " success=" + str(not existed))
+
   def conclude (self):
+
+    self.log (2, "Daemon::conclude")
 
     self.quit_event.set()
 
-    if self.tryKill ("INT"):
-      time.sleep(2)
-      if self.tryKill ("TERM"):
-        time.sleep(2)
-        self.tryKill ("KILL")
+    self.log (2, "Daemon::conclude killBinaries")
+    self.killBinaries()
 
     if self.control_thread:
       self.control_thread.join()
@@ -259,7 +329,7 @@ class Daemon(object):
 
     return_code = 0
 
-    self.log(dl, "system_piped: " + command)
+    self.log (dl, "system_piped: dl=" + str(dl) + " self.dl=" + str(self.dl) + " " + command)
 
     # setup the module object
     proc = subprocess.Popen(command,
@@ -275,7 +345,7 @@ class Daemon(object):
     # discard the return code
     return_code = proc.returncode
 
-    if return_code:
-      self.log (0, "system_pipe: " + command + " failed")
+    if return_code and not self.quit_event.isSet():
+      self.log (0, "system_piped: " + command + " failed")
 
     return return_code

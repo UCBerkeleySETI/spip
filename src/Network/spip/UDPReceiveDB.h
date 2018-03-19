@@ -33,21 +33,36 @@ namespace spip {
 
       int configure (const char * config);
 
-      void prepare ();
-
       void set_format (UDPFormat * fmt);
+
+      void set_control_cmd (ControlCmd cmd);
 
       void start_control_thread (int port);
 
       void stop_control_thread ();
 
-      void open ();
+      static void * control_thread_wrapper (void * obj)
+      {
+        // ensure the control thread is not offloaded
+#ifdef HAVE_VMA
+        pthread_t id = pthread_self();
+        struct vma_api_t * vma_api = vma_get_api();
+        if (vma_api)
+        {
+          vma_api->thread_offload (0, id);
+        }
+#endif
+        ((UDPReceiveDB*) obj)->control_thread ();
+        pthread_exit (NULL);
+      }
+
+      bool open ();
 
       void open (const char * header);
 
       void close ();
 
-      bool receive ();
+      bool receive (int core);
 
       void start_capture () { control_cmd = Start; };
 
@@ -56,6 +71,7 @@ namespace spip {
       static void * stats_thread_wrapper (void * obj)
       {
         ((UDPReceiveDB*) obj )->stats_thread ();
+        pthread_exit (NULL);
       }
 
       void start_stats_thread ();
@@ -70,13 +86,7 @@ namespace spip {
 
     protected:
 
-      static void * control_thread_wrapper (void *);
-
       void control_thread ();
-
-      void update_stats();
-
-      void set_control_cmd (ControlCmd cmd);
 
       std::string data_host;
 
@@ -101,6 +111,8 @@ namespace spip {
       ControlCmd control_cmd;
 
       ControlState control_state;
+
+      AsciiHeader config;
 
       AsciiHeader header;
 
@@ -145,6 +157,17 @@ namespace spip {
 
       struct timeval curr;
       struct timeval prev;
+
+      char verbose;
+
+    private:
+
+      int core;
+
+      pthread_cond_t cond;
+
+      pthread_mutex_t mutex;
+
   };
 
 }

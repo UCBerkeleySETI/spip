@@ -6,7 +6,6 @@
  ****************************************************************************/
 
 #include "spip/AsciiHeader.h"
-#include "spip/HardwareAffinity.h"
 #include "spip/UDPReceiveDB.h"
 #include "spip/UDPFormatCustom.h"
 
@@ -38,7 +37,6 @@ int main(int argc, char *argv[]) try
 
   // core on which to bind thread operations
   int core = -1;
-  spip::HardwareAffinity hw_affinity;
 
   int verbose = 0;
 
@@ -51,8 +49,6 @@ int main(int argc, char *argv[]) try
     {
       case 'b':
         core = atoi(optarg);
-        hw_affinity.bind_process_to_cpu_core (core);
-        hw_affinity.bind_to_memory (core);
         break;
 
       case 'f':
@@ -105,19 +101,11 @@ int main(int argc, char *argv[]) try
  
   signal(SIGINT, signal_handler);
 
-  if (config.load_from_file (argv[optind]) < 0)
-  {
-    cerr << "ERROR: could not read ASCII config from " << argv[optind] << endl;
-    return (EXIT_FAILURE);
-  }
+  config.load_from_file (argv[optind]);
 
   if (verbose)
     cerr << "ska1_udpdb: configuring" << endl;
   udpdb->configure (config.raw());
-
-  if (verbose)
-    cerr << "ska1_udpdb: allocating resources" << endl;
-  udpdb->prepare ();
 
   if (verbose)
     cerr << "ska1_udpdb: writing header to data block" << endl;
@@ -138,7 +126,7 @@ int main(int argc, char *argv[]) try
 
   if (verbose)
     cerr << "ska1_udpdb: receiving" << endl;
-  udpdb->receive ();
+  udpdb->receive (core);
   quit_threads = 1;
 
   udpdb->close();
@@ -229,5 +217,7 @@ void * stats_thread (void * arg)
 
     sleep(1);
   }
+  void * result = NULL;
+  return result;
 }
 

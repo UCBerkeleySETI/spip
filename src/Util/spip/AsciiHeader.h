@@ -32,11 +32,11 @@ namespace spip {
 
       void reset () { header[0] = '\0'; };
 
-      int load_from_file (const char* filename);
+      void load_from_file (const char* filename);
 
-      int load_from_str (const char* header_str);
+      void load_from_str (const char* header_str);
 
-      int append_from_str (const char* header_str);
+      void append_from_str (const char* header_str);
 
       int get (const char* keyword, const char* format, ...);
 

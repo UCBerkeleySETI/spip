@@ -5,8 +5,7 @@
 # 
 ###############################################################################
 
-import threading, socket, errno
-from select import select
+import threading, socket, errno, select
 
 class SocketedThread (threading.Thread):
 
@@ -15,10 +14,14 @@ class SocketedThread (threading.Thread):
     self.script = script
     self.host = host
     self.port = port
+    self.nlisten = 1
 
     self.can_read = []
     self.can_write = []
     self.can_error = []
+
+  def set_listening_slots (self, nlisten):
+    self.nlisten = nlisten
 
   def run (self):
 
@@ -27,7 +30,8 @@ class SocketedThread (threading.Thread):
 
     self.script.log (2, "SocketedThread::run listening on " + self.host + ":" + str(self.port))
     sock.bind((self.host, int(self.port)))
-    sock.listen(1)
+    self.script.log (3, "SocketedThread configuring number of listening slots to " + str(self.nlisten))
+    sock.listen(self.nlisten)
 
     self.can_read = [sock]
     self.can_write = []
@@ -43,10 +47,10 @@ class SocketedThread (threading.Thread):
 
       try:
         # wait for some activity on the control socket
-        self.script.log (3, "SocketedThread: select")
-        did_read, did_write, did_error = select(self.can_read, self.can_write, self.can_error, timeout)
-        self.script.log (3, "SocketedThread: read="+str(len(did_read))+" write="+
-                   str(len(did_write))+" error="+str(len(did_error)))
+        self.script.log (3, "SocketedThread::run select")
+        did_read, did_write, did_error = select.select(self.can_read, self.can_write, self.can_error, timeout)
+        self.script.log (3, "SocketedThread::run read="+str(len(did_read))+" write="+ str(len(did_write))+" error="+str(len(did_error)))
+
       except select.error as e:
         if e[0] == errno.EINTR:
           self.script.log(0, "SIGINT received during select, exiting")
@@ -83,6 +87,12 @@ class SocketedThread (threading.Thread):
                     del self.can_read[i]
               else:
                 raise
+
+    self.script.log (2, "SocketedThread::run exiting")
+    # ensure any sockets that are open are closed and flushed
+    for i, x in enumerate(self.can_read):
+      x.close()
+      del self.can_read[i]
 
   def parse_message(self, data):
     return "ok"

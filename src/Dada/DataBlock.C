@@ -57,6 +57,7 @@ spip::DataBlock::DataBlock (const char * key_string)
   header = 0;
   header_bufsz = 0;
   data_bufsz = 0;
+  verbose = false;
 }
 
 spip::DataBlock::~DataBlock ()

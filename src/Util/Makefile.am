@@ -12,23 +12,24 @@ libspiputil_la_SOURCES = AsciiHeader.C  \
 	tostring.C \
 	Time.C
 
-LDADD = libspiputil.la
+libspiputil_la_LIBADD = 
 
-#if HAVE_CUFFT
+if HAVE_CUFFT
 
 libspiputil_headers += spip/CUFFTError.h
-
 libspiputil_la_SOURCES += CUFFTError.C
-
-#endif
+libspiputil_la_LIBADD += @CUFFT_LIBS@
 
 AM_CPPFLAGS = @CUFFT_CFLAGS@
+AM_LDFLAGS =  @CUFFT_LIBS@
 
-LDADD += @CUFFT_LIBS@
+endif
 
 TESTS = test_AsciiHeader
 
 check_PROGRAMS = $(TESTS)
 
 test_AsciiHeader_SOURCES = test_AsciiHeader.C
+
+#test_AsciiHeader_LDADD = @CUFFT_LIBS@
 

@@ -89,7 +89,7 @@ size_t spip::AsciiHeader::get_header_length() const
   return strlen(header);
 }
 
-int spip::AsciiHeader::load_from_file (const char * filename)
+void spip::AsciiHeader::load_from_file (const char * filename)
 {
   size_t file_size = spip::AsciiHeader::filesize (filename);
   if (file_size > header_size)
@@ -101,7 +101,7 @@ int spip::AsciiHeader::load_from_file (const char * filename)
     throw runtime_error ("could not read header from file");
 }
 
-int spip::AsciiHeader::load_from_str (const char * string)
+void spip::AsciiHeader::load_from_str (const char * string)
 {
   size_t str_length = strlen(string) + 1;
   if (str_length > header_size)
@@ -109,7 +109,7 @@ int spip::AsciiHeader::load_from_str (const char * string)
   strcpy (header, string);
 }
 
-int spip::AsciiHeader::append_from_str (const char * string)
+void spip::AsciiHeader::append_from_str (const char * string)
 {
   size_t str_length = strlen(string) + strlen(header) + 1;
   if (str_length > header_size)

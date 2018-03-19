@@ -30,15 +30,15 @@ void spip::BlockFormatBPSR::unpack_hgft (char * buffer, uint64_t nbytes)
 {
   const unsigned nsamp = nbytes / bytes_per_sample;
   const unsigned nsamp_per_time = nsamp / ntime;
-  const unsigned nchan_per_freq = nchan / nfreq;
+  const unsigned nchan_per_freq_hg = nchan / nfreq_hg;
+  const unsigned nchan_per_freq_ft = nchan / nfreq_hg;
   const unsigned nsamp_block = resolution / (nchan * npol * ndim * nbit / 8);
   const unsigned nblock = nsamp / nsamp_block;
 
   int8_t * in = (int8_t *) buffer;
-  int8_t val;
 
   uint64_t idat = 0;
-  unsigned ibin, ifreq, itime;
+  unsigned ibin, ifreq_hg, ifreq_ft, itime;
   int re, im;
   unsigned power;
 
@@ -48,7 +48,8 @@ void spip::BlockFormatBPSR::unpack_hgft (char * buffer, uint64_t nbytes)
     {
       for (unsigned ichan=0; ichan<nchan; ichan++)
       {
-        ifreq = ichan / nchan_per_freq;
+        ifreq_ft = ichan / nchan_per_freq_ft;
+        ifreq_hg = ichan / nchan_per_freq_hg;
 
         for (unsigned isamp=0; isamp<nsamp_block; isamp++)
         {
@@ -59,15 +60,15 @@ void spip::BlockFormatBPSR::unpack_hgft (char * buffer, uint64_t nbytes)
           sums[ipol*ndim + 1] += (float) im;
 
           ibin = re + 128;
-          hist[ipol][0][ifreq][ibin]++;
+          hist[ipol][0][ifreq_hg][ibin]++;
 
           ibin = im + 128;
-          hist[ipol][1][ifreq][ibin]++;
+          hist[ipol][1][ifreq_hg][ibin]++;
 
           // detect and average the timesamples into a NPOL sets of NCHAN * 512 waterfalls
           power = (unsigned) ((re * re) + (im * im));
           itime = ((iblock * nsamp_block) + isamp) / nsamp_per_time;
-          freq_time[ipol][ifreq][itime] += power;
+          freq_time[ipol][ifreq_ft][itime] += power;
 
           idat += 2;
         }
@@ -81,8 +82,6 @@ void spip::BlockFormatBPSR::unpack_hgft (char * buffer, uint64_t nbytes)
 void spip::BlockFormatBPSR::unpack_ms(char * buffer, uint64_t nbytes)
 {
   const unsigned nsamp = nbytes / bytes_per_sample;
-  const unsigned nsamp_per_time = nsamp / ntime;
-  const unsigned nchan_per_freq = nchan / nfreq;
   const unsigned nsamp_block = resolution / (nchan * npol * ndim * nbit / 8);
   const unsigned nblock = nsamp / nsamp_block;
 
@@ -92,17 +91,10 @@ void spip::BlockFormatBPSR::unpack_ms(char * buffer, uint64_t nbytes)
     means[i] = sums[i] / ndat;
 
   int8_t * in = (int8_t *) buffer;
-  int8_t val;
 
   uint64_t idat = 0;
   int re, im;
   float diff;
-
-#ifdef _DEBUG
-  cerr << "spip::BlockFormatBPSR::unpack_ms nsamp=" << nsamp << " nsamp_per_time=" << nsamp_per_time << endl;
-  cerr << "spip::BlockFormatBPSR::unpack_ms nchan_per_freq=" << nchan_per_freq << " nblock=" << nblock << end
-l;
-#endif
 
   for (unsigned iblock=0; iblock<nblock; iblock++)
   {

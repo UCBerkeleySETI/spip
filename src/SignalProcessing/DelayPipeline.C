@@ -121,7 +121,7 @@ void spip::DelayPipeline::prepare ()
   buffered->resize();
   buffered->zero();
 
-  integer_delay = new spip::IntegerDelay ();
+  integer_delay = new spip::IntegerDelayRAM ();
   integer_delay->set_input (input);
   integer_delay->set_output (buffered);
   integer_delay->prepare (nsignal);

@@ -105,21 +105,28 @@ class timing extends spip_webpage
                 params   = beam.getElementsByTagName("observation_parameters")[0];
                 observer = get_node_value(params.getElementsByTagName("observer")[0]);
                 pid      = get_node_value(params.getElementsByTagName("pid")[0]);
-                mode     = get_node_value(params.getElementsByTagName("mode")[0]);
                 tobs     = get_node_value(params.getElementsByTagName("expected_length")[0]);
 
                 start    = get_node_value(params.getElementsByTagName("utc_start")[0]);
                 elapsed  = get_node_value(params.getElementsByTagName("elapsed_time")[0]);
+
+                params   = beam.getElementsByTagName("fold_processing_parameters")[0];
 
                 document.getElementById(beam_name + "_source").innerHTML = name;
                 document.getElementById(beam_name + "_ra").innerHTML = ra;
                 document.getElementById(beam_name + "_dec").innerHTML = dec;
                 document.getElementById(beam_name + "_observer").innerHTML = observer;
                 document.getElementById(beam_name + "_pid").innerHTML = pid;
-                document.getElementById(beam_name + "_mode").innerHTML = mode;
                 document.getElementById(beam_name + "_start").innerHTML = start;
                 document.getElementById(beam_name + "_elapsed").innerHTML = elapsed;
                 document.getElementById(beam_name + "_tobs").innerHTML = tobs;
+
+                params   = beam.getElementsByTagName("fold_processing_parameters")
+                if (params.length == 1)
+                {
+                  mode     = get_node_value(params.getElementsByTagName("mode")[0]);
+                  document.getElementById(beam_name + "_mode").innerHTML = mode;
+                }
 
                 //if (beam_state == "Recording")
                   tcs_utcs[beam_name] = start
@@ -165,25 +172,20 @@ class timing extends spip_webpage
     
                     var plot_id = beam_name + "_" + plot_type
                     var plot_ts = beam_name + "_" + plot_type + "_ts"
+                    var plot_link = beam_name + "_" + plot_type + "_link"
 
                     // if the image has been updated, reacquire it
                     //alert (plot_timestamp + " ?=? " + document.getElementById(plot_ts).value)
                     if (plot_timestamp != document.getElementById(plot_ts).value)
                     {
-                      //var new_image = new Image();
-                      //new_image.id = plot_id;
-                      //new_image.src = "/spip/timing/index.php?update=true&beam_name="+
-                      //                beam_name+"&pol=0&type=plot&plot="+plot_type+"&ts="+plot_timestamp;;
-                      //new_image.onload = function() {
-                      //  var img = document.getElementById(plot_id);
-                      //  img.parentNode.insertBefore(new_image, img);
-                      //  img.parentNode.removeChild(img);
-                      //}
-
-                      url = "/spip/timing/index.php?update=true&beam_name="+beam_name+"&type=plot&pol=0&plot="+plot_type+"&ts="+plot_timestamp;
+                      url = "/spip/timing/index.php?update=true&beam_name="+beam_name+"&type=plot&pol=0&plot="+plot_type+"&res=lo&ts="+plot_timestamp;
                       //alert (url);
                       document.getElementById(plot_id).src = url;
                       document.getElementById(plot_ts).value = plot_timestamp;
+
+                      url = "/spip/timing/index.php?update=true&beam_name="+beam_name+"&type=plot&pol=0&plot="+plot_type+"&res=hi&ts="+plot_timestamp;
+                      document.getElementById(plot_link).href= url;
+
                     }
                   }
                 }
@@ -270,8 +272,17 @@ class timing extends spip_webpage
     {
       $repack_socket = new spip_socket();
 
-      $host = $beam["host"];
-      $port = $this->config["STREAM_REPACK_PORT"] + $ibeam;
+      # if each beam operates indepdent of others      
+      if ($this->config["INDEPENDENT_BEAMS"] == "true")
+      {
+        $host = $beam["host"];
+        $port = $this->config["BEAM_REPACK_PORT"] + $ibeam;
+      }
+      else
+      {
+        $host = $this->config["SERVER_HOST"];
+        $port = $this->config["BEAM_REPACK_PORT"] + $ibeam;
+      }
 
       if ($repack_socket->open ($host, $port, 0) == 0)
       {
@@ -282,7 +293,7 @@ class timing extends spip_webpage
       }
       else
       {
-        $xml .= "<repack_state><beam name='".$beam["name"]."' active='False'></beam></repack_state>";
+        $xml .= "<repack_state><beam name='".$beam["name"]."' active='False' host='".$host."' port='".$port."'></beam></repack_state>";
       }
     }
     # get all information from TCS too
@@ -291,7 +302,7 @@ class timing extends spip_webpage
     {
       foreach ($this->beams as $ibeam => $beam)
       {
-        array_push ($tcses, $beam["host"].":".($this->config["TCS_REPORT_PORT"] + $ibeam));
+        array_push ($tcses, $beam["host"].":".($this->config["TCS_REPORT_PORT_".$ibeam]));
       }
     }
     else
@@ -331,7 +342,7 @@ class timing extends spip_webpage
   // will contact a repacker to request current image information
   function renderImage($get)
   {
-    $beam_name     = $get["beam_name"];
+    $beam_name = $get["beam_name"];
     $ibeam = -1;
     foreach ($this->beams as $ib => $beam)
     {
@@ -351,8 +362,17 @@ class timing extends spip_webpage
         ($get["plot"] == "bandpass") ||
         ($get["plot"] == "snr_vs_time"))
     {
-      $host      = $this->beams[$ibeam]["host"];
-      $port      = $this->config["STREAM_REPACK_PORT"];
+      # if each beam operates indepdent of others      
+      if ($this->config["INDEPENDENT_BEAMS"] == "true")
+      {
+        $host = $this->beams[$ibeam]["host"];
+      }
+      else
+      {
+        $host = $this->config["SERVER_HOST"];
+      }
+      $port = $this->config["BEAM_REPACK_PORT"];
+
       if ($ibeam >= 0)
         $port += $ibeam;
 
@@ -361,7 +381,7 @@ class timing extends spip_webpage
       $xml_req .= "<requestor>timing page</requestor>";
       $xml_req .= "<type>plot</type>";
       $xml_req .= "<beam>".$beam_name."</beam>";
-      $xml_req .= "<plot>".$get["plot"]."</plot>";
+      $xml_req .= "<plot>".$get["plot"]."_".$get["res"]."</plot>";
       $xml_req .= "</repack_request>";
 
       $repack_socket = new spip_socket(); 
@@ -469,22 +489,66 @@ class timing extends spip_webpage
     echo "<table  width='100%' id='plotTable'>\n";
 
     echo "<tr>\n";
-    echo   "<td><img id='".$beam."_flux_vs_phase' ".$img_params."/><input type='hidden' id='".$beam."_flux_vs_phase_ts' value='not set'/></td>\n";
-    echo   "<td><img id='".$beam."_freq_vs_phase' ".$img_params."/><input type='hidden' id='".$beam."_freq_vs_phase_ts' value='not set'/></td>\n";
-    echo   "<td><img id='".$beam."_time_vs_phase' ".$img_params."/><input type='hidden' id='".$beam."_time_vs_phase_ts' value='not set'/></td>\n";
-    echo   "<td><img id='".$beam."_bandpass' ".$img_params."/><input type='hidden' id='".$beam."_bandpass_ts' value='not set'/></td>\n";
-    echo "<tr><td>Flux</td><td>Freq</td><td>Time</td><td>Bandpass</td></tr>\n";
+
+    echo   "<td>";
+    echo     "<a id='".$beam."_flux_vs_phase_link'>";
+    echo       "<img id='".$beam."_flux_vs_phase' ".$img_params."/>";
+    echo     "</a>";
+    echo     "<input type='hidden' id='".$beam."_flux_vs_phase_ts' value='not set'/>";
+    echo   "</td>\n";
+
+    echo   "<td>";
+    echo     "<a id='".$beam."_freq_vs_phase_link'>";
+    echo       "<img id='".$beam."_freq_vs_phase' ".$img_params."/>";
+    echo     "</a>";
+    echo     "<input type='hidden' id='".$beam."_freq_vs_phase_ts' value='not set'/>";
+    echo   "</td>\n";
+
+    echo   "<td>";
+    echo     "<a id='".$beam."_time_vs_phase_link'>";
+    echo       "<img id='".$beam."_time_vs_phase' ".$img_params."/>";
+    echo     "</a>";
+    echo     "<input type='hidden' id='".$beam."_time_vs_phase_ts' value='not set'/>";
+    echo   "</td>\n";
+
+    echo   "<td>";
+    echo     "<a id='".$beam."_bandpass_link'>";
+    echo       "<img id='".$beam."_bandpass' ".$img_params."/>";
+    echo     "</a>";
+    echo     "<input type='hidden' id='".$beam."_bandpass_ts' value='not set'/>";
+    echo   "</td>\n";
+
     echo "</tr>\n";
-    echo "<table>\n";
+
+    echo "<tr><td>Flux</td><td>Freq</td><td>Time</td><td>Bandpass</td></tr>\n";
+
+    echo "</table>\n";
 
     echo "<table  width='100%' id='plotTable'>\n";
     echo "<tr>\n";
-    echo   "<td><img id='".$beam."_snr_vs_time' ".$img_params."/><input type='hidden' id='".$beam."_snr_vs_time_ts' value='not set'/></td>\n";
-    echo   "<td><img id='".$beam."_snr_histogram' ".$img_params."/><input type='hidden' id='".$beam."_snr_histogram_ts'/></td>\n";
-    echo   "<td><img id='".$stream."_input_histogram' ".$img_params."/><input type='hidden' id='".$stream."_input_histogram_ts'/></td>\n";
-    echo   "<td><img id='".$stream."_freq_vs_time' ".$img_params."/><input type='hidden' id='".$stream."_freq_vs_time_ts'/></td>\n";
-    echo "<tr><td>SNR</td><td>SNR HG</td><td>Input HG</td><td>Freq vs Time</td></tr>\n";
+
+    echo   "<td>";
+    echo     "<a id='".$beam."_snr_vs_time_link'>";
+    echo       "<img id='".$beam."_snr_vs_time' ".$img_params."/>";
+    echo     "</a>";
+    echo     "<input type='hidden' id='".$beam."_snr_vs_time_ts' value='not set'/>";
+    echo   "</td>\n";
+
+    echo   "<td>";
+    echo     "<img  ".$img_params."/>"; 
+    echo   "</td>\n";
+
+    echo   "<td>";
+    echo     "<img  ".$img_params."/>"; 
+    echo   "</td>\n";
+
+    echo   "<td>";
+    echo     "<img  ".$img_params."/>"; 
+    echo   "</td>\n";
+
     echo "</tr>\n";
+
+    echo "<tr><td>SNR</td><td></td><td></td><td></td></tr>\n";
 
     echo "</table>\n";
   }

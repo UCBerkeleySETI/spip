@@ -32,7 +32,7 @@ class ConfiguringThread (ReportingThread):
     self.script = script
     host = getHostNameShort()
     port = int(script.cfg["STREAM_RECV_PORT"]) + int(id)
-    self.script.log (0, "ConfiguringThread listening on " + host + ":" + str(port))
+    self.script.log (2, "ConfiguringThread listening on " + host + ":" + str(port))
     ReportingThread.__init__(self, script, host, port)
 
   def parse_message (self, request):
@@ -43,24 +43,24 @@ class ConfiguringThread (ReportingThread):
     req = request["recv_cmd"]
 
     if req["command"] == "configure":
-      self.script.log (0, "ConfiguringThread:parse_message received configure command")
+      self.script.log (2, "ConfiguringThread:parse_message received configure command")
       if self.script.configured:
         self.deconfigure ()
       self.configure (req["params"]["param"])
       return (True, "ok")
 
     elif req["command"] == "deconfigure":
-      self.script.log (0, "ConfiguringThread:parse_message: deconfigure command")
+      self.script.log (2, "ConfiguringThread:parse_message: deconfigure command")
       self.deconfigure ()
       return (True, "ok")
 
     else:
 
-      self.script.log (0, "ConfiguringThread:parse_message: unrecognised command [" + req["command"] + "]")
+      self.script.log (-1, "ConfiguringThread:parse_message: unrecognised command [" + req["command"] + "]")
       return (True, "fail")
 
   def configure (self, params):
-    self.script.log (1, "ConfiguringThread:configure")
+    self.script.log (2, "ConfiguringThread:configure")
     for param in params:
       key = param["@key"]
       value = param["#text"]
@@ -69,7 +69,7 @@ class ConfiguringThread (ReportingThread):
       self.script.configured = True
 
   def deconfigure (self):
-    self.script.log (1, "ConfiguringThread:deconfigure")
+    self.script.log (2, "ConfiguringThread:deconfigure")
     self.script.configured = False
     if self.script.running:
       for binary in self.script.binary_list:
@@ -89,7 +89,7 @@ class RecvDaemon(Daemon,StreamBased):
 
   def main (self):
 
-    self.log(2, "main: self.waitForSMRB()")
+    self.log(2, "RecvDaemon::main self.waitForSMRB()")
     smrb_exists = self.waitForSMRB()
 
     if not smrb_exists:
@@ -112,51 +112,58 @@ class RecvDaemon(Daemon,StreamBased):
     # external control loop to allow for reconfiguration of RECV
     while not self.quit_event.isSet():
     
-      self.log(3, "main: waiting for configuration")
+      self.log(2, "RecvDaemon::main waiting for configuration")
       while not self.quit_event.isSet() and not self.configured:
         sleep(1) 
       if self.quit_event.isSet():
         return
       Config.writeDictToCFGFile (self.local_config, self.local_config_file)
-      self.log(3, "main: configured")
+      self.log(2, "RecvDaemon:: configured")
 
       cmd = self.getCommand(self.local_config_file)
       self.binary_list.append (cmd)
 
-      self.log(3, "main: sleep(1)")
+      self.log(3, "RecvDaemon::main sleep(1)")
       sleep(1)
 
-      self.log(3, "main: log_pipe = LogSocket(recv_src)")
+      self.log(2, "RecvDaemon::main log_pipe = LogSocket(recv_src)")
       log_pipe = LogSocket ("recv_src", "recv_src", str(self.id), "stream",
                             self.cfg["SERVER_HOST"], self.cfg["SERVER_LOG_PORT"],
                             int(DL))
 
-      self.log(3, "main: log_pipe.connect()")
+      self.log(2, "RecvDaemon::main log_pipe.connect()")
       log_pipe.connect()
 
-      self.log(3, "main: sleep(1)")
+      self.log(2, "RecvDaemon::main sleep(1)")
       sleep(1)
 
       self.running = True
 
-      recv_cmd = "numactl -C 6 -- " + cmd
-     
+      self.numa_core = self.cfg["STREAM_RECV_CORE_" + self.id]
+
+      recv_cmd = "numactl -C " + self.numa_core + " -- " + cmd
+ 
+      self.log(1, "START  " + cmd)
+    
       # this should be a persistent / blocking command 
-      rval = self.system_piped (recv_cmd, log_pipe.sock, int(DL), env)
+      rval = self.system_piped (recv_cmd, log_pipe.sock, 2, env)
+
+      self.log(1, "END    " + cmd)
 
       self.running = False 
       self.binary_list.remove (cmd)
 
       if rval:
-        if self.quit_event.isSet():
+        if not self.quit_event.isSet():
           self.log (-2, cmd + " failed with return value " + str(rval))
+
       log_pipe.close ()
 
 
   # wait for the SMRB to be created
   def waitForSMRB (self):
 
-    db_id = self.cfg["PROCESSING_DATA_BLOCK"]
+    db_id = self.cfg["RECEIVING_DATA_BLOCK"]
     db_prefix = self.cfg["DATA_BLOCK_PREFIX"]
     num_stream = self.cfg["NUM_STREAM"]
     self.db_key = SMRBDaemon.getDBKey (db_prefix, self.id, num_stream, db_id)
@@ -186,14 +193,16 @@ class RecvDaemon(Daemon,StreamBased):
 
   # return the configuration
   def getConfiguration (self):
+    self.log(2, "RecvDaemon::getConfiguration()")
     local_config = self.config.getStreamConfigFixed (self.id)
     return local_config
 
   def getEnvironment (self):
+    self.log(2, "RecvDaemon::getEnvironment()")
     return environ.copy()
 
   def getCommand (self, config_file):
-
+    self.log(2, "RecvDaemon::getCommand()")
     (stream_ip, stream_port) =  self.cfg["STREAM_UDP_" + str(self.id)].split(":")
     cmd = self.cfg["STREAM_BINARY"] + " -k " + self.db_key \
             + " -v -b " + self.cpu_core \

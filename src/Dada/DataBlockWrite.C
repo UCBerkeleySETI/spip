@@ -216,8 +216,10 @@ void spip::DataBlockWrite::zero_next_block ()
       throw runtime_error ("could not zero next block");
   }
   else
-  if (ipcio_zero_next_block (data_block) < 0)
-    throw runtime_error ("could not zero next block");
+  {
+    if (ipcio_zero_next_block (data_block) < 0)
+      throw runtime_error ("could not zero next block");
+  }
 #else
   if (ipcio_zero_next_block (data_block) < 0)
     throw runtime_error ("could not zero next block");

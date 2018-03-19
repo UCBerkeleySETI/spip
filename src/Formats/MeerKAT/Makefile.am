@@ -23,14 +23,15 @@ LDADD = libmeerkat.la \
 
 if HAVE_PSRDADA
 
-bin_PROGRAMS += meerkat_udpdb meerkat_dbstats meerkat_simdb meerkat_udpmergedb # meerkat_udpmergedbs
+bin_PROGRAMS += meerkat_udpdb meerkat_dbstats meerkat_simdb meerkat_udpmergedb meerkat_udpmerge2db
+
 AM_CXXFLAGS += -I$(top_builddir)/src/Dada
 
 meerkat_udpdb_SOURCES = meerkat_udpdb.C
 meerkat_dbstats_SOURCES = meerkat_dbstats.C
 meerkat_simdb_SOURCES = meerkat_simdb.C
 meerkat_udpmergedb_SOURCES = meerkat_udpmergedb.C
-# meerkat_udpmergedbs_SOURCES = meerkat_udpmergedbs.C
+meerkat_udpmerge2db_SOURCES = meerkat_udpmerge2db.C
 
 endif
 

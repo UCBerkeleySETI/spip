@@ -12,7 +12,7 @@
 #include "spip/Time.h"
 #include "spip/DataBlockRead.h"
 #include "spip/DataBlockWrite.h"
-#include "spip/IntegerDelay.h"
+#include "spip/IntegerDelayRAM.h"
 #include "spip/FractionalDelay.h"
 #include "spip/ContainerRingWrite.h"
 #include "spip/ContainerRingRead.h"
@@ -56,7 +56,7 @@ namespace spip {
 
       Time * utc_start;
 
-      IntegerDelay * integer_delay;
+      IntegerDelayRAM * integer_delay;
 
       FractionalDelay * fractional_delay;
 

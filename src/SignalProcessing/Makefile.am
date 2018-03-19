@@ -4,26 +4,37 @@ noinst_LTLIBRARIES = libspipdsp.la
 libspipdsp_headers = spip/Container.h \
 	spip/ContainerRAM.h \
 	spip/ContainerRing.h spip/ContainerRingRead.h spip/ContainerRingWrite.h \
-	spip/DelayPipeline.h \
+	spip/ContainerBufferedRing.h spip/ContainerBufferedRingWrite.h \
+	spip/Detection.h spip/DetectionPolarimetry.h spip/DetectionPolarimetryRAM.h \
+	spip/DetectionSquareLaw.h spip/DetectionSquareLawRAM.h \
 	spip/FractionalDelay.h \
-	spip/IntegerDelay.h \
+	spip/IntegerDelayRAM.h \
+	spip/Integration.h spip/IntegrationRAM.h \
 	spip/Transformation.h
 
 libspipdsp_la_SOURCES = Container.C \
 	ContainerRAM.C \
 	ContainerRing.C ContainerRingRead.C ContainerRingWrite.C \
-	DelayPipeline.C \
+	ContainerBufferedRing.C ContainerBufferedRingWrite.C \
+	Detection.C DetectionPolarimetry.C DetectionPolarimetryRAM.C \
+	DetectionSquareLaw.C DetectionSquareLawRAM.C \
 	FractionalDelay.C \
 	Filterbank.C \
+	Integration.C IntegrationRAM.C \
+	AdaptiveFilter.C \
+	AdaptiveFilterRAM.C \
+	AdaptiveFilterPipeline.C \
+	AdaptiveFilterTest.C \
   BatchedBackwardFFT.C \
   ForwardFFT.C \
-	IntegerDelay.C \
+  BackwardFFT.C \
   UnpackFloat.C UnpackFloatRAM.C
 
-bin_PROGRAMS = delay_pipeline filterbank_pipeline
+bin_PROGRAMS = filterbank_pipeline adaptive_filter_pipeline adaptive_filter_test
 
-delay_pipeline_SOURCES = delay_pipeline.C
 filterbank_pipeline_SOURCES = filterbank_pipeline.C
+adaptive_filter_pipeline_SOURCES = adaptive_filter_pipeline.C
+adaptive_filter_test_SOURCES = adaptive_filter_test.C
 
 AM_CXXFLAGS = @PSRDADA_CFLAGS@ \
 	-I$(top_builddir)/src/Affinity\
@@ -36,36 +47,50 @@ LDADD = libspipdsp.la \
 	$(top_builddir)/src/Util/libspiputil.la \
 	@PSRDADA_LIBS@
 
+libspipdsp_la_LIBADD = @PSRDADA_LIBS@
+
 if HAVE_FFTW3
 
 libspipdsp_la_SOURCES += ForwardFFTFFTW.C \
+  BackwardFFTFFTW.C \
   BatchedBackwardFFTFFTW.C
 
 AM_CXXFLAGS += @FFTW_CFLAGS@
 
+libspipdsp_la_LIBADD += @FFTW_LIBS@
 LDADD += @FFTW_LIBS@
 
 endif
 
 if HAVE_CUFFT
 
-libspipdsp_la_SOURCES += ForwardFFTCUDA.C \
+libspipdsp_la_SOURCES += ForwardFFTCUDA.cu \
+  BackwardFFTCUDA.cu \
   BatchedBackwardFFTCUDA.C
 
 AM_CXXFLAGS += @CUFFT_CFLAGS@
 
+libspipdsp_la_LIBADD += @CUFFT_LIBS@
 LDADD += @CUFFT_LIBS@
 
 endif
 
 if HAVE_CUDA
 
+libspipdsp_headers += spip/DetectionPolarimetryCUDA.h \
+  DetectionSquareLawCUDA.cu
+
 libspipdsp_la_SOURCES += CUDAtoRAMTransfer.C \
   RAMtoCUDATransfer.C \
   ContainerCUDA.C \
-  UnpackFloatCUDA.cu
+  DetectionPolarimetryCUDA.cu \
+  DetectionSquareLawCUDA.cu \
+  IntegrationCUDA.cu \
+  UnpackFloatCUDA.cu \
+	AdaptiveFilterCUDA.cu
 
 AM_CXXFLAGS += @CUDA_CFLAGS@
+libspipdsp_la_LIBADD += @CUDA_LIBS@
 LDADD += @CUDA_LIBS@
 
 include $(top_srcdir)/config/Makefile.cuda

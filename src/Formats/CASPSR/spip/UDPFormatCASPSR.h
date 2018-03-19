@@ -56,6 +56,8 @@ namespace spip {
 
       static unsigned get_samples_per_packet () { return 1; };
 
+      inline int64_t get_subband (int64_t byte_offset, int nsubband) { return 0; };
+
     private:
 
       //! pointer to most recently decoded packet payload

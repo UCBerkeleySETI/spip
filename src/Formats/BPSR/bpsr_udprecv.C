@@ -98,11 +98,7 @@ int main(int argc, char *argv[])
       cerr << "bpsr_udprecv: Loading configuration from " << argv[optind] << endl;
 
     // config file for this data stream
-    if (config.load_from_file (argv[optind]) < 0)
-    {
-      cerr << "ERROR: could not read ASCII header from " << argv[optind] << endl;
-      return (EXIT_FAILURE);
-    }
+    config.load_from_file (argv[optind]);
 
     if (udprecv->verbose)
       cerr << "bpsr_udprecv: configuring using fixed config" << endl;
@@ -115,7 +111,7 @@ int main(int argc, char *argv[])
     if (udprecv->verbose)
       cerr << "bpsr_udprecv: starting stats thread" << endl;
     pthread_t stats_thread_id;
-    int rval = pthread_create (&stats_thread_id, 0, stats_thread, (void *) recv);
+    int rval = pthread_create (&stats_thread_id, 0, stats_thread, (void *) udprecv);
     if (rval != 0)
     {
       cerr << "bpsr_udprecv: failed to start stats thread" << endl;
@@ -175,7 +171,7 @@ void signal_handler(int signalValue)
  */
 void * stats_thread (void * arg)
 {
-  spip::UDPReceiver * recv = (spip::UDPReceiver *) arg;
+  //spip::UDPReceiver * recv = (spip::UDPReceiver *) arg;
 
   uint64_t b_recv_total = 0;
   uint64_t b_recv_curr = 0;

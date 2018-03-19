@@ -13,11 +13,18 @@
 
 #include "spip/AsciiHeader.h"
 #include "spip/Time.h"
+#include "spip/Types.h"
 
 namespace spip {
 
   //! All Data Containers have a sample ordering 
-  typedef enum { SFPT, TFPS, FSTP, Custom } Ordering;
+  typedef enum { SFPT, TFPS, TSPF, Custom } Ordering;
+
+  //! Data may be packed in big or little endian
+  typedef enum { Little, Big } Endian;
+
+  //! Data may be ordered as Offset Binary or Twos Complement
+  typedef enum { OffsetBinary, TwosComplement} Encoding;
 
   class Container
   {
@@ -66,12 +73,30 @@ namespace spip {
       double get_bandwidth () { return bandwidth; }
       double get_bandwidth () const { return bandwidth; }
 
+      void set_file_size (int64_t n) { file_size = n; compute_file_size = false; } 
+      int64_t get_file_size () { return file_size; } 
+      int64_t get_file_size () const { return file_size; } 
+
+      unsigned calculate_nbits_per_sample () { return unsigned (nsignal * nchan * nbit * npol * ndim); };
+      uint64_t calculate_bytes_per_second ();
+
+      size_t get_size () { return size; };
       size_t calculate_buffer_size () { return size_t (ndat * nchan * nsignal * ndim * npol * nbit) / 8; }
       size_t calculate_buffer_size () const { return size_t (ndat * nchan * nsignal * ndim * npol * nbit) / 8; }
+
+      void recalculate ();
 
       void set_order (Ordering o) { order = o; };
       Ordering get_order() { return order; };
       Ordering get_order() const { return order; };
+
+      void set_endianness (Endian o) { endianness = o; };
+      Endian get_endianness() { return endianness; };
+      Endian get_endianness() const { return endianness; };
+
+      void set_endcoding (Encoding e) { encoding = e; };
+      Encoding get_encoding() { return encoding; };
+      Encoding get_encoding() const { return encoding; };
 
       //! resize the buffer to match the input dimensions
       virtual void resize () = 0;
@@ -79,6 +104,9 @@ namespace spip {
       //! return a pointer to the data buffer
       virtual unsigned char * get_buffer() { return buffer; }
       virtual unsigned char * get_buffer() const { return buffer; }
+
+      //! zero the contents of the buffer
+      virtual void zero () = 0;
 
       // copy the meta-data from the supplied header
       void clone_header (const spip::AsciiHeader &obj);
@@ -91,6 +119,9 @@ namespace spip {
 
       //! return const header
       AsciiHeader get_header () const { return header; } 
+
+      //! return a descriptive string regarding the ordering
+      static std::string get_order_string (Ordering o);
 
     protected:
 
@@ -105,6 +136,12 @@ namespace spip {
 
       //! Ordering of data within the buffer
       Ordering order;
+
+      //! Byte ordering of data samples
+      Endian endianness;
+
+      //! Bit Encoding of data samples
+      Encoding encoding;
 
       //! Number of time samples
       uint64_t ndat;
@@ -144,8 +181,25 @@ namespace spip {
 
       //! Offset in bytes of the data stream from the start utc
       uint64_t obs_offset;
+
+      //! Number of bits per sample, accounting for all dimensions
+      unsigned bits_per_sample;
+
+      //! Number of bytes per second
+      uint64_t bytes_per_second;
+
+      //! Minimum data size
+      uint64_t resolution;
+
+      //! Preferred file size
+      int64_t file_size;
+
+      //! Number of seconds of data corresponding to each "file"
+      double seconds_per_file;
       
     private:
+
+      bool compute_file_size;
 
   };
 }

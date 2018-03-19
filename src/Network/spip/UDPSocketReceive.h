@@ -49,14 +49,14 @@ namespace spip {
       char * buf_ptr;
 
       // receive a packet from the UDP socket
-      size_t recv_from ();
+      ssize_t recv_from ();
 
     protected:
 
       // flag for whether bufsz contains a packet
       bool have_packet;
 
-      size_t pkt_size;
+      ssize_t pkt_size;
 
     private:
 

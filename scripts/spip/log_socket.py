@@ -57,7 +57,7 @@ class LogSocket(object):
         self.connected = False
         self.connect(1)
       if self.connected:
-        prefix = "[" + times.getCurrentTimeUS() + "] "
+        prefix = "[" + times.getCurrentTimeMS() + "] "
         if level == -1:
           prefix += "W "
         if level == -2:
@@ -65,10 +65,11 @@ class LogSocket(object):
         lines = message.split("\n")
         try:
           for line in lines:
+            cleaned = ''.join([x for x in line if ord(x) < 128])
             if self.log_local:
-              stderr.write (prefix + message + "\n")
+              stderr.write (prefix + cleaned + "\n")
             if self.connected and self.sock:
-              self.sock.send (prefix + message + "\n")
+              self.sock.send (prefix + cleaned + "\n")
         except socket.error as e:
           if e.errno == errno.EPIPE or errno.ECONNRESET:
             if self.connected:

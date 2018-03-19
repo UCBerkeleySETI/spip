@@ -15,29 +15,23 @@ namespace spip {
 
   typedef struct {
 
-    uint64_t seq_number;
+    uint64_t packet_sequence_number;
 
-    uint32_t integer_seconds;
+    uint64_t attoseconds_from_integer;
 
-    uint32_t fractional_seconds;
+    uint32_t seconds_from_epoch;
 
-    uint16_t channel_number;
+    uint32_t cfcbi_number;	// Contiguous Frequnecy Channel Block Index
 
     uint16_t beam_number;
-
-    uint16_t nsamp;
 
     uint8_t  cbf_version;
 
     uint8_t  reserved_01;
-
-    uint16_t weights;
-
-    uint16_t reserved_02;
-
-    uint16_t reserved_03;
-
-    uint16_t reserved_04;
+    uint8_t  reserved_02;
+    uint8_t  reserved_03;
+    uint8_t  reserved_04;
+    uint8_t  reserved_05;
 
   } ska1_custom_udp_header_t;
 
@@ -89,26 +83,32 @@ namespace spip {
       inline void gen_packet (char * buf, size_t bufsz);
 
       // accessor methods for header params
-      void set_seq_num (uint64_t seq_num) { header.seq_number = seq_num; };
-      void set_int_sec (uint32_t int_sec) { header.integer_seconds = int_sec; };
-      void set_fra_sec (uint32_t fra_sec) { header.fractional_seconds = fra_sec; };
-      void set_chan_no (uint16_t chan_no) { header.channel_number = chan_no; };
-      void set_beam_no (uint16_t beam_no) { header.beam_number = beam_no; };
-      void set_nsamp   (uint16_t nsamp)   { header.nsamp = nsamp; };
-      void set_weights (uint16_t weights) { header.weights = weights; };
-      void set_cbf_ver (uint8_t  cbf_ver) { header.cbf_version = cbf_ver; };
-
+      void set_seq_num  (uint64_t seq_num)  { header.packet_sequence_number = seq_num; };
+      void set_int_sec  (uint32_t int_sec)  { header.seconds_from_epoch = int_sec; };
+      void set_atto_sec (uint64_t atto_sec) { header.attoseconds_from_integer = atto_sec; };
+      void set_beam_num (uint16_t beam_num)  { header.beam_number = beam_num; };
+      void set_cfcbi_num (uint16_t cfcbi_num) { header.cfcbi_number = cfcbi_num; };
+      void set_cbf_ver (uint8_t  cbf_ver)   { header.cbf_version = cbf_ver; };
+ 
       static unsigned get_samples_per_packet () { return UDP_FORMAT_CUSTOM_PACKET_NSAMP; };
+
+      inline int64_t get_subband (int64_t byte_offset, int nsubband) { return 0; };
 
     private:
 
       ska1_custom_udp_header_t header;
 
+      ska1_custom_udp_header_t * header_ptr;
+
+      unsigned packet_weights_size;
+     
+      char * weights_ptr;
+
       char * payload_ptr;
 
-      unsigned channel_stride;
+      unsigned seq_stride;
 
-      uint64_t nsamp_offset;
+      unsigned cfcbi_stride;
 
       uint64_t nsamp_per_sec;
 
@@ -116,7 +116,19 @@ namespace spip {
 
       unsigned end_channel;
 
-      unsigned seq_to_bytes;
+      unsigned nsamp_per_weight;
+
+      unsigned nsamp_per_packet;
+
+      unsigned nchan_per_packet;
+
+      unsigned start_cfcbi;
+
+      unsigned end_cfcbi;
+
+      unsigned ncfcbi;
+
+      uint64_t attoseconds_per_packet;
 
   };
 

@@ -171,7 +171,8 @@ int main(int argc, char *argv[]) try
   }
   else
   {
-    cerr << "uwb_dbstats: calling monitor" << endl;
+    if (verbose)
+      cerr << "uwb_dbstats: calling monitor" << endl;
     dbstats->monitor(stats_dir, stream);
   }
 

@@ -141,7 +141,7 @@ void usage()
 #ifdef HAVE_CUDA
   cout << " -d gpu    use GPU" << endl;
 #endif
-  cout << " -n ntap   number of FIR filter taps" << endl;
+  cout << " -n nfft   backward FFT length for each output channel" << endl;
   cout << " -h        display usage" << endl;
   cout << " -v        verbose output" << endl;
 }

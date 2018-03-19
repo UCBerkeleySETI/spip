@@ -66,6 +66,8 @@ namespace spip {
 
       void set_data_size (unsigned size ) { packet_data_size = size; } ;
 
+      unsigned get_packet_size () { return packet_header_size + packet_data_size; };
+
       double rand_normal (double mean, double stddev);
 
       void generate_noise_buffer (int nbits);
@@ -86,6 +88,8 @@ namespace spip {
       //! return the offset from the utc_startin pico seconds
       uint64_t get_pico_seconds () { return pico_seconds; };
 
+      virtual int64_t get_subband (int64_t byte_offset, int nsubband) = 0;
+
       //void set_start_sample (uint64_t s) { start_sample = s; };
 
     protected:
@@ -101,6 +105,9 @@ namespace spip {
 
       //! size of the data in the UDP packet payload
       unsigned packet_data_size;
+
+      //! size of the UDP packet
+      unsigned packet_size;
 
       unsigned ndim;
 
@@ -123,6 +130,8 @@ namespace spip {
       char * noise_buffer;
 
       size_t noise_buffer_size;
+
+      unsigned noise_buffer_alignment;
 
       bool configured;
 

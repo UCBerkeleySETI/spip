@@ -73,7 +73,7 @@ def system_piped (command, pipe, log, work_dir=None):
   return_code = 0
 
   if log:
-    logMsg (0, 0, "spip.system_pipe: " + command)
+    logMsg (0, 0, "spip.system_piped: " + command)
 
   # setup the module object
   proc = subprocess.Popen(command,
@@ -90,6 +90,6 @@ def system_piped (command, pipe, log, work_dir=None):
   return_code = proc.returncode
 
   if return_code:
-    logMsg (0, 0, "spip.system_pipe: " + command + " failed")
+    logMsg (0, 0, "spip.system_piped: " + command + " failed")
 
   return return_code

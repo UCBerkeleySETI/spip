@@ -32,20 +32,8 @@ void spip::ContainerRingRead::process_header ()
   // load this header from the c string
   header.load_from_str (header_str);
 
-  if (header.get ("NANT", "%u", &nsignal) != 1)
-    throw invalid_argument ("NSIGNAL did not exist in header");
-
-  if (header.get ("NCHAN", "%u", &nchan) != 1)
-    throw invalid_argument ("NCHAN did not exist in header");
-
-  if (header.get ("NBIT", "%u", &nbit) != 1)
-    throw invalid_argument ("NBIT did not exist in header");
-
-  if (header.get ("NPOL", "%u", &npol) != 1)
-    throw invalid_argument ("NPOL did not exist in header");
-
-  if (header.get ("NDIM", "%u", &ndim) != 1)
-    throw invalid_argument ("NDIM did not exist in header");
+  // read the mandatory header parameters
+  spip::Container::read_header();
 
   nbits_per_sample = nsignal * nchan * nbit * npol * ndim;
   ndat = size / (nbits_per_sample / 8);

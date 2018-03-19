@@ -20,15 +20,14 @@ class stat extends spip_webpage
     $this->config = spip::get_config();
     $this->streams = array();
 
-    $this->plot_width = 240;
-    $this->plot_height = 180;
+    $this->plot_width = 160;# 240;
+    $this->plot_height = 120;#180;
 
     for ($istream=0; $istream<$this->config["NUM_STREAM"]; $istream++)
     {
       list ($host, $ibeam, $subband) = explode (":", $this->config["STREAM_".$istream]);
-
       $beam_name = $this->config["BEAM_".$ibeam];
-      $this->streams[$istream] = array("beam_name" => $beam_name, "host" => $host);
+      $this->streams[$istream] = array("beam_name" => $beam_name, "host" => $host, "subband" => $subband);
     }
   }
 
@@ -104,14 +103,19 @@ class stat extends spip_webpage
     
                         var plot_id = stream_id + "_" + plot_type + "_" + pol_name + "_" + dim_name
                         var plot_ts = stream_id + "_" + plot_type + "_" + pol_name + "_" + dim_name + "_ts"
+                        var plot_link = stream_id + "_" + plot_type + "_" + pol_name + "_" + dim_name + "_link"
 
                         // if the image has been updated, reacquire it
                         //alert (plot_timestamp + " ?=? " + document.getElementById(plot_ts).value)
                         if (plot_timestamp != document.getElementById(plot_ts).value)
                         {
-                          url = "/spip/stats/index.php?update=true&istream="+stream_id+"&type=plot&plot="+plot_type+"&pol="+pol_name+"&dim="+dim_name+"&ts="+plot_timestamp;
+                          url = "/spip/stats/index.php?update=true&istream="+stream_id+"&type=plot&plot="+plot_type+"&pol="+pol_name+"&dim="+dim_name+"&res=lo&ts="+plot_timestamp;
                           document.getElementById(plot_id).src = url;
                           document.getElementById(plot_ts).value = plot_timestamp;
+
+                          url = "/spip/stats/index.php?update=true&istream="+stream_id+"&type=plot&plot="+plot_type+"&pol="+pol_name+"&dim="+dim_name+"&res=hi&ts="+plot_timestamp;
+                          document.getElementById(plot_link).href= url;
+ 
                         }
                       }
                     }
@@ -205,12 +209,13 @@ class stat extends spip_webpage
     }
     $xml = "<stat_update>";
 
-    
+    # the preferred channel number
+    $pref_chan = isset($get["pref_chan"]) ? $get["pref_chan"] : 10;
     $xml_req  = XML_DEFINITION;
     $xml_req .= "<stat_request>";
     $xml_req .= "<requestor>stat page</requestor>";
     $xml_req .= "<type>state</type>";
-    $xml_req .= "<pref_chan>".$get["pref_chan"]."</pref_chan>";
+    $xml_req .= "<pref_chan>".$pref_chan."</pref_chan>";
     $xml_req .= "</stat_request>";
 
     foreach ($this->streams as $istream => $stream)
@@ -220,7 +225,6 @@ class stat extends spip_webpage
       $host = $stream["host"];
       $port = $this->config["STREAM_STAT_PORT"] + $istream;
 
-      #echo "host=".$host." port=".$port."<br>\n";
       if ($stat_socket->open ($host, $port, 0) == 0)
       {
         $stat_socket->write ($xml_req."\r\n");
@@ -254,6 +258,7 @@ class stat extends spip_webpage
     $xml_req .= "<plot>".$get["plot"]."</plot>";
     $xml_req .= "<pol>".$get["pol"]."</pol>";
     $xml_req .= "<dim>".$get["dim"]."</dim>";
+    $xml_req .= "<res>".$get["res"]."</res>";
     $xml_req .= "</stat_request>";
 
     $stat_socket = new spip_socket(); 
@@ -299,7 +304,6 @@ class stat extends spip_webpage
     echo "<tr><th colspan=4 style='text-align: center;'>Pol 0</th>".
              "<th colspan=4 style='text-align: center;'>Pol 1</th></tr>\n";
 
-
     echo "<tr>\n";
     echo "<th width='10%'>Mean</th>\n";
     echo "<td width='15%'>(<span id='".$stream."_histogram_mean_0_real'></span>,".
@@ -312,6 +316,7 @@ class stat extends spip_webpage
     echo "<th width='10%'>Mean</th>\n";
     echo "<td width='15%'>(<span id='".$stream."_histogram_mean_1_real'></span>,".
                            "<span id='".$stream."_histogram_mean_1_imag'></span>)</td>\n";
+
     echo "<th width='10%'>Std. Dev.</th>\n";
     echo "<td width='15%'>(<span id='".$stream."_histogram_stddev_1_real'></span>,".
                            "<span id='".$stream."_histogram_stddev_1_imag'></span>)</td>\n";
@@ -337,7 +342,13 @@ class stat extends spip_webpage
   {
     $img_params = "src='/spip/images/blankimage.gif' width='".$this->plot_width."px' height='".$this->plot_height."px'";
 
+    echo "<input type='hidden' id='".$stream."_histogram_0_real_ts'/>\n";
+    echo "<input type='hidden' id='".$stream."_histogram_0_imag_ts'/>\n";
+    echo "<input type='hidden' id='".$stream."_histogram_1_real_ts'/>\n";
+    echo "<input type='hidden' id='".$stream."_histogram_1_imag_ts'/>\n";
+
     echo "<table  width='100%' id='plotTable'>\n";
+    /*
     echo "<tr>\n";
     echo   "<td><img id='".$stream."_histogram_0_real' ".$img_params."/><input type='hidden' id='".$stream."_histogram_0_real_ts'/></td>\n";
     echo   "<td><img id='".$stream."_histogram_0_imag' ".$img_params."/><input type='hidden' id='".$stream."_histogram_0_imag_ts'/></td>\n";
@@ -345,15 +356,51 @@ class stat extends spip_webpage
     echo   "<td><img id='".$stream."_histogram_1_imag' ".$img_params."/><input type='hidden' id='".$stream."_histogram_1_imag_ts'/></td>\n";
     echo "</tr>\n";
     echo "<tr><td>Input HG Real</td><td>Input HG Imag</td><td>Input HG Real</td><td>Input HG Imag</td></tr>\n";
+    */
 
     echo "<tr>\n";
-    echo   "<td><img id='".$stream."_freq_vs_time_0_none' ".$img_params."/><input type='hidden' id='".$stream."_freq_vs_time_0_none_ts'/></td>\n";
-    echo   "<td><img id='".$stream."_histogram_0_none' ".$img_params."/><input type='hidden' id='".$stream."_histogram_0_none_ts'/></td>\n";
-    echo   "<td><img id='".$stream."_freq_vs_time_1_none' ".$img_params."/><input type='hidden' id='".$stream."_freq_vs_time_1_none_ts'/></td>\n";
-    echo   "<td><img id='".$stream."_histogram_1_none' ".$img_params."/><input type='hidden' id='".$stream."_histogram_1_none_ts'/></td>\n";
-    echo "<td></td>\n";
+    echo   "<td>";
+    echo     "<a id='".$stream."_freq_vs_time_0_none_link'>";
+    echo       "<img id='".$stream."_freq_vs_time_0_none' ".$img_params." width='160px'/>";
+    echo     "</a>";
+    echo     "<input type='hidden' id='".$stream."_freq_vs_time_0_none_ts'/>";
+    echo   "</td>\n";
+
+    echo   "<td>";
+    echo     "<a id='".$stream."_histogram_0_none_link'>";
+    echo       "<img id='".$stream."_histogram_0_none' ".$img_params."/>";
+    echo     "</a>";
+    echo     "<input type='hidden' id='".$stream."_histogram_0_none_ts'/>";
+    echo   "</td>\n";
+    echo   "<td>";
+    echo     "<a id='".$stream."_bandpass_0_none_link'>";
+    echo       "<img id='".$stream."_bandpass_0_none' ".$img_params."/>";
+    echo     "</a>";
+    echo     "<input type='hidden' id='".$stream."_bandpass_0_none_ts'/>";
+    echo   "</td>\n";
+
+    echo   "<td>";
+    echo     "<a id='".$stream."_freq_vs_time_1_none_link'>";
+    echo       "<img id='".$stream."_freq_vs_time_1_none' ".$img_params." width='160px'/>";
+    echo     "</a>";
+    echo     "<input type='hidden' id='".$stream."_freq_vs_time_1_none_ts'/>";
+    echo   "</td>\n";
+
+    echo   "<td>";
+    echo     "<a id='".$stream."_histogram_1_none_link'>";
+    echo       "<img id='".$stream."_histogram_1_none' ".$img_params."/>";
+    echo     "</a>";
+    echo     "<input type='hidden' id='".$stream."_histogram_1_none_ts'/>";
+    echo   "</td>\n";
+    echo   "<td>";
+    echo     "<a id='".$stream."_bandpass_1_none_link'>";
+    echo       "<img id='".$stream."_bandpass_1_none' ".$img_params."/>";
+    echo     "</a>";
+    echo     "<input type='hidden' id='".$stream."_bandpass_1_none_ts'/>";
+    echo   "</td>\n";
+
     echo "</tr>\n";
-    echo "<tr><td>Freq v Time</td><td></td><td>Freq v Time</td><td></td></tr>\n";
+    echo "<tr><td>Freq v Time</td><td>Histogram</td><td>Bandpass</td><td>Freq v Time</td><td>Histogram</td><td>Bandpass</td></tr>\n";
 
     echo "</table>\n";
   }
