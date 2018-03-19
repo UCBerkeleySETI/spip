@@ -261,8 +261,8 @@ class KATCPDaemon(Daemon):
     xml += "<obs_cmd>"
     xml +=   "<command>configure</command>"
     xml +=   "<beam_configuration>"
-    xml +=     "<nbeam>1</nbeam>"
-    xml +=     "<beam_state_0 name='" + self.beam_name + "'>on</beam_state_0>"
+    xml +=     "<nbeam key='NBEAM'>1</nbeam>"
+    xml +=     "<beam_state_0 key='BEAM_STATE_0' name='" + self.beam_name + "'>on</beam_state_0>"
     xml +=   "</beam_configuration>"
 
     xml +=   "<source_parameters>"
@@ -288,7 +288,6 @@ class KATCPDaemon(Daemon):
     xml +=     "<observer key='OBSERVER'>" + self.beam_config["OBSERVER"] + "</observer>"
     xml +=     "<project_id key='PID'>" + self.beam_config["PID"] + "</project_id>"
     xml +=     "<tobs key='TOBS' units='seconds'>" + self.beam_config["TOBS"] + "</tobs>"
-    xml +=     "<mode key='MODE'>" + self.beam_config["MODE"] + "</mode>"
     xml +=     "<calfreq key='CALFREQ'>" + self.beam_config["CALFREQ"] + "</calfreq>"
     xml +=     "<utc_start key='UTC_START'>None</utc_start>"
     xml +=     "<utc_stop key='UTC_STOP'>None</utc_stop>"
@@ -317,6 +316,7 @@ class KATCPDaemon(Daemon):
     xml +=     "<output_nbins key='OUTNBIN'>" + self.beam_config["OUTNBIN"] + "</output_nbins>"
     xml +=     "<output_tsubint key='OUTTSUBINT'>" + self.beam_config["OUTTSUBINT"] + "</output_tsubint>"
     xml +=     "<output_nstokes key='OUTNSTOKES'>" + self.beam_config["OUTNSTOKES"] + "</output_nstokes>"
+    xml +=     "<mode key='MODE'>" + self.beam_config["MODE"] + "</mode>"
     xml +=   "</fold_processing_parameters>"
 
     xml +=   "<search_processing_parameters>"
@@ -326,7 +326,6 @@ class KATCPDaemon(Daemon):
     xml +=     "<output_tdec key='OUTTDEC'>" + self.beam_config["OUTTDEC"] + "</output_tdec>"
     xml +=     "<output_nstokes key='OUTNSTOKES'>" + self.beam_config["OUTNSTOKES"] + "</output_nstokes>"
     xml +=   "</search_processing_parameters>"
-
 
     xml += "</obs_cmd>"
 
@@ -338,8 +337,8 @@ class KATCPDaemon(Daemon):
     xml += "<obs_cmd>"
     xml +=   "<command>start</command>"
     xml +=   "<beam_configuration>"
-    xml +=     "<nbeam>1</nbeam>"
-    xml +=     "<beam_state_0 name='" + self.beam_name + "'>on</beam_state_0>"
+    xml +=     "<nbeam key='NBEAM'>1</nbeam>"
+    xml +=     "<beam_state_0 key='BEAM_STATE_0' name='" + self.beam_name + "'>on</beam_state_0>"
     xml +=   "</beam_configuration>"
     xml +=   "<observation_parameters>"
     xml +=     "<utc_start key='UTC_START'>None</utc_start>"
@@ -354,8 +353,8 @@ class KATCPDaemon(Daemon):
     xml += "<obs_cmd>"
     xml += "<command>stop</command>"
     xml +=   "<beam_configuration>"
-    xml +=     "<nbeam>1</nbeam>"
-    xml +=     "<beam_state_0 name='" + self.beam_name + "'>on</beam_state_0>"
+    xml +=     "<nbeam key='NBEAM'>1</nbeam>"
+    xml +=     "<beam_state_0 key='BEAM_STATE_0' name='" + self.beam_name + "'>on</beam_state_0>"
     xml +=   "</beam_configuration>"
     xml +=   "<observation_parameters>"
     xml +=     "<utc_stop key='UTC_STOP'>None</utc_stop>"
