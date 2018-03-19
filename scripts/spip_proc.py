@@ -187,8 +187,8 @@ class ProcDaemon (Daemon, StreamBased):
               os.makedirs (fold_dir, 0755)
               fold_cmd = "dspsr -Q " + db_key_filename + " -cuda " + gpu_id + " -overlap -minram 4000 -x 16384 -b 1024 -L 5 -no_dyn"
               fold_cmd = "dspsr -Q " + db_key_filename + " -cuda " + gpu_id + " -D 0 -minram 512 -b 1024 -L 10 -no_dyn -skz -skzs 4 -skzm 128 -skz_no_tscr -skz_no_fscr"
-              fold_cmd = "dspsr -Q " + db_key_filename + " -cuda " + gpu_id + " -minram 2048 -x 1024 -b 1024 -L 10 -no_dyn"
-              fold_cmd = "dspsr -Q " + db_key_filename + " -cuda " + gpu_id + " -D 0 -minram 2048 -b 1024 -L 10 -no_dyn"
+              #fold_cmd = "dspsr -Q " + db_key_filename + " -cuda " + gpu_id + " -D 0 -minram 2048 -b 1024 -Lmin 7 -L 8 -no_dyn"
+              fold_cmd = "dspsr -Q " + db_key_filename + " -cuda " + gpu_id + " -minram 2048 -x 1024 -b 1024 -L 8 -Lmin 7 -no_dyn"
               #fold_cmd = "dada_dbdisk -k " + db_key_in + " -s -D " + fold_dir
 
               header_file = fold_dir + "/obs.header"
@@ -223,7 +223,7 @@ class ProcDaemon (Daemon, StreamBased):
           #self.binary_list.append (search_cmd)
 
           # create processing threads
-          self.log (1, "creating processing threads")      
+          self.log (2, "creating processing threads")      
           cmd = "numactl -C " + cpu_core + " -- " + fold_cmd
           fold_thread = procThread (cmd, fold_dir, fold_log_pipe.sock, 1)
 
@@ -231,7 +231,8 @@ class ProcDaemon (Daemon, StreamBased):
           #search_thread = procThread (search_cmd, self.log_sock.sock, 2)
 
           # start processing threads
-          self.log (1, "starting processing threads")      
+          self.log (2, "starting processing threads")      
+          self.log (1, "START " + fold_cmd)      
           fold_thread.start()
           #trans_thread.start()
           #search_thread.start()
@@ -240,6 +241,7 @@ class ProcDaemon (Daemon, StreamBased):
           self.log (2, "waiting for fold thread to terminate")
           rval = fold_thread.join() 
           self.log (2, "fold thread joined")
+          self.log (1, "END   " + fold_cmd)      
 
           # remove the binary command from the list
           self.binary_list.remove (fold_cmd)
