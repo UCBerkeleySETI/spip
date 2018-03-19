@@ -617,7 +617,7 @@ class RepackDaemon(Daemon):
     if rval < 0:
       return (rval, "failed to create time plot")
 
-    cmd = "psrplot -pb -x -lpol=0,1 -N2,1 -c above:c= " + band_file + " -D -/png"
+    cmd = "psrplot -pb -x -lpol=0,1 -O -c log=1 -c above:c= " + band_file + " -D -/png"
     rval, bandpass_raw = self.system_raw (cmd, 3)
     if rval < 0:
       return (rval, "failed to create time plot")
@@ -679,8 +679,8 @@ class RepackDaemon(Daemon):
     try:
       fail_parent_dir = os.path.dirname(fail_dir)
       if not os.path.exists(fail_parent_dir):
-        os.mkdir (fail_parent_dir, 0755)
-      os.rename (obs_dir, fail_dir)
+        os.mkdir (fail_parent_dir, 0755) 
+      shutil.move (obs_dir, fail_dir)
     except OSError, e:
       self.log (0, "fail_observation failed to rename " + obs_dir + " to " + fail_dir)
       self.log (0, str(e))
@@ -793,6 +793,10 @@ class RepackServerDaemon (RepackDaemon, ServerBased):
       self.results[bid]["lock"] = threading.Lock()
       self.results[bid]["cond"] = threading.Condition(self.results[bid]["lock"])
 
+      keys = ["source", "utc_start", "timestamp", "snr", "length"]
+      for key in keys:
+        self.results[bid][key] = ""
+
       self.snr_history[bid] = {}
       self.snr_history[bid]["times"] = []
       self.snr_history[bid]["snrs"] = []
@@ -842,6 +846,9 @@ class RepackBeamDaemon (RepackDaemon, BeamBased):
     self.results[bid]["valid"] = False
     self.results[bid]["lock"] = threading.Lock()
     self.results[bid]["cond"] = threading.Condition(self.results[bid]["lock"])
+    keys = ["source", "utc_start", "timestamp", "snr", "length"]
+    for key in keys:
+      self.results[bid][key] = ""
 
     self.snr_history[bid] = {}
     self.snr_history[bid]["times"] = []
