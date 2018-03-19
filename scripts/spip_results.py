@@ -466,7 +466,7 @@ class ResultsDaemon(Daemon):
       rval, bin_data = self.system_raw (cmd, 3)
 
     except KeyError as e:
-      self.log("freq_plot: results["+utc_start+"]["+source+"][*] did not exist")
+      self.log(-1, "freq_plot: results["+utc_start+"]["+source+"][*] did not exist")
 
     self.results_lock.release()
     return rval, bin_data
