@@ -94,6 +94,7 @@ class lmcThread (threading.Thread):
       self.stop_daemons (self.ranks)
 
     except:
+      self.parent.log(1, self.prefix + " Exception during RUN")
       self.parent.quit_event.set()
 
       formatted_lines = traceback.format_exc().splitlines()
@@ -125,7 +126,6 @@ class lmcThread (threading.Thread):
           self.parent.log(0, "Launch failure: " + daemon + " asking all threads to quit")
           for line in lines:
             self.parent.log(-2, self.prefix + line)
-          
           self.parent.quit_event.set()
         else:
           for line in lines:
@@ -265,6 +265,7 @@ class LMCReportingThread (ReportingThread):
 
     host = script.req_host
     port = int(script.cfg["LMC_PORT"])
+    script.log (2, "LMCReportingThread::__init__ ReportingThread on " + host + ":" + str(port))
     ReportingThread.__init__(self, script, host, port)
 
     # allow 5 queued connections
@@ -275,7 +276,7 @@ class LMCReportingThread (ReportingThread):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    self.script.log (3, "LMCReportingThread listening on " + self.host + ":" + str(self.port))
+    self.script.log (2, "LMCReportingThread listening on " + self.host + ":" + str(self.port))
     sock.bind((self.host, int(self.port)))
     self.script.log (3, "LMCReportingThread configuring number of listening slots to " + str(self.nlisten))
     sock.listen(self.nlisten)
@@ -485,6 +486,29 @@ class LMCDaemon (Daemon, HostBased):
     self.ntp_sync = True
     self.smrbs = {}
     self.sensors = {}
+    self.disks_to_monitor = []
+
+  def gather_stats (self):
+
+    self.log(3, "LMCDaemon::gather_stats getDiskCapacity ()")
+    rval, self.disks = lmc_mon.getDiskCapacity (self.disks_to_monitor, DL)
+    self.log(3, "LMCDaemon::gather_stats " + str(self.disks))
+
+    self.log(3, "LMCDaemon::gather_stats getLoads()")
+    rval, self.loads = lmc_mon.getLoads (DL)
+    self.log(3, "LMCDaemon::gather_stats " + str(self.loads))
+
+    self.log(3, "LMCDaemon::gather_stats getNTPSynced()")
+    rval, self.ntp_sync = lmc_mon.getNTPSynced(DL)
+    self.log(3, "LMCDaemon::gather_stats " + str(self.ntp_sync))
+
+    self.log(3, "LMCDaemon::gather_stats getSMRBCapacity(" + str(self.host_streams)+ ")")
+    rval, self.smrbs = lmc_mon.getSMRBCapacity (self.host_streams, self.quit_event, DL)
+    self.log(3, "LMCDaemon::gather_stats " + str(self.smrbs))
+
+    self.log(3, "LMCDaemon::gather_stats getIPMISensors()")
+    rval, self.sensors = lmc_mon.getIPMISensors (DL)
+    self.log(3, "LMCDaemon::gather_stats " + str(self.sensors))
 
   def main (self):
 
@@ -522,6 +546,16 @@ class LMCDaemon (Daemon, HostBased):
     self.stream_daemon_states = {}
     self.beam_daemon_states = {}
 
+ 
+    # configure disk systems to monitor
+    if len(self.host_servers) > 0:
+      self.disks_to_monitor = [self.cfg["SERVER_DIR"]]
+    else:
+      self.disks_to_monitor = [self.cfg["CLIENT_DIR"]]
+
+    # gather some initial statistics
+    self.gather_stats()
+
     # start server thread
     for stream in self.host_servers:
       self.log(2, "main: server_thread["+str(stream)+"] = streamThread(-1)")
@@ -545,6 +579,7 @@ class LMCDaemon (Daemon, HostBased):
       self.log(2, "main: stream_thread["+str(stream)+"] started!")
 
     self.log(1, "Stream threads started: " + str(len(self.host_streams)))
+    sleep(5)
 
     # start a thread for each beam
     for beam in self.host_beams:
@@ -559,17 +594,14 @@ class LMCDaemon (Daemon, HostBased):
     self.log(1, "Beam threads started: " + str(len(self.host_beams)))
 
     # main thread
-    if len(self.host_servers) > 0:
-      disks_to_monitor = [self.cfg["SERVER_DIR"]]
-    else:
-      disks_to_monitor = [self.cfg["CLIENT_DIR"]]
 
     hw_poll = 5
     counter = 0 
 
     first_time = True
 
-    self.log(2, "main: starting main loop")
+    self.log(2, "main: starting main loop quit_event=" + str(self.quit_event.isSet()))
+
     # control loop
     while not self.quit_event.isSet():
 
@@ -580,30 +612,13 @@ class LMCDaemon (Daemon, HostBased):
         if not first_time:
           self.resource_lock.acquire ()
 
-        self.log(3, "main: getDiskCapacity ()")
-        rval, self.disks = lmc_mon.getDiskCapacity (disks_to_monitor, DL)
-        self.log(3, "main: " + str(self.disks))
-
-        self.log(3, "main: getLoads()")
-        rval, self.loads = lmc_mon.getLoads (DL)
-        self.log(3, "main: " + str(self.loads))
-
-        self.log(3, "main: getNTPSynced()")
-        rval, self.ntp_sync = lmc_mon.getNTPSynced(DL)
-        self.log(3, "main: " + str(self.ntp_sync))
-
-        self.log(3, "main: getSMRBCapacity(" + str(self.host_streams)+ ")")
-        rval, self.smrbs = lmc_mon.getSMRBCapacity (self.host_streams, self.quit_event, DL)
-        self.log(3, "main: " + str(self.smrbs))
-
-        self.log(3, "main: getIPMISensors()")
-        rval, self.sensors = lmc_mon.getIPMISensors (DL)
-        self.log(3, "main: " + str(self.sensors))
+        self.log(3, "main: self.gather_stats()")
+        self.gather_stats()
 
         first_time = False
         self.resource_lock.release ()
 
-        self.log(2, "main: monitoring points refreshed")
+        self.log(3, "main: monitoring points refreshed")
 
         counter = hw_poll
 
@@ -672,6 +687,7 @@ if __name__ == "__main__":
     reporting_thread.join()
 
   except:
+
     print "ERROR: exception during script.main, script.quit_event.set()"
     script.quit_event.set()
 
