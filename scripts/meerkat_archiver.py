@@ -7,8 +7,7 @@
 # 
 ###############################################################################
 
-import logging
-import sys, os, traceback
+import logging, sys, os, traceback, socket
 from time import sleep
 
 from spip.daemons.bases import BeamBased,ServerBased
