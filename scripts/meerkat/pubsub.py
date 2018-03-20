@@ -16,7 +16,6 @@ import errno, time, random
 
 from spip.utils import sockets,times
 
-DAEMONIZE = True
 DL = 1
 
 ###############################################################
