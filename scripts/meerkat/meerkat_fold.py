@@ -19,7 +19,7 @@ from spip.utils.sockets import getHostNameShort
 from meerkat_proc import MEERKATProcThread, MEERKATProcDaemon
 
 DAEMONIZE = True
-DL        = 2
+DL = 1
 
 ###############################################################################
 # Fold Daemon that extends the MEERKATProcDaemon
