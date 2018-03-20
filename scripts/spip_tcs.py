@@ -56,7 +56,7 @@ class TCSReportingThread (ReportingThread):
       o = c["observation_parameters"]
       xml += "<observation_parameters>"
       xml += "<observer>" + o["observer"]["#text"] + "</observer>"
-      xml += "<pid>" + o["pid"]["#text"] + "</pid>"
+      xml += "<project_id>" + o["project_id"]["#text"] + "</project_id>"
 
       utc_start = ""
       utc_stop = ""
@@ -78,22 +78,27 @@ class TCSReportingThread (ReportingThread):
       xml += "<expected_length units='seconds'>" + o["tobs"]["#text"] + "</expected_length>"
       xml += "</observation_parameters>"
 
-      modes = c["processing_modes"]
-      for k in modes.keys():
-        key = modes[k]["@key"]
-        val = modes[k]["#text"]
+      try:
+        modes = c["processing_modes"]
+        for k in modes.keys():
+          key = modes[k]["@key"]
+          val = modes[k]["#text"]
 
-        # inject processing parameters into header
-        if val == "true" or val == "1":
-          xml += "<" + k + "_processing_parameters>"
-          p = c[k + "_processing_parameters"]
-          for l in p.keys():
-            try:
-              pval = p[l]["#text"]
-            except KeyError as e:
-              val = ''
-            xml += "<" + l + ">" + pval + "</" + l + ">"
-          xml += "</" + k + "_processing_parameters>"
+          mode_xml = ""
+          # inject processing parameters into header
+          if val == "true" or val == "1":
+            mode_xml += "<" + k + "_processing_parameters>"
+            p = c[k + "_processing_parameters"]
+            for l in p.keys():
+              try:
+                pval = p[l]["#text"]
+              except KeyError as e:
+                val = ''
+              mode_xml += "<" + l + ">" + pval + "</" + l + ">"
+            mode_xml += "</" + k + "_processing_parameters>"
+          xml += mode_xml
+      except:
+        self.script.log (2, "TCSReportingThread::parse_message exception")
       xml += "</beam>"
       
       self.beam_states[beam]["lock"].release()
@@ -147,7 +152,7 @@ class TCSDaemon(Daemon):
         self.beam_states[b]["config"]["source_parameters"]["dec"]["@units"] = "dd:mm:ss"
 
         self.beam_states[b]["config"]["observation_parameters"]["observer"]["#text"] = header["OBSERVER"]
-        self.beam_states[b]["config"]["observation_parameters"]["pid"]["#text"] = header["PID"]
+        self.beam_states[b]["config"]["observation_parameters"]["project_id"]["#text"] = header["PID"]
         self.beam_states[b]["config"]["observation_parameters"]["mode"]["#text"] = header["MODE"]
         self.beam_states[b]["config"]["observation_parameters"]["calfreq"]["#text"] = header["CALFREQ"]
         self.beam_states[b]["config"]["observation_parameters"]["tobs"]["#text"] = header["TOBS"]
@@ -518,7 +523,7 @@ class TCSServerDaemon (TCSDaemon, ServerBased):
       self.beam_states[b]["config"]["source_parameters"]["name"] = {"@key":"SOURCE", "@epoch":"J2000", "#text":""}
       self.beam_states[b]["config"]["source_parameters"]["ra"] = {"@key":"RA", "@units":"hhmmss", "#text":""}
       self.beam_states[b]["config"]["source_parameters"]["dec"] = {"@key":"DEC", "@units":"ddmmss", "#text":""}
-      self.beam_states[b]["config"]["observation_parameters"]["pid"] = {"@key":"PID", "#text":""}
+      self.beam_states[b]["config"]["observation_parameters"]["project_id"] = {"@key":"PID", "#text":""}
       self.beam_states[b]["config"]["observation_parameters"]["observer"] = {"@key":"OBSERVER", "#text":""}
       self.beam_states[b]["config"]["observation_parameters"]["utc_start"] = {"@key":"UTC_START", "#text":"None"}
       self.beam_states[b]["config"]["observation_parameters"]["utc_stop"] = {"@key":"UTC_STOP", "#text":"None"}
@@ -549,7 +554,7 @@ class TCSBeamDaemon (TCSDaemon, BeamBased):
     self.beam_states[b]["config"]["source_parameters"]["name"] = {"@key":"SOURCE", "@epoch":"J2000", "#text":""}
     self.beam_states[b]["config"]["source_parameters"]["ra"] = {"@key":"RA", "@units":"hhmmss", "#text":""}
     self.beam_states[b]["config"]["source_parameters"]["dec"] = {"@key":"DEC", "@units":"ddmmss", "#text":""}
-    self.beam_states[b]["config"]["observation_parameters"]["pid"] = {"@key":"PID", "#text":""}
+    self.beam_states[b]["config"]["observation_parameters"]["project_id"] = {"@key":"PID", "#text":""}
     self.beam_states[b]["config"]["observation_parameters"]["observer"] = {"@key":"OBSERVER", "#text":""}
     self.beam_states[b]["config"]["observation_parameters"]["utc_start"] = {"@key":"UTC_START", "#text":"None"}
     self.beam_states[b]["config"]["observation_parameters"]["utc_stop"] = {"@key":"UTC_STOP", "#text":"None"}
