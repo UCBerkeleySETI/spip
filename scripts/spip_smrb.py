@@ -150,7 +150,7 @@ class monThread (threading.Thread):
           for handle in did_read:
             if (handle == sock):
               (new_conn, addr) = sock.accept()
-              script.log(2, "monThread::run accept connection from " + 
+              script.log(3, "monThread::run accept connection from " + 
                           repr(addr))
               can_read.append(new_conn)
 
@@ -159,7 +159,7 @@ class monThread (threading.Thread):
               message = message.strip()
               script.log(3, "monThread::run message='" + message+"'")
               if (len(message) == 0):
-                script.log(2, "monThread::run closing connection")
+                script.log(3, "monThread::run closing connection")
                 handle.close()
                 for i, x in enumerate(can_read):
                   if (x == handle):
