@@ -160,7 +160,7 @@ class KATCPDaemon(Daemon):
 
     while not self.quit_event.isSet():
 
-      self.log(2, "KATCPDaemon::main loop start")
+      self.log(3, "KATCPDaemon::main loop start")
       # the primary function of the KATCPDaemon is to update the 
       # sensors in the DeviceServer periodically
 
@@ -173,28 +173,22 @@ class KATCPDaemon(Daemon):
         return
 
       (host, port) = self.lmc.split(":")
-      self.log(2, "KATCPDaemon::main updating sensors from LMC")
+      self.log(3, "KATCPDaemon::main updating sensors from LMC")
       try:
-        self.log(2, "KATCPDaemon::main openSocket("+host+","+port+")")
+        self.log(3, "KATCPDaemon::main openSocket("+host+","+port+")")
         sock = sockets.openSocket (DL, host, int(port), 1)
-        self.log(2, "KATCPDaemon::main socket opened")
+        self.log(3, "KATCPDaemon::main socket opened")
         if sock:
-          self.log(2, "KATCPDaemon::main sock.settimeout(1.0)")
           sock.settimeout(1.0)
-          self.log(2, "KATCPDaemon::main sock.send()")
           sock.send(self.lmc_cmd)
-          self.log(2, "KATCPDaemon::main sock.recv()")
           lmc_reply = sock.recv (65536)
-          self.log(2, "KATCPDaemon::main xml.parse()")
           xml = xmltodict.parse(lmc_reply)
-          self.log(2, "KATCPDaemon::main sock.close()")
           sock.close()
-          self.log(2, "KATCPDaemon::main sock.close() done")
 
           if self.quit_event.isSet():
             self.log(2, "KATCPDaemon::main quit_event was set, exiting main 2")
             return
-          self.log(2, "KATCPDaemon::main update_lmc_sensors("+host+",[xml])")
+          self.log(3, "KATCPDaemon::main update_lmc_sensors("+host+",[xml])")
           self.update_lmc_sensors(host, xml)
 
       except socket.error as e:
@@ -207,12 +201,12 @@ class KATCPDaemon(Daemon):
         self.log(2, "KATCPDaemon::main other exception on LMC sensor read")
         sock.close()
 
-      self.log(2, "KATCPDaemon::main received LMC data")
+      self.log(3, "KATCPDaemon::main received LMC data")
 
       # connect to SPIP_REPACK to retrieve Pulsar SNR performance
       if self.quit_event.isSet():
         return
-      self.log(2, "KATCPDaemon::main pulsar SNR sensor from REPACK")
+      self.log(3, "KATCPDaemon::main pulsar SNR sensor from REPACK")
       (host, port) = self.repack.split(":")
       try:
         sock = sockets.openSocket (DL, host, int(port), 1)
@@ -242,7 +236,7 @@ class KATCPDaemon(Daemon):
       xml = "None"
       self.update_stat_sensors (host, xml)
 
-      self.log(2, "KATCPDaemon::main sleeping for 5 seconds")
+      self.log(3, "KATCPDaemon::main sleeping for 5 seconds")
 
       to_sleep = 5
       while not self.quit_event.isSet() and to_sleep > 0:
@@ -401,12 +395,12 @@ class KATCPDaemon(Daemon):
       self.log (3, "KATCPDaemon::update_repack_sensors beam="+beam_name+" active="+active)
       if active == "True":
         source = beam[1]["source"]["name"]["#text"]
-        self.log (2, "KATCPDaemon::update_repack_sensors source="+source)
+        self.log (3, "KATCPDaemon::update_repack_sensors source="+source)
 
         start = beam[1]["observation"]["start"]["#text"]
         integrated = beam[1]["observation"]["integrated"]["#text"]
         snr = beam[1]["observation"]["snr"]
-        self.log (2, "KATCPDaemon::update_repack_sensors start="+start+" length="+integrated+" snr="+snr)
+        self.log (3, "KATCPDaemon::update_repack_sensors start="+start+" length="+integrated+" snr="+snr)
 
         self.katcp._beam_sensors["observing"].set_value (1)
         self.katcp._beam_sensors["snr"].set_value (float(snr))
