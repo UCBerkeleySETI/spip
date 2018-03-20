@@ -56,11 +56,7 @@ class Daemon(object):
       sys.stderr.write ("ERROR: script requires " + self.req_host +", but was launched on " + self.hostname + "\n")
       return 1
 
-    if str(self.id) == "-1":
-      self.log_file  = self.log_dir + "/" + dest + ".log"
-    else:
-      self.log_file  = self.log_dir + "/" + dest + "_" + str(self.id) +  ".log"
-
+    self.log_file  = self.log_dir + "/" + dest + ".log"
     self.pid_file  = self.control_dir + "/" + self.name + ".pid"
     self.quit_file = self.control_dir + "/"  + self.name + ".quit"
     self.reload_file = self.control_dir + "/"  + self.name + ".reload"
