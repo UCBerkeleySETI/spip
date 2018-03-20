@@ -114,6 +114,7 @@ class KATCPServer (DeviceServer):
       lmc_reply = sock.recv (65536)
       sock.close()
       xml = xmltodict.parse(lmc_reply)
+      self.script.log(2, "KATCPServer::setup_sensors_host sock.recv=" + str(xml))
 
       self._host_sensors = {}
 
@@ -497,6 +498,9 @@ class KATCPServer (DeviceServer):
   def request_capture_done(self, req):
     """Terminte the ingest process."""
     self.script.log (1, "request_capture_done()")
+    return self.capture_done()
+
+  def capture_done(self):
 
     # in case the observing was terminated early
     if self._data_product["state"] == "recording":
@@ -695,6 +699,7 @@ class KATCPServer (DeviceServer):
 
               self.script.log (1, "configure: sending XML req ["+req+"]")
               sock.send(req)
+              self.script.log (1, "configure: send XML, receiving reply")
               recv_reply = sock.recv (65536)
               self.script.log (1, "configure: received " + recv_reply)
               sock.close()
@@ -724,16 +729,13 @@ class KATCPServer (DeviceServer):
   def request_deconfigure(self, req, msg):
     """Deconfigure for the data_product."""
 
-    #if len(msg.arguments) == 0:
-    #  self.script.log (-1, "request_deconfigure: no arguments provided")
-    #  return ("fail", "expected 1 argument")
+    # in case the observing was terminated early
+    if self._data_product["state"] == "recording":
+      (result, message) = self.target_stop ()
 
-    # the sub-array identifier
-    #data_product_id = msg.arguments[0]
+    if self._data_product["state"] == "ready":
+      (result, message) = self.capture_done()
 
-    #self.script.log (1, "configure: deconfiguring " + str(data_product_id))
-
-    # hack for now
     data_product_id = self._data_product["id"]
 
     # check if the data product was previously configured
