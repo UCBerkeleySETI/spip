@@ -296,7 +296,7 @@ class RepackDaemon(Daemon):
             cmd = "find " + out_dir + " -type f -name '????-??-??-??:??:??.ar' | wc -l"
             rval, lines = self.system(cmd, 3)
             if rval or  lines[0] == "0":
-              self.log (-1, "main: no archives have been produced")
+              self.log (-1, "main: no archives have been produced in " + out_dir)
               all_finished = False
               any_failed = True
 
@@ -872,7 +872,7 @@ class RepackServerDaemon (RepackDaemon, ServerBased):
 
     freq_low  = float(self.subbands[0]["cfreq"])  - (float(self.subbands[0]["bw"]) / 2.0)
     freq_high = float(self.subbands[-1]["cfreq"]) + (float(self.subbands[-1]["bw"]) / 2.0)
-    self.out_cfreq = freq_low + ((freq_high - freq_low) / 2.0)
+    self.out_cfreq = int(freq_low + ((freq_high - freq_low) / 2.0))
 
     return 0
 
@@ -924,7 +924,7 @@ class RepackBeamDaemon (RepackDaemon, BeamBased):
 
     freq_low  = float(self.subbands[0]["cfreq"])  - (float(self.subbands[0]["bw"]) / 2.0)
     freq_high = float(self.subbands[-1]["cfreq"]) + (float(self.subbands[-1]["bw"]) / 2.0)
-    self.out_cfreq = freq_low + ((freq_high - freq_low) / 2.0)
+    self.out_cfreq = int(freq_low + ((freq_high - freq_low) / 2.0))
 
     self.log(1, "RepackBeamDaemon::configure done")
 
