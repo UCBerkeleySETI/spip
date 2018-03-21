@@ -91,6 +91,10 @@ class KATCPDaemon(Daemon):
 
   def reset_cam_config (self):
     self.cam_config["ADC_SYNC_TIME"] = "0"
+    self.cam_config["PRECISETIME_FRACTION_POLV"] = "0"
+    self.cam_config["PRECISETIME_FRACTION_POLH"] = "0"
+    self.cam_config["PRECISETIME_UNCERTAINTY_POLV"] = "0"
+    self.cam_config["PRECISETIME_UNCERTAINTY_POLH"] = "0"
     self.cam_config["TARGET"] = "None"
     self.cam_config["RA"] = "None"
     self.cam_config["DEC"] = "None"
@@ -118,6 +122,10 @@ class KATCPDaemon(Daemon):
     self.beam_config["MODE"] = "PSR"
     self.beam_config["CALFREQ"] = "0"
     self.beam_config["ADC_SYNC_TIME"] = "0"
+    self.beam_config["PRECISETIME_FRACTION_POLV"] = "0"
+    self.beam_config["PRECISETIME_FRACTION_POLH"] = "0"
+    self.beam_config["PRECISETIME_UNCERTAINTY_POLV"] = "0"
+    self.beam_config["PRECISETIME_UNCERTAINTY_POLH"] = "0"
     self.beam_config["PERFORM_FOLD"] = "1"
     self.beam_config["PERFORM_SEARCH"] = "0"
     self.beam_config["ANTENNAE"] = "0"
@@ -295,6 +303,10 @@ class KATCPDaemon(Daemon):
     xml +=     "<proposal_id key='PROPOSAL_ID'>" + self.beam_config["PROPOSAL_ID"] + "</proposal_id>"
     xml +=     "<program_block_id key='PROGRAM_BLOCK_ID'>" + "TBD" + "</program_block_id>"
     xml +=     "<description key='DESCRIPTION'>" + self.beam_config["DESCRIPTION"] + "</description>"
+    xml +=     "<precisetime_fraction_polv key='PRECISETIME_FRACTION_POLV'>" + self.beam_config["PRECISETIME_FRACTION_POLV"] + "</precisetime_fraction_polv>"
+    xml +=     "<precisetime_fraction_polh key='PRECISETIME_FRACTION_POLH'>" + self.beam_config["PRECISETIME_FRACTION_POLH"] + "</precisetime_fraction_polh>"
+    xml +=     "<precisetime_uncertainty_polv key='PRECISETIME_UNCERTAINTY_POLV'>" + self.beam_config["PRECISETIME_UNCERTAINTY_POLV"] + "</precisetime_uncertainty_polv>"
+    xml +=     "<precisetime_uncertainty_polh key='PRECISETIME_UNCERTAINTY_POLH'>" + self.beam_config["PRECISETIME_UNCERTAINTY_POLH"] + "</precisetime_uncertainty_polh>"
     xml +=   "</custom_parameters>"
 
     xml +=   "<processing_modes>"
