@@ -80,7 +80,7 @@ class MEERKATFoldDaemon (MEERKATProcDaemon):
     try:
       outtsub = int(self.header["OUTTSUBINT"])
     except:
-      outtsub = 10
+      outtsub = 8
 
     try:
       outnbin = int(self.header["OUTNBIN"])
