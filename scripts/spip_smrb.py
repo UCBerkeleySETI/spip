@@ -20,7 +20,7 @@ from json import dumps
 from spip.daemons.bases import StreamBased
 from spip.daemons.daemon import Daemon
 from spip.log_socket import LogSocket
-from spip.utils.core import system_piped,system
+from spip.utils.core import system
 
 DAEMONIZE = True
 DL        = 1
@@ -89,7 +89,7 @@ class smrbThread (threading.Thread):
 
     # run the command
     self.script.log (1, "START " + cmd)
-    rval = system_piped (cmd, self.pipe, 1 <= DL)
+    rval = self.script.system_piped (cmd, self.pipe, 2)
     self.script.log (1, "END   " + cmd)
 
 # Monitor the state of all data blocks in this stream
