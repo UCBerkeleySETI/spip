@@ -42,6 +42,30 @@ class MeerKATArchiverDaemon(Daemon):
     else:
       return ""
 
+  def computeResults (self, finished_dir):
+
+    data = { "snr": "Unknown", "length": "Unknown" }
+
+    freq_sum_file = finished_dir + "/freq.sum"
+    if os.path.exists(freq_sum_file):
+
+      cmd = "psrstat -jFDp -c snr " + freq_sum_file + "| awk -F= '{printf(\"%f\",$2)}'"
+      rval, lines = self.system (cmd, 3)
+      if rval < 0:
+        return (rval, "failed to extract snr from freq.sum")
+      data["snr"] = lines[0]
+
+    time_sum_file = finished_dir + "/time.sum"
+    if os.path.exists(time_sum_file):
+      cmd = "psrstat -c length " + time_sum_file + " | awk -F= '{printf(\"%f\",$2)}'"
+      rval, lines = self.system (cmd, 3)
+      if rval < 0:
+        return (rval, "failed to extract length from time.sum")
+      data["length"] = lines[0]
+
+    return data
+
+
   def generateObsInfoDat (self, finished_subdir, completed_subdir):
 
     obs_results_file = self.finished_dir + "/" + finished_subdir + "/obs.results"
@@ -52,10 +76,12 @@ class MeerKATArchiverDaemon(Daemon):
 
       self.log (2, "MeerKATArchiverDaemon::generateObsInfoDat creating obs_info.dat")
 
-      if not os.path.exists(obs_results_file):
-        self.log (-1, "MeerKATArchiverDaemon::generateObsInfoDat: " + obs_results_file + " did not exist")
-        return ("fail", "obs.results file did not exist")
-      obs_results = Config.readCFGFileIntoDict(obs_results_file)
+      if os.path.exists(obs_results_file):
+        self.log (2, "MeerKATArchiverDaemon::generateObsInfoDat: reading " + obs_results_file)
+        obs_results = Config.readCFGFileIntoDict(obs_results_file)
+      else:
+        self.log (2, "MeerKATArchiverDaemon::generateObsInfoDat: generating results")
+        obs_results = self.computeResults (self.finished_dir + "/" + finished_subdir)
 
       if not os.path.exists(obs_header_file):
         self.log (-1, "MeerKATArchiverDaemon::generateObsInfoDat: " + obs_header_file + " did not exist")
@@ -74,7 +100,13 @@ class MeerKATArchiverDaemon(Daemon):
       obs_info_dat["proposal_id"] = self.extractKey(obs_header, "PROPOSAL_ID")
       obs_info_dat["description"] = self.extractKey(obs_header, "DESCRIPTION")
       obs_info_dat["backend_args"] = "TBD"
-      obs_info_dat["experiment_id"] = self.extractKey(obs_header,"EXPERIMENT_ID")
+      obs_info_dat["experiment_id"] = self.extractKey(obs_header, "EXPERIMENT_ID")
+      obs_info_dat["adc_sync_time"] = self.extractKey(obs_header, "ADC_SYNC_TIME")
+      obs_info_dat["precisetime_fraction"] = self.extractKey(obs_header, "PRECISETIME_FRACTION_AVG")
+      obs_info_dat["utc_start_offset_picoseconds"] = self.extractKey(obs_header, "PICOSECONDS")
+
+      fold_mode = self.extractKey(obs_header, "PERFORM_FOLD")
+      search_mode = self.extractKey(obs_header, "PERFORM_SEARCH")
 
       Config.writeDictToColonSVFile(obs_info_dat, obs_info_dat_file)
 
@@ -102,7 +134,7 @@ class MeerKATArchiverDaemon(Daemon):
     while not self.quit_event.isSet():
 
       # look for observations that have been completed archived / beam / utc / source
-      cmd = "find " + self.completed_dir + " -mindepth 5 -maxdepth 5 -type f -name 'obs.finished' -mmin +1 | sort"
+      cmd = "find " + self.completed_dir + " -mindepth 5 -maxdepth 5 -type f -name 'obs.finished' -mmin +5 | sort"
       rval, fin_files = self.system(cmd, 2)
       if rval:
         self.log (-1, "main: find command failed: " + fin_files[0])
@@ -125,9 +157,10 @@ class MeerKATArchiverDaemon(Daemon):
           # form the obs.dat file that is parsed during ingest
           (rval, response) = self.generateObsInfoDat (finished_subdir, completed_subdir)
           if not rval == "ok":
-            self.log (-1, "main: self.generateObsInfoDat for " + utc + " failed: " + response)
-            base_dir = self.completed_dir + "/" + completed_subdir
-            os.rename (base_dir + "/obs.finished", base_dir + "/obs.failed")
+            self.log (-1, "Could not generate obs_info.dat for " + utc + ": " + response)
+            # self.log (-1, "main: self.generateObsInfoDat for " + utc + " failed: " + response)
+            # base_dir = self.completed_dir + "/" + completed_subdir
+            # os.rename (base_dir + "/obs.finished", base_dir + "/obs.failed")
             continue
 
           # name of the directory to transfer (flat)
@@ -264,7 +297,7 @@ if __name__ == "__main__":
   if state != 0:
     sys.exit(state)
 
-  script.log(2, "STARTING SCRIPT")
+  script.log(1, "STARTING SCRIPT")
 
   try:
     script.main ()
@@ -276,6 +309,6 @@ if __name__ == "__main__":
     traceback.print_exc(file=sys.stdout)
     print '-'*60
 
-  script.log(2, "STOPPING SCRIPT")
+  script.log(1, "STOPPING SCRIPT")
   script.conclude()
   sys.exit(0)
