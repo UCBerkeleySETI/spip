@@ -23,6 +23,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <new>
+#include <signal.h>
 
 using namespace std;
 
@@ -185,8 +186,12 @@ void spip::UDPReceiveMergeDB::set_control_cmd (spip::ControlCmd cmd)
   pthread_cond_signal (&cond_db);
   pthread_mutex_unlock (&mutex_db);
 
-  //if ((cmd == Stop) || (cmd == Quit))
-  //  send_terminal_packets();
+  // send a SIGINT in case the threads are blocked on a system call to recvfrom
+  if ((cmd == Stop) || (cmd == Quit))
+  {
+    pthread_kill (recv_thread1_id, SIGINT);
+    pthread_kill (recv_thread2_id, SIGINT);
+  }
 }
 
 void spip::UDPReceiveMergeDB::send_terminal_packets()
@@ -396,6 +401,9 @@ void spip::UDPReceiveMergeDB::start_threads (int c1, int c2)
 
   stats[0]->reset();
   stats[1]->reset();
+
+  // ensure the receiving threads are ready to start
+  spip::UDPSocketReceive::keep_receiving = true;
 
   pthread_create (&datablock_thread_id, NULL, datablock_thread_wrapper, this);
   pthread_create (&recv_thread1_id, NULL, recv_thread1_wrapper, this);
