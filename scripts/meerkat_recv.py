@@ -57,7 +57,7 @@ class MeerKATRecvDaemon(RecvDaemon):
 
     # hack for sub-band mode
     if self.id != "0":
-      cmd = "sleep 2678400" # 1 month
+      cmd = "meerkat_dummyserver -b " + self.cpu_core + " -c " + self.ctrl_port
 
     return cmd
 
