@@ -113,17 +113,6 @@ void Error::report (ostream& ostr) const
     ostr << "Error::message\n\t" << message << endl;
 }
 
-string Error::warning () const
-{
-  string function;
-
-  if (!functions.empty())
-    function = functions.back();
-
-  return function + " WARNING: " + message;
-}
-
-
 const string Error::get_message() const
 {
   return message;
