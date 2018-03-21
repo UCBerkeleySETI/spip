@@ -83,7 +83,7 @@ class KATCPServer (DeviceServer):
     # GUI URL TODO remove hardcoding
     guis = [ { "title": "PTUSE Web Interface",
                "description": "Live Pulsar timing monitoring plots", 
-               "href": "http://192.168.6.235/spip/timing/" } ]
+               "href": self.script.cfg["SPIP_ADDRESS"] } ]
     encoded = json.dumps(guis)
     self._gui_urls = Sensor.string("gui-urls",
       description="PTUSE GUI URL",
@@ -397,6 +397,12 @@ class KATCPServer (DeviceServer):
     self.script.beam_config["TARGET"] = self.script.cam_config["TARGET"]
     if self.script.cam_config["ADC_SYNC_TIME"] != "0":
       self.script.beam_config["ADC_SYNC_TIME"] = self.script.cam_config["ADC_SYNC_TIME"]
+
+    self.script.beam_config["PRECISETIME_FRACTION_POLV"] = self.script.cam_config["PRECISETIME_FRACTION_POLV"]
+    self.script.beam_config["PRECISETIME_FRACTION_POLH"] = self.script.cam_config["PRECISETIME_FRACTION_POLH"]
+    self.script.beam_config["PRECISETIME_UNCERTAINTY_POLV"] = self.script.cam_config["PRECISETIME_UNCERTAINTY_POLV"]
+    self.script.beam_config["PRECISETIME_UNCERTAINTY_POLH"] = self.script.cam_config["PRECISETIME_UNCERTAINTY_POLH"]
+
     self.script.beam_config["OBSERVER"] = self.script.cam_config["OBSERVER"]
     self.script.beam_config["ANTENNAE"] = self.script.cam_config["ANTENNAE"]
     self.script.beam_config["SCHEDULE_BLOCK_ID"] = self.script.cam_config["SCHEDULE_BLOCK_ID"]
