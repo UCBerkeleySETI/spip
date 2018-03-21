@@ -74,12 +74,13 @@ class PubSubThread (threading.Thread):
     sensors["PRECISETIME_UNCERTAINTY_POLH"] = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.precise-time.uncertainty'}
     sensors["PRECISETIME_FRACTION_POLV"]    = {"comp": "sub", "sensor": 'streams.' + self.polv_stream + '.precise-time.epoch-fraction'}
     sensors["PRECISETIME_UNCERTAINTY_POLV"] = {"comp": "sub", "sensor": 'streams.' + self.polv_stream + '.precise-time.uncertainty'}
+    sensors["TFR_GNSS_KTT"]     = {"comp": "anc", "sensor": 'tfr.gnss.ktt'}
     # there will be different sensors for V and H pols, but we need them to be the same, we should check this!
 
-    sensors["EXPERIMENT_ID"]     = {"comp": "sub", "sensor": 'observation.script-experiment-id'}
-    sensors["OBSERVER"]          = {"comp": "sub", "sensor": "observation.script-observer"}
-    sensors["PROPOSAL_ID"]       = {"comp": "sub", "sensor": "observation.script-proposal-id"}
-    sensors["DESCRIPTION"]       = {"comp": "sub", "sensor": "observation.script-description"}
+    sensors["EXPERIMENT_ID"]    = {"comp": "sub", "sensor": 'observation.script-experiment-id'}
+    sensors["OBSERVER"]         = {"comp": "sub", "sensor": "observation.script-observer"}
+    sensors["PROPOSAL_ID"]      = {"comp": "sub", "sensor": "observation.script-proposal-id"}
+    sensors["DESCRIPTION"]      = {"comp": "sub", "sensor": "observation.script-description"}
 
     # there will be a anc.tfr.kttc that is the difference between KTT and UTC, less accurate, but immediate
     # TODO CAM ICD mandates observation.script-proposal-id
