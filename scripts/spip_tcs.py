@@ -160,7 +160,6 @@ class TCSDaemon(Daemon):
         self.beam_states[b]["config"]["observation_parameters"]["utc_stop"]["#text"] = ""
         #self.beam_states[b]["config"]["observation_parameters"]["utc_stop"]["#text"] = header["UTC_STOP"]
 
-        #self.beam_states[b]["adc_sync_time"] = header["ADC_SYNC_TIME"]
         self.beam_states[b]["state"] = "Idle"
 
         self.beam_states[b]["lock"].release()
