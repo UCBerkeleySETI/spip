@@ -579,7 +579,6 @@ class LMCDaemon (Daemon, HostBased):
       self.log(2, "main: stream_thread["+str(stream)+"] started!")
 
     self.log(1, "Stream threads started: " + str(len(self.host_streams)))
-    sleep(5)
 
     # start a thread for each beam
     for beam in self.host_beams:
