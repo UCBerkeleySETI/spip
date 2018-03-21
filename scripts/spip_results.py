@@ -412,7 +412,7 @@ class ResultsDaemon(Daemon):
       else:
         rval, data["bandpass"]["raw"] = self.system_raw ("cat " + band_plot_file, 3)
 
-    # find the resultsfilename
+    # find the results filename
     results_file = dir + "/obs.results"
     if os.path.exists(results_file):
       self.log (3, "collect_data: results_file=" + results_file)
