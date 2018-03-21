@@ -178,6 +178,7 @@ void spip::SimReceiveDB::control_thread()
         cerr << "control_thread: cmd=" << cmd << endl;
       if (strcmp (cmd, "START") == 0)
       {
+        cerr << "Received START command" << endl;
         // re-import the config
         header.clone (config);
 
@@ -198,12 +199,14 @@ void spip::SimReceiveDB::control_thread()
       }
       else if (strcmp (cmd, "STOP") == 0)
       {
+        cerr << "Received STOP command" << endl;
         if (verbose)
           cerr << "control_thread: control_cmd = Stop" << endl;
         control_cmd = Stop;
       }
       else if (strcmp (cmd, "QUIT") == 0)
       {
+        cerr << "Received QUIT command" << endl;
         if (verbose)
           cerr << "control_thread: control_cmd = Quit" << endl;
         control_cmd = Quit;
@@ -296,20 +299,23 @@ void spip::SimReceiveDB::update_stats()
   if (prev.tv_sec > 0)
   {
     double seconds_elapsed = (curr.tv_sec - prev.tv_sec);
-    seconds_elapsed += (curr.tv_usec - prev.tv_usec) / 1000000;
+    seconds_elapsed += double(curr.tv_usec - prev.tv_usec) / 1000000;
 
-    // calc the values since prev update
-    bytes_recv_ps = (double) (b_recv_curr - b_recv_total) / seconds_elapsed;
-    bytes_drop_ps = (double) (b_drop_curr - b_drop_total) / seconds_elapsed;
-    sleeps_ps = (double) (s_curr - s_total) / seconds_elapsed;
+    if (seconds_elapsed > 0)
+    {
+      // calc the values since prev update
+      bytes_recv_ps = (double) (b_recv_curr - b_recv_total) / seconds_elapsed;
+      bytes_drop_ps = (double) (b_drop_curr - b_drop_total) / seconds_elapsed;
+      sleeps_ps = (double) (s_curr - s_total) / seconds_elapsed;
 
-    double mb_recv_ps = (double) bytes_recv_ps / 1000000;
-    double gb_recv_ps = (mb_recv_ps * 8)/1000;
+      double mb_recv_ps = (double) bytes_recv_ps / 1000000;
+      double gb_recv_ps = (mb_recv_ps * 8)/1000;
 
-    double mb_drop_ps = (double) bytes_drop_ps / 1000000;
+      double mb_drop_ps = (double) bytes_drop_ps / 1000000;
 
-    if (control_state == Active)
-      cerr << "In: " << gb_recv_ps << "Gb/s\tDropped:" << mb_drop_ps << " Mb/s" << endl;
+      if (control_state == Active)
+        cerr << "In: " << gb_recv_ps << "Gb/s\tDropped:" << mb_drop_ps << " Mb/s" << endl;
+    }
   }
 
   // update the totals
@@ -384,12 +390,15 @@ bool spip::SimReceiveDB::generate (int tobs)
   struct timeval timestamp;
   time_t start_second = 0;
 
+  cerr << "Waiting for START command" << endl;
+
   // Main loop
   while (keep_generating)
   {
     // wait for start
     if (control_state == Idle && control_cmd == Start)
     {
+      cerr << "Acknowledging START command" << endl;
       control_state = Active;
       gettimeofday (&timestamp, 0);
       start_second = timestamp.tv_sec + DELTA_START;
@@ -443,6 +452,7 @@ bool spip::SimReceiveDB::generate (int tobs)
       // check for stop command
     if (control_cmd == Stop)
     {
+      cerr << "Acknowledging STOP command" << endl;
       if (verbose)
         cerr << "spip::SimReceiveDB::receive control_cmd == Stop" << endl;
       keep_generating = false;
