@@ -25,7 +25,8 @@ using namespace std;
 spip::TCPSocketServer::TCPSocketServer ()
 {
   client_fd = 0;
-  //sock_in = sock_out = 0;
+  verbose = false;
+  ending = false;
 }
 
 spip::TCPSocketServer::~TCPSocketServer ()
@@ -70,15 +71,6 @@ void spip::TCPSocketServer::open (std::string ip_addr, int port, int nqueued)
 
 void spip::TCPSocketServer::close_me ()
 {
-/*
-  if (sock_in)
-    fclose(sock_in);
-  if (sock_out)
-    fclose(sock_out);
-  if (client_fd)
-    close(client_fd);
-*/
-
   spip::TCPSocket::close_me ();
 }
 
@@ -94,12 +86,6 @@ int spip::TCPSocketServer::accept_client ()
   {
     throw runtime_error ("could not accept connection");
   }
-
-  //sock_in  = fdopen (client_fd, "r");
-  //sock_out = fdopen (client_fd, "w");
-
-  //setbuf (sock_in, 0);
-  //setbuf (sock_out, 0);
 
   return client_fd;
 }
@@ -120,7 +106,12 @@ int spip::TCPSocketServer::accept_client (int timeout)
   int readsocks = select(fd+1, &socks, (fd_set *) 0, (fd_set *) 0, &tmout);
 
   if (readsocks < 0)
-    throw runtime_error ("select failed");
+  {
+    if (ending)
+      return -1;
+    else
+      throw runtime_error ("select failed");
+  }
   else if (readsocks == 0)
   {
     return -1;
@@ -131,15 +122,6 @@ int spip::TCPSocketServer::accept_client (int timeout)
 
 void spip::TCPSocketServer::close_client ()
 {
-/*
-  if (sock_in)
-    fclose(sock_in);
-  sock_in = 0;
-  if (sock_out)
-    fclose(sock_out);
-  sock_out = 0;
-*/
-  
   if (client_fd)
     close(client_fd);
   client_fd = 0;
@@ -167,3 +149,9 @@ ssize_t spip::TCPSocketServer::write_client (char * buffer, size_t bytes)
   return bytes_sent;
 }
 
+void spip::TCPSocketServer::set_verbosity (int level) 
+{
+  if (level)
+    cerr << "spip::TCPSocketServer::set_verbosity level=" << level << endl;
+  verbose = level;
+};

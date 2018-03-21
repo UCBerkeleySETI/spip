@@ -36,13 +36,21 @@ namespace spip {
 
       ssize_t write_client (char * buffer, size_t bytes);
 
+      // configure verbosity
+      void set_verbosity (int level);
+
+      // indicate sockets are closing
+      void set_ending () { ending = true; } ;
+
+    protected:
+
+      int verbose;
+
     private:
 
       int client_fd;
 
-      //FILE * sock_in;
-
-      //FILE * sock_out;
+      bool ending;
 
   };
 

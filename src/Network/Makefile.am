@@ -3,11 +3,11 @@ noinst_LTLIBRARIES = libspipnet.la
 
 libspipnet_headers = spip/Socket.h spip/UDPSocket.h spip/UDPSocketReceive.h spip/UDPSocketSend.h \
                      spip/UDPGenerator.h spip/UDPReceiver.h spip/UDPStats.h \
-                     spip/UDPFormat.h spip/TCPSocket.h spip/TCPSocketServer.h
+                     spip/UDPFormat.h spip/TCPDummyServer.h spip/TCPSocket.h spip/TCPSocketServer.h
 
 libspipnet_la_SOURCES = Socket.C C UDPSocket.C UDPSocketReceive.C UDPSocketSend.C \
                         UDPGenerator.C UDPReceiver.C UDPStats.C \
-                        UDPFormat.C TCPSocket.C TCPSocketServer.C
+                        UDPFormat.C TCPDummyServer.C TCPSocket.C TCPSocketServer.C
 
 AM_CXXFLAGS = -I$(top_builddir)/src/Affinity \
 							-I$(top_builddir)/src/Util \
