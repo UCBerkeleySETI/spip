@@ -48,7 +48,7 @@ class tests extends spip_webpage
   {
     $a = array();
     array_push($a, $this->build_hash("obs", "observer", "OBSERVER", "Observer", "text", "Andrew", "16"));
-    array_push($a, $this->build_hash("obs", "pid", "PID", "Project ID", "text", "P999", "8"));
+    array_push($a, $this->build_hash("obs", "project_id", "PID", "Project ID", "text", "P999", "8"));
     array_push($a, $this->build_hash("obs", "tobs", "TOBS", "Expected Length [s]", "text", "60", "8"));
     array_push($a, $this->build_hash("obs", "calfreq", "CALFREQ", "Calibrator Frequency [Hz]", "text", "11.123", "8"));
     return $a;
