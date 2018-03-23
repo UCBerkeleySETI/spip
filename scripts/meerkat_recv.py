@@ -57,7 +57,8 @@ class MeerKATRecvDaemon(RecvDaemon):
 
     # hack for sub-band mode
     if self.id != "0":
-      cmd = "sleep 2678400" # 1 month
+      #cmd = "meerkat_dummyserver -b " + self.cpu_core + " -c " + self.ctrl_port
+      cmd = "sleep 86400"
 
     return cmd
 
@@ -74,6 +75,8 @@ if __name__ == "__main__":
   stream_id = sys.argv[1]
 
   script = MeerKATRecvDaemon ("meerkat_recv", stream_id)
+  script.cpu_list = "-1"
+
   state = script.configure (DAEMONIZE, DL, "recv", "recv")
   if state != 0:
     sys.exit(state)

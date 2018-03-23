@@ -79,7 +79,7 @@ class timing extends spip_webpage
 
             var h, i, j, k;      
             var source, name, ra, dec;
-            var params, observer, pid, mode, start, elapsed, tobs
+            var params, observer, project_id, mode, start, elapsed, tobs
             var observation, integrated, snr;
 
             // process the TCS state first
@@ -104,19 +104,17 @@ class timing extends spip_webpage
     
                 params   = beam.getElementsByTagName("observation_parameters")[0];
                 observer = get_node_value(params.getElementsByTagName("observer")[0]);
-                pid      = get_node_value(params.getElementsByTagName("pid")[0]);
+                project_id = get_node_value(params.getElementsByTagName("project_id")[0]);
                 tobs     = get_node_value(params.getElementsByTagName("expected_length")[0]);
 
                 start    = get_node_value(params.getElementsByTagName("utc_start")[0]);
                 elapsed  = get_node_value(params.getElementsByTagName("elapsed_time")[0]);
 
-                params   = beam.getElementsByTagName("fold_processing_parameters")[0];
-
                 document.getElementById(beam_name + "_source").innerHTML = name;
                 document.getElementById(beam_name + "_ra").innerHTML = ra;
                 document.getElementById(beam_name + "_dec").innerHTML = dec;
                 document.getElementById(beam_name + "_observer").innerHTML = observer;
-                document.getElementById(beam_name + "_pid").innerHTML = pid;
+                document.getElementById(beam_name + "_project_id").innerHTML = project_id;
                 document.getElementById(beam_name + "_start").innerHTML = start;
                 document.getElementById(beam_name + "_elapsed").innerHTML = elapsed;
                 document.getElementById(beam_name + "_tobs").innerHTML = tobs;
@@ -124,7 +122,7 @@ class timing extends spip_webpage
                 params   = beam.getElementsByTagName("fold_processing_parameters")
                 if (params.length == 1)
                 {
-                  mode     = get_node_value(params.getElementsByTagName("mode")[0]);
+                  mode     = get_node_value(params[0].getElementsByTagName("mode")[0]);
                   document.getElementById(beam_name + "_mode").innerHTML = mode;
                 }
 
@@ -260,7 +258,9 @@ class timing extends spip_webpage
       $this->renderImage($get);
       return;
     }
-    $xml = "<timing_update>";
+    
+    $xml = XML_DEFINITION;
+    $xml .= "<timing_update>";
 
     $xml_req  = XML_DEFINITION;
     $xml_req .= "<repack_request>";
@@ -457,7 +457,7 @@ class timing extends spip_webpage
     $cols = 4;
     $fields = array( $beam."_source" => "Source",
                      $beam."_start" => "UTC_START",
-                     $beam."_pid" => "Project ID",
+                     $beam."_project_id" => "Project ID",
                      $beam."_tobs" => "Tobs",
                      $beam."_ra" => "RAJ",
                      $beam."_mode" => "Mode",

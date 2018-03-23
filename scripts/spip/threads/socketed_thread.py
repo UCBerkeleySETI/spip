@@ -28,7 +28,7 @@ class SocketedThread (threading.Thread):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    self.script.log (3, "SocketedThread listening on " + self.host + ":" + str(self.port))
+    self.script.log (2, "SocketedThread::run listening on " + self.host + ":" + str(self.port))
     sock.bind((self.host, int(self.port)))
     self.script.log (3, "SocketedThread configuring number of listening slots to " + str(self.nlisten))
     sock.listen(self.nlisten)

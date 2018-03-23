@@ -5,10 +5,11 @@ libmeerkat_headers = spip/UDPFormatMeerKATSimple.h spip/BlockFormatMeerKAT.h
 
 libmeerkat_la_SOURCES = UDPFormatMeerKATSimple.C BlockFormatMeerKAT.C
 
-bin_PROGRAMS = meerkat_udpgen meerkat_udprecv
+bin_PROGRAMS = meerkat_udpgen meerkat_udprecv meerkat_dummyserver
 
 meerkat_udpgen_SOURCES = meerkat_udpgen.C
 meerkat_udprecv_SOURCES = meerkat_udprecv.C
+meerkat_dummyserver_SOURCES = meerkat_dummyserver.C
 
 AM_CXXFLAGS = -I. \
 	-I$(top_builddir)/src/Affinity \

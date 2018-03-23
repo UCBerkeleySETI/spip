@@ -16,7 +16,6 @@ import errno, time, random
 
 from spip.utils import sockets,times
 
-DAEMONIZE = True
 DL = 1
 
 ###############################################################
@@ -43,10 +42,12 @@ class PubSubThread (threading.Thread):
     self.beam = -1
     self.sub_array = -1
     self.mappings = {}
+    self.chatty_sensors = []
     self.io_loop = []
     self.policy = "event-rate 5.0 300.0"
     self.title  = "ptuse_unconfigured"
     self.running = False
+    self.chatty_first_update = 1
 
     self.restart_io_loop = True
 
@@ -57,36 +58,39 @@ class PubSubThread (threading.Thread):
     self.mapping = {}
 
     sensors = {}
+
+    # these sensors are to be looked up
     sensors["TARGET"]            = {"comp": "cbf", "sensor": "target"}
     sensors["RA"]                = {"comp": "cbf", "sensor": "pos.request-base-ra"}
-    #sensors["BMAJ"]              = {"comp": "cbf", "sensor": "beam-major-axis"}
-    #sensors["BMIN"]              = {"comp": "cbf", "sensor": "beam-minor-axis"}
-    #sensors["BPA"]               = {"comp": "cbf", "sensor": "beam-position"}
+    sensors["DEC"]               = {"comp": "cbf", "sensor": "pos.request-base-dec"}
     sensors["NCHAN"]             = {"comp": "cbf", "sensor": self.fengine_stream + '.antenna-channelised-voltage-n-chans'}
     sensors["ADC_SYNC_TIME"]     = {"comp": "cbf", "sensor": self.fengine_stream + '.synchronisation-epoch'}
-    sensors["ITRF"]              = {"comp": "sub", "sensor": "reference-location-itrf"}
-    # this will change - check ICD
+    sensors["ITRF"]              = {"comp": "sub", "sensor": "array-position-itrf"}
     sensors["SCHEDULE_BLOCK_ID"] = {"comp": "sub", "sensor": "active-sbs"}
     sensors["FREQ"]              = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.centre-frequency'}
     sensors["BW"]                = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.bandwidth'}
     sensors["SIDEBAND"]          = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.sideband'}
-    # PRECISE TIME SENSORS WILLL BE HERE
     sensors["PRECISETIME_FRACTION_POLH"]    = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.precise-time.epoch-fraction'}
     sensors["PRECISETIME_UNCERTAINTY_POLH"] = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.precise-time.uncertainty'}
     sensors["PRECISETIME_FRACTION_POLV"]    = {"comp": "sub", "sensor": 'streams.' + self.polv_stream + '.precise-time.epoch-fraction'}
     sensors["PRECISETIME_UNCERTAINTY_POLV"] = {"comp": "sub", "sensor": 'streams.' + self.polv_stream + '.precise-time.uncertainty'}
     # there will be different sensors for V and H pols, but we need them to be the same, we should check this!
 
-    sensors["EXPERIMENT_ID"]     = {"comp": "sub", "sensor": 'observation.script-experiment-id'}
-    sensors["OBSERVER"]          = {"comp": "sub", "sensor": "observation.script-observer"}
-    sensors["PROPOSAL_ID"]       = {"comp": "sub", "sensor": "observation.script-proposal-id"}
-    sensors["DESCRIPTION"]       = {"comp": "sub", "sensor": "observation.script-description"}
+    sensors["EXPERIMENT_ID"]    = {"comp": "sub", "sensor": 'observation.script-experiment-id'}
+    sensors["OBSERVER"]         = {"comp": "sub", "sensor": "observation.script-observer"}
+    sensors["PROPOSAL_ID"]      = {"comp": "sub", "sensor": "observation.script-proposal-id"}
+    sensors["DESCRIPTION"]      = {"comp": "sub", "sensor": "observation.script-description"}
+    sensors["ANTENNAE"]         = {"comp": "sub", "sensor": "observation.script-ants"}
 
-    # there will be a anc.tfr.kttc that is the difference between KTT and UTC, less accurate, but immediate
     # TODO CAM ICD mandates observation.script-proposal-id
+    self.chatty_first_update = times.getCurrentDateTime()
+    fixed_sensors = {}
+    fixed_sensors["TFR_GNSS_KTT"] = "anc_tfr_gnss_ktt"
 
+    self.chatty_sensors = ["RA", "DEC", "PRECISETIME_FRACTION_POLH", "PRECISETIME_UNCERTAINTY_POLH", \
+                           "PRECISETIME_FRACTION_POLV", "PRECISETIME_UNCERTAINTY_POLV", "TFR_GNSS_KTT"]
+    
     self.script.log(3, "PubSubThread::configure sensors=" + str(sensors))
-
     for key in sensors.keys():
 
       comp = sensors[key]["comp"]
@@ -110,18 +114,31 @@ class PubSubThread (threading.Thread):
       except SensorLookupError as exc:
         self.script.log(0, "PubSubThread::configure failed to find " + comp + "." + sens)
 
+    self.script.log(3, "PubSubThread::configure fixed_sensors=" + str(fixed_sensors))
+    for key in fixed_sensors.keys():
+      name = fixed_sensors[key]
+      try:
+        self.script.log(2, "PubSubThread::configure mappings["+name+"]=" + key)
+        self.mappings[name] = key
+        self.script.log(2, "PubSubThread::configure set_sampling_strategy(" + self.title + ", " + name + ", " + self.policy + ")")
+        result = yield self.ws_client.set_sampling_strategy (self.title, name, self.policy)
+        self.script.log(2, "PubSubThread::configure set_sampling_strategy result="+str(result))
+      except Exception, e:
+        print 'PubSubThread::configure failed to set sampling stratey: ', e
+
     self.script.log(2, "PubSubThread::configure added sensors")
 
   # configure a new metadata server 
-  def update_cam (self, server, fengine_stream, polh_stream):
+  def update_cam (self, server, fengine_stream, polh_stream, polv_stream):
 
-    self.script.log(2, "PubSubThread::update_cam("+server+","+fengine_stream+","+polh_stream+")")
+    self.script.log(2, "PubSubThread::update_cam("+server+","+fengine_stream+","+polh_stream+","+polv_stream+")")
     # server name is configured with the following schema
     # http://{host}/api/client/{subarray_number}
     self.cam_server = server
 
     self.fengine_stream = fengine_stream
     self.polh_stream = polh_stream
+    self.polv_stream = polv_stream
     self.sub_array = server.split('/')[-1]
 
   # configure the pub/sub instance to 
@@ -196,7 +213,16 @@ class PubSubThread (threading.Thread):
   def update_cam_config (self, key, name, value):
     if key in self.script.cam_config.keys():
       if self.script.cam_config[key] != value:
-        self.script.log(1, key + "=" + value)
+        if key in self.chatty_sensors:
+          chatty_delta = times.diffCurrentDateTime(self.chatty_first_update)
+          if (chatty_delta % 600) <= 5:
+            self.script.log(1, key + "=" + value)
+          elif self.script.cam_config[key] == "0.0":
+            self.script.log(1, key + "=" + value)
+          else:
+            self.script.log(2, key + "=" + value)
+        else:
+          self.script.log(1, key + "=" + value)
         self.script.log(2, "PubSubThread::update_cam_config " + key + "=" + value + " from " + name)
         self.script.cam_config[key] = value
       else:
@@ -216,9 +242,6 @@ class PubSubThread (threading.Thread):
     status = msg["msg_data"]["status"]
     value = msg["msg_data"]["value"]
     name = msg["msg_data"]["name"]
-
-    #self.script.log(2, "PubSubThread::update_config " + name + "=" + str(value))
-    #self.script.log(2, "PubSubThread::update_config name="+name+"  mapping.keys()=" + str(self.mappings.keys()))
 
     if name in self.mappings.keys():
       key = self.mappings[name]

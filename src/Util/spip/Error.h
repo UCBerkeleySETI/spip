@@ -78,9 +78,6 @@ class Error {
   //! Write error and auxilliary info to ostream
   virtual void report (std::ostream& ostr) const;
   
-  //! Write function name and error message to screen
-  virtual std::string warning () const;
-
   //! Get the error message
   const std::string get_message() const;
 

@@ -20,7 +20,7 @@ from json import dumps
 from spip.daemons.bases import StreamBased
 from spip.daemons.daemon import Daemon
 from spip.log_socket import LogSocket
-from spip.utils.core import system_piped,system
+from spip.utils.core import system
 
 DAEMONIZE = True
 DL        = 1
@@ -89,7 +89,7 @@ class smrbThread (threading.Thread):
 
     # run the command
     self.script.log (1, "START " + cmd)
-    rval = system_piped (cmd, self.pipe, 1 <= DL)
+    rval = self.script.system_piped (cmd, self.pipe, 2)
     self.script.log (1, "END   " + cmd)
 
 # Monitor the state of all data blocks in this stream
@@ -150,7 +150,7 @@ class monThread (threading.Thread):
           for handle in did_read:
             if (handle == sock):
               (new_conn, addr) = sock.accept()
-              script.log(2, "monThread::run accept connection from " + 
+              script.log(3, "monThread::run accept connection from " + 
                           repr(addr))
               can_read.append(new_conn)
 
@@ -159,7 +159,7 @@ class monThread (threading.Thread):
               message = message.strip()
               script.log(3, "monThread::run message='" + message+"'")
               if (len(message) == 0):
-                script.log(2, "monThread::run closing connection")
+                script.log(3, "monThread::run closing connection")
                 handle.close()
                 for i, x in enumerate(can_read):
                   if (x == handle):

@@ -18,13 +18,6 @@ class MeerKATConfig(Config):
 
     cfg = Config.getStreamConfigFixed (self, id)
 
-    #cfg["DATA_HOST"]  = self.config["DATA_HOST_" + id]
-    #cfg["DATA_MCAST"] = self.config["DATA_MCAST_" + id]
-    #cfg["DATA_PORT"]  = self.config["DATA_PORT_" + id]
-    #cfg["META_HOST"]  = self.config["META_HOST_" + id]
-    #cfg["META_MCAST"] = self.config["META_MCAST_" + id]
-    #cfg["META_PORT"]  = self.config["META_PORT_" + id]
-
     (cfg["DATA_HOST_0"], cfg["DATA_HOST_1"]) = self.config["DATA_HOST"].split(",")
     (cfg["DATA_MCAST_0"], cfg["DATA_MCAST_1"]) = self.config["DATA_MCAST"].split(",")
     (cfg["DATA_PORT_0"], cfg["DATA_PORT_1"]) = self.config["DATA_PORT"].split(",")
@@ -39,9 +32,14 @@ class MeerKATConfig(Config):
     (freq2, bw2, nchan2) = self.config["SUBBAND_CONFIG_1"].split(":")
  
     freq = (float(freq1) + float(freq2)) / 2
+
     bw = float(bw1) + float(bw2)
     nchan = int(nchan1) + int(nchan2)
-    cfg["FREQ"] = str(freq)
+
+    # MeerKAT's convention is that the CFREQ is offset by chan_bw/2
+    chan_bw = float(bw1) / float(nchan1)
+
+    cfg["FREQ"] = str(float(freq) - chan_bw / 2)
     cfg["BW"] = str(bw)
     cfg["NCHAN"] = str(nchan)
     cfg["NPOL"] = "2"
@@ -69,7 +67,10 @@ class MeerKATConfig(Config):
 
     (freq, bw, nchan) = self.config["SUBBAND_CONFIG_" + str(id)].split(":")
 
-    cfg["FREQ"] = freq
+    # MeerKAT's convention is that the CFREQ is offset by chan_bw/2
+    chan_bw = float(bw) / float(nchan)
+    cfg["FREQ"] = str(float(freq) - chan_bw / 2)
+
     cfg["BW"] = bw
     cfg["NCHAN"] = nchan
     cfg["NPOL"] = "2"

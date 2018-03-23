@@ -83,7 +83,7 @@ class KATCPServer (DeviceServer):
     # GUI URL TODO remove hardcoding
     guis = [ { "title": "PTUSE Web Interface",
                "description": "Live Pulsar timing monitoring plots", 
-               "href": "http://192.168.6.235/spip/timing/" } ]
+               "href": self.script.cfg["SPIP_ADDRESS"] } ]
     encoded = json.dumps(guis)
     self._gui_urls = Sensor.string("gui-urls",
       description="PTUSE GUI URL",
@@ -114,6 +114,7 @@ class KATCPServer (DeviceServer):
       lmc_reply = sock.recv (65536)
       sock.close()
       xml = xmltodict.parse(lmc_reply)
+      self.script.log(2, "KATCPServer::setup_sensors_host sock.recv=" + str(xml))
 
       self._host_sensors = {}
 
@@ -396,6 +397,12 @@ class KATCPServer (DeviceServer):
     self.script.beam_config["TARGET"] = self.script.cam_config["TARGET"]
     if self.script.cam_config["ADC_SYNC_TIME"] != "0":
       self.script.beam_config["ADC_SYNC_TIME"] = self.script.cam_config["ADC_SYNC_TIME"]
+
+    self.script.beam_config["PRECISETIME_FRACTION_POLV"] = self.script.cam_config["PRECISETIME_FRACTION_POLV"]
+    self.script.beam_config["PRECISETIME_FRACTION_POLH"] = self.script.cam_config["PRECISETIME_FRACTION_POLH"]
+    self.script.beam_config["PRECISETIME_UNCERTAINTY_POLV"] = self.script.cam_config["PRECISETIME_UNCERTAINTY_POLV"]
+    self.script.beam_config["PRECISETIME_UNCERTAINTY_POLH"] = self.script.cam_config["PRECISETIME_UNCERTAINTY_POLH"]
+
     self.script.beam_config["OBSERVER"] = self.script.cam_config["OBSERVER"]
     self.script.beam_config["ANTENNAE"] = self.script.cam_config["ANTENNAE"]
     self.script.beam_config["SCHEDULE_BLOCK_ID"] = self.script.cam_config["SCHEDULE_BLOCK_ID"]
@@ -497,6 +504,9 @@ class KATCPServer (DeviceServer):
   def request_capture_done(self, req):
     """Terminte the ingest process."""
     self.script.log (1, "request_capture_done()")
+    return self.capture_done()
+
+  def capture_done(self):
 
     # in case the observing was terminated early
     if self._data_product["state"] == "recording":
@@ -621,7 +631,7 @@ class KATCPServer (DeviceServer):
           self.script.log (2,"configure: polh_stream="+str(polh_stream))
 
         if cam_server != "None" and fengine_stream != "None" and polh_stream != "None":
-          self.script.pubsub.update_cam (cam_server, fengine_stream, polh_stream)
+          self.script.pubsub.update_cam (cam_server, fengine_stream, polh_stream, polv_stream)
         else:
           response = "Could not extract streams[cam.http][camdata]"
           self.script.log (1, "configure: cam_server=" + cam_server)
@@ -695,6 +705,7 @@ class KATCPServer (DeviceServer):
 
               self.script.log (1, "configure: sending XML req ["+req+"]")
               sock.send(req)
+              self.script.log (1, "configure: send XML, receiving reply")
               recv_reply = sock.recv (65536)
               self.script.log (1, "configure: received " + recv_reply)
               sock.close()
@@ -724,16 +735,13 @@ class KATCPServer (DeviceServer):
   def request_deconfigure(self, req, msg):
     """Deconfigure for the data_product."""
 
-    #if len(msg.arguments) == 0:
-    #  self.script.log (-1, "request_deconfigure: no arguments provided")
-    #  return ("fail", "expected 1 argument")
+    # in case the observing was terminated early
+    if self._data_product["state"] == "recording":
+      (result, message) = self.target_stop ()
 
-    # the sub-array identifier
-    #data_product_id = msg.arguments[0]
+    if self._data_product["state"] == "ready":
+      (result, message) = self.capture_done()
 
-    #self.script.log (1, "configure: deconfiguring " + str(data_product_id))
-
-    # hack for now
     data_product_id = self._data_product["id"]
 
     # check if the data product was previously configured
@@ -850,13 +858,13 @@ class KATCPServer (DeviceServer):
 
   @request(Int())
   @return_reply(Str())
-  def request_output_nstoke(self, req, outnstokes):
-    """Set the number of output stokes parameters."""
-    if outnstokes != 1 and outnstokes != 2 and outnstokes != 4:
-      self.script.log (-1, "request_output_nstokes: " + str(outnstokes) + " not 1, 2 or 4")
-      return ("fail", "output nstokes must be between 1, 2 or 4")
+  def request_output_npol(self, req, outnpol):
+    """Set the number of output pol parameters."""
+    if outnpol != 1 and outnpol != 2 and outnpol != 3 and outnpol != 4:
+      self.script.log (-1, "request_output_npol: " + str(outnpol) + " not 1, 2 or 4")
+      return ("fail", "output npol must be between 1, 2 or 4")
     self.script.beam_config["lock"].acquire()
-    self.script.beam_config["OUTNSTOKES"] = str(outnstokes)
+    self.script.beam_config["OUTNPOL"] = str(outnpol)
     self.script.beam_config["lock"].release()
     return ("ok", "")
 

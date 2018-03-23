@@ -296,7 +296,7 @@ class RepackDaemon(Daemon):
             cmd = "find " + out_dir + " -type f -name '????-??-??-??:??:??.ar' | wc -l"
             rval, lines = self.system(cmd, 3)
             if rval or  lines[0] == "0":
-              self.log (-1, "main: no archives have been produced")
+              self.log (-1, "main: no archives have been produced in " + out_dir)
               all_finished = False
               any_failed = True
 
@@ -329,23 +329,17 @@ class RepackDaemon(Daemon):
               self.log (-1, "failed to finalise observation: " + response)
             else:
 
-              # merge the headers from each sub-band in the finished dir
-              self.log (2, "main: header_file=" + fin_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
-              header = Config.readCFGFileIntoDict (fin_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
-              for i in range(1,len(self.subbands)):
-                header_sub = Config.readCFGFileIntoDict (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.header")
-                header = Config.mergeHeaderFreq (header, header_sub)
-                os.remove (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.header")
-                os.remove (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.finished")
-                os.rmdir(fin_dir + "/" + self.subbands[i]["cfreq"])
-              os.remove (fin_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
-              os.remove (fin_dir + "/" + self.subbands[0]["cfreq"] + "/obs.finished")
-              os.rmdir(fin_dir + "/" + self.subbands[0]["cfreq"])
+              # ensure the merged obs.header file exists
+              self.acquire_obs_header (fin_dir)
 
-              self.log (2, "main: writing header to " + fin_dir + "/" + "obs.header")
-              Config.writeDictToCFGFile (header, fin_dir + "/" + "obs.header")
-              self.log (2, "main: writing header to " + fin_dir + "/" + "obs.header")
+              # copy the merged header file to the output directory
+              self.log (2, "main: copying header to " + out_dir + "/" + "obs.header")
               shutil.copyfile (fin_dir + "/obs.header", out_dir + "/obs.header")
+
+              # remove sub-band files and directories that are now superfluous
+              for i in range(len(self.subbands)):
+                os.remove (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.finished")
+                os.rmdir (fin_dir + "/" + self.subbands[i]["cfreq"])
 
           processed_this_loop += processed_this_obs
           self.log (2, "main: finished processing loop for " + observation)
@@ -438,12 +432,11 @@ class RepackDaemon(Daemon):
     new["obs:observer"] = header["OBSERVER"] 
     new["obs:projid"]   = header["PID"]
 
-    # constants that currently do not flow through CAM
-    new["be:nrcvr"]     = "2"
+    new["be:nrcvr"]     = header["NPOL"]
 
-    # need to know what these mean!
-    new["be:phase"]     = "+1"    # Phase convention of backend
-    new["be:tcycle"]    = "8"     # Correlator cycle time
+    # need to know what these mean
+    new["be:phase"]     = header["BACKEND_PHASE"] # Phase convention of backend
+    new["be:tcycle"]    = header["FOLD_OUTTSUBINT"]    # Correlator cycle time
     new["be:dcc"]       = "0"     # Downconversion conjugation corrected
     new["sub:nsblk"]    = "1"     # Samples/row (SEARCH mode, else 1)
   
@@ -452,6 +445,8 @@ class RepackDaemon(Daemon):
     new["ext:bpa"]      = "0" # Beam position angle [?]
     new["ext:bmaj"]     = "0" # Beam major axis [degrees]
     new["ext:bmin"]     = "0" # Beam minor axis [degrees]
+    
+    self.log(3, "RepackDaemon::patch_psrfits_header freq=" + str(header["FREQ"]))
 
     new["ext:obsfreq"]  = header["FREQ"]
     new["ext:obsbw"]    = header["BW"]
@@ -578,16 +573,31 @@ class RepackDaemon(Daemon):
     return (0, "")
 
   def acquire_obs_header (self, in_dir):
-    if not os.path.exists (in_dir + "/obs.header"):
-      cmd = "find " + in_dir + " -mindepth 2 -maxdepth 2 -type f -name 'obs.header'"
-      rval, header_files  = self.system (cmd, 3)
-      if rval or len(header_files) == 0:
-        return (-1, "acquire_obs_header: could not find obs.header files")
+    """Generate the obs.header file for the whole band from sub-bands."""
 
-      cmd = "cp " + header_files[0] + " " + in_dir +"/obs.header"
-      rval, header_files  = self.system (cmd, 3)
-      if rval:
-        return (-1, "acquire_obs_header: could not copy obs.header file")
+    # test if already exists
+    if os.path.exists (in_dir + "/obs.header"):
+      self.log(2, "RepackDaemon::acquire_obs_header obs.header file already existed")
+      return (0, "")
+  
+    # start with header file from first sub-band
+    self.log (2, "RepackDaemon::acquire_obs_header header_file[0]=" + in_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
+    header = Config.readCFGFileIntoDict (in_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
+    
+    # merge the headers from the other sub-bands
+    for i in range(1,len(self.subbands)):
+      self.log (2, "RepackDaemon::acquire_obs_header header_file[" + str(i)+ "]=" + in_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
+      header_sub = Config.readCFGFileIntoDict (in_dir + "/" + self.subbands[i]["cfreq"] + "/obs.header")
+      header = Config.mergeHeaderFreq (header, header_sub)
+      os.remove (in_dir + "/" + self.subbands[i]["cfreq"] + "/obs.header")
+
+    # remove the first header
+    os.remove (in_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
+
+    # write the combined header
+    self.log (2, "RepackDaemon::acquire_obs_header writing header to " + in_dir + "/" + "obs.header")
+    Config.writeDictToCFGFile (header, in_dir + "/" + "obs.header")
+
     return (0, "")
 
   #
@@ -675,7 +685,7 @@ class RepackDaemon(Daemon):
     # plot the bandpass
     basecmd = "psrplot -pb -x "
     if npol == 2:
-      basecmd = basecmd + "-lpol=0,1 -N2,1 "
+      basecmd = basecmd + "-lpol=0,1 -O -c log=1 "
   
     cmd = basecmd + band_file + lo_res + opts
     self.log (2, "process_observation: " + cmd)
@@ -756,8 +766,8 @@ class RepackDaemon(Daemon):
     try:
       fail_parent_dir = os.path.dirname(fail_dir)
       if not os.path.exists(fail_parent_dir):
-        os.mkdir (fail_parent_dir, 0755)
-      os.rename (obs_dir, fail_dir)
+        os.mkdir (fail_parent_dir, 0755) 
+      shutil.move (obs_dir, fail_dir)
     except OSError, e:
       self.log (0, "fail_observation failed to rename " + obs_dir + " to " + fail_dir)
       self.log (0, str(e))
@@ -856,6 +866,10 @@ class RepackServerDaemon (RepackDaemon, ServerBased):
       self.results[bid]["lock"] = threading.Lock()
       self.results[bid]["cond"] = threading.Condition(self.results[bid]["lock"])
 
+      keys = ["source", "utc_start", "timestamp", "snr", "length"]
+      for key in keys:
+        self.results[bid][key] = ""
+
       self.snr_history[bid] = {}
       self.snr_history[bid]["times"] = []
       self.snr_history[bid]["snrs"] = []
@@ -868,7 +882,7 @@ class RepackServerDaemon (RepackDaemon, ServerBased):
 
     freq_low  = float(self.subbands[0]["cfreq"])  - (float(self.subbands[0]["bw"]) / 2.0)
     freq_high = float(self.subbands[-1]["cfreq"]) + (float(self.subbands[-1]["bw"]) / 2.0)
-    self.out_cfreq = freq_low + ((freq_high - freq_low) / 2.0)
+    self.out_cfreq = int(freq_low + ((freq_high - freq_low) / 2.0))
 
     return 0
 
@@ -903,6 +917,9 @@ class RepackBeamDaemon (RepackDaemon, BeamBased):
     self.results[bid]["valid"] = False
     self.results[bid]["lock"] = threading.Lock()
     self.results[bid]["cond"] = threading.Condition(self.results[bid]["lock"])
+    keys = ["source", "utc_start", "timestamp", "snr", "length"]
+    for key in keys:
+      self.results[bid][key] = ""
 
     self.snr_history[bid] = {}
     self.snr_history[bid]["times"] = []
@@ -917,7 +934,7 @@ class RepackBeamDaemon (RepackDaemon, BeamBased):
 
     freq_low  = float(self.subbands[0]["cfreq"])  - (float(self.subbands[0]["bw"]) / 2.0)
     freq_high = float(self.subbands[-1]["cfreq"]) + (float(self.subbands[-1]["bw"]) / 2.0)
-    self.out_cfreq = freq_low + ((freq_high - freq_low) / 2.0)
+    self.out_cfreq = int(freq_low + ((freq_high - freq_low) / 2.0))
 
     self.log(1, "RepackBeamDaemon::configure done")
 

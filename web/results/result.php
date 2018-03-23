@@ -37,7 +37,7 @@ class result extends spip_webpage
       if ($beam_name == $this->beam)
       {
         $this->host = $host;
-        $this->port =  $this->config["STREAM_RESULTS_PORT"] + $istream;
+        $this->port =  $this->config["BEAM_RESULTS_PORT"] + $ibeam;
       }
     }
     $this->update_url = "result.php?update=true&beam=".$this->beam."&utc_start=".$this->utc_start."&source=".str_replace("+", "%2B", $this->source);

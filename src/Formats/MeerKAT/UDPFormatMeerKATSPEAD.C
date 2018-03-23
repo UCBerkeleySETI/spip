@@ -164,6 +164,7 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
 #endif
 
   // observation should begin on first heap after UTC_START, add offset in picoseconds to header
+  int64_t picoseconds = 0;
   int64_t modulus = obs_start_sample % adc_samples_per_heap;
   if (modulus > 0)
   {
@@ -175,11 +176,69 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
     cerr << "obs_start_sample=" << obs_start_sample << " modulus=" << modulus << " adc_samples_to_add=" << adc_samples_to_add << " offset_picoseconds=" << offset_picoseconds << endl;
     cerr << "MODULUS=" << modulus << " PICOSECONDS=" << offset_picoseconds << endl;
 #endif
-    header.set ("PICOSECONDS", "%lu", offset_picoseconds);
+    picoseconds += offset_picoseconds;
   }
 
+  // apply the MeerKAT Precise Time offset
+  double precise_time_fraction_polh = 0;
+  double precise_time_fraction_polv = 0;
+  if (header.get ("PRECISETIME_FRACTION_POLH", "%lf", &precise_time_fraction_polh) != 1)
+    cerr << "PRECISETIME_FRACTION_POLH did not exist in header" << endl;
+  if (header.get ("PRECISETIME_FRACTION_POLV", "%lf", &precise_time_fraction_polv) != 1)
+    cerr << "PRECISETIME_FRACTION_POLV did not exist in header" << endl;
+
+  // check that both sensors are non zero
+  double precise_time_fraction_nanoseconds = 0;
+  unsigned precise_time_fraction_count = 0;
+
+  if (fabs(precise_time_fraction_polh) > 0)
+  {
+    precise_time_fraction_nanoseconds += precise_time_fraction_polh;
+    precise_time_fraction_count++;
+  }
+  if (fabs(precise_time_fraction_polv) > 0)
+  {
+    precise_time_fraction_nanoseconds += precise_time_fraction_polv;
+    precise_time_fraction_count++;
+  }
+
+  // if both sensors are good
+  if (precise_time_fraction_count == 2)
+  {
+    precise_time_fraction_nanoseconds /= 2;
+    double difference = fabs(precise_time_fraction_polh - precise_time_fraction_polv);
+    double adc_sampling_time_ns = double(1e9) / double(adc_sample_rate);
+    if (difference > 32 * adc_sampling_time_ns)
+      cerr << "Warning: difference between precisetime sensors " 
+           << difference << " > 32 ADC samples" << endl;
+  }
+  else if (precise_time_fraction_count == 1)
+  {
+    cerr << "Warning: one of the precise time sensors was zero: "
+         << "  polh=" << precise_time_fraction_polh
+         << "  polv=" << precise_time_fraction_polv << endl;
+  }
+  else
+    cerr << "Warning: both precise time sensors were zero" << endl;
+
+  header.set ("PRECISETIME_FRACTION_AVG", "%lf", precise_time_fraction_nanoseconds);
+
+  int64_t precise_time_fraction_picoseconds = int64_t(precise_time_fraction_nanoseconds * 1e3);
+
 #ifdef _DEBUG
-  cerr << "UTC_START=" << key<< " obs_start_sample=" << obs_start_sample << " modulus=" << modulus << endl;
+  cerr << "precise_time_fraction polh= " << precise_time_fraction_polh 
+       << " polv=" << precise_time_fraction_polv << endl;
+  cerr << "precise_time_fraction avg=" << precise_time_fraction_picoseconds << endl;
+#endif
+  picoseconds += precise_time_fraction_picoseconds;
+#ifdef _DEBUG
+  cerr << "PICOSECONDS=" << picoseconds << endl;
+#endif
+  header.set ("PICOSECONDS", "%ld", picoseconds);
+
+#ifdef _DEBUG
+  cerr << "UTC_START=" << key<< " obs_start_sample=" << obs_start_sample << " modulus=" 
+       << modulus << " picoseconds=" << picoseconds <<  endl;
 #endif
 
   free (key);
