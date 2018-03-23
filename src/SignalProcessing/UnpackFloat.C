@@ -75,8 +75,9 @@ void spip::UnpackFloat::configure (spip::Ordering output_order)
 
   // update the parameters that this transformation will affect
   output->set_nbit (32);
-  //output->set_instrument ("DSPSR");
+  output->set_instrument ("DSPSR");
   output->set_endianness (spip::Endian::Little);
+  output->set_endianness (spip::Ecnoding::TwosComplement);
   output->set_order (spip::Ordering::SFPT);
 
   // update the output header parameters with the new details
