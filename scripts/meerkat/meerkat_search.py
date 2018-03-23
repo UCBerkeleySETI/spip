@@ -59,55 +59,66 @@ class MEERKATSearchDaemon (MEERKATProcDaemon):
       db_key_file.write("key " +  self.db_key + "\n")
       db_key_file.close()
 
-    outnstokes = -1
+    outnpol = -1
     outtsubint = -1
     dm = -1
     innchan = self.header["NCHAN"]
     outnchan = innchan
-    outnstokes = 1
-    outnbit = 8
+    outnbit = -1
 
     try:
-      outtsubint = int(self.header["OUTTSUBINT"])
+      outtsubint = int(self.header["SEARCH_OUTTSUBINT"])
     except:
       outtsubint = 10
+      self.log(-1, "SEARCH_OUTTSUBINT not present in header, assuming " + str(outtsubint))
+      self.header["SEARCH_OUTTSUBINT"] = str(outtsubint)
 
     try:
-      outnstokes = int(self.header["OUTNSTOKES"])
+      outnpol = int(self.header["SEARCH_OUTNPOL"])
     except:
-      outnstokes = 1
+      outnpol = 1
+      self.log(-1, "SEARCH_OUTNPOL not present in header, assuming " + str(outnpol))
+      self.header["SEARCH_OUTNPOL"] = str(outnpol)
 
     try:
-      outnbit = int(self.header["OUTNBIT"])
+      outnbit = int(self.header["SEARCH_OUTNBIT"])
     except:
       outnbit = 8
+      self.log(-1, "SEARCH_OUTNBIT not present in header, assuming " + str(outnbit))
+      self.header["SEARCH_OUTNBIT"] = str(outnbit)
 
     try:
-      outtdec = int(self.header["OUTTDEC"])
+      outtdec = int(self.header["SEARCH_OUTTDEC"])
     except:
       outtdec = 32
+      self.log(-1, "SEARCH_OUTTDEC not present in header, assuming " + str(outtdec))
+      self.header["SEARCH_OUTTDEC"] = str(outtdec)
 
     try:
-      outnchan = int(self.header["OUTNCHAN"])
+      outnchan = int(self.header["SEARCH_OUTNCHAN"])
     except:
-      outnchan = 0
-      innchan = 0
+      outnchan = innchan
+      self.log(-1, "SEARCH_OUTNCHAN not present in header, assuming " + str(outnchan))
+      self.header["SEARCH_OUTNCHAN"] = str(outnchan)
 
     try:
-      dm = float(self.header["DM"])
+      dm = float(self.header["SEARCH_DM"])
     except:
       dm = -1
+      self.log(-1, "SEARCH_OUTDM not present in header, assuming " + str(dm))
+      self.header["SEARCH_OUTDM"] = str(dm)
 
+    # this seems to be a good default
     nsblk = 1024
 
     # configure the command to be run
     self.cmd = "digifits -Q " + db_key_filename + " -cuda " + self.gpu_id + " -nsblk " + str(nsblk)
  
     # handle detection options
-    if outnstokes == 1 or outnstokes == 2 or outnstokes == 4:
-      self.cmd = self.cmd + " -p " + str(outnstokes)
+    if outnpol == 1 or outnstokes == 2 or outnstokes == 4:
+      self.cmd = self.cmd + " -p " + str(outnpol)
     else:
-      self.log(-1, "ignoring invalid outnstokes of " + str(outnstokes))
+      self.log(-1, "ignoring invalid outnpol of " + str(outnstokes))
 
     # handle channelisation
     if outnchan > innchan:
