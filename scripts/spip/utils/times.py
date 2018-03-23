@@ -51,3 +51,12 @@ def diffUTCTime(epoch_str):
   now = datetime.utcnow()
   delta = now - epoch
   return delta.seconds
+
+def getCurrentDateTime():
+  return datetime.today()
+
+def diffCurrentDateTime(epoch):
+  now = datetime.today()
+  delta = now - epoch
+  return delta.seconds
+
