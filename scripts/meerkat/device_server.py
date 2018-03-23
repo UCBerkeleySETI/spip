@@ -631,7 +631,7 @@ class KATCPServer (DeviceServer):
           self.script.log (2,"configure: polh_stream="+str(polh_stream))
 
         if cam_server != "None" and fengine_stream != "None" and polh_stream != "None":
-          self.script.pubsub.update_cam (cam_server, fengine_stream, polh_stream)
+          self.script.pubsub.update_cam (cam_server, fengine_stream, polh_stream, polv_stream)
         else:
           response = "Could not extract streams[cam.http][camdata]"
           self.script.log (1, "configure: cam_server=" + cam_server)
@@ -858,13 +858,13 @@ class KATCPServer (DeviceServer):
 
   @request(Int())
   @return_reply(Str())
-  def request_output_nstoke(self, req, outnstokes):
-    """Set the number of output stokes parameters."""
-    if outnstokes != 1 and outnstokes != 2 and outnstokes != 4:
-      self.script.log (-1, "request_output_nstokes: " + str(outnstokes) + " not 1, 2 or 4")
-      return ("fail", "output nstokes must be between 1, 2 or 4")
+  def request_output_npol(self, req, outnpol):
+    """Set the number of output pol parameters."""
+    if outnpol != 1 and outnpol != 2 and outnpol != 3 and outnpol != 4:
+      self.script.log (-1, "request_output_npol: " + str(outnpol) + " not 1, 2 or 4")
+      return ("fail", "output npol must be between 1, 2 or 4")
     self.script.beam_config["lock"].acquire()
-    self.script.beam_config["OUTNSTOKES"] = str(outnstokes)
+    self.script.beam_config["OUTNPOL"] = str(outnpol)
     self.script.beam_config["lock"].release()
     return ("ok", "")
 

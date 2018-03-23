@@ -143,11 +143,12 @@ class Config(object):
   def getStreamConfigFixed (self, id):
 
     cfg = {}
-
-    cfg["HDR_VERSION"] = self.site["HDR_VERSION"]
-    cfg["HDR_SIZE"]    = self.site["HDR_SIZE"]
-    cfg["TELESCOPE"]   = self.site["TELESCOPE"]
-    cfg["DSB"]         = self.site["DSB"]
+ 
+    cfg["HDR_VERSION"]   = self.site["HDR_VERSION"]
+    cfg["HDR_SIZE"]      = self.site["HDR_SIZE"]
+    cfg["TELESCOPE"]     = self.site["TELESCOPE"]
+    cfg["DSB"]           = self.site["DSB"]
+    cfg["BACKEND_PHASE"] = self.site["BACKEND_PHASE"]
 
     cfg["RECEIVER"]   = self.config["RECEIVER"]
     cfg["INSTRUMENT"] = self.config["INSTRUMENT"]

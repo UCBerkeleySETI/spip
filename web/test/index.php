@@ -89,11 +89,11 @@ class tests extends spip_webpage
   function get_fold_config()
   {
     $a = array();
-    array_push($a, $this->build_hash("fold", "output_nchan", "OUTNCHAN", "Number of output channels", "text", "128", "8"));
-    array_push($a, $this->build_hash("fold", "custom_dm", "DM", "Custom DM", "text", "-1", "8"));
-    array_push($a, $this->build_hash("fold", "output_nbin", "OUTNBIN", "Number of output phase bins", "text", "1024", "8"));
-    array_push($a, $this->build_hash("fold", "output_tsubint", "OUTTSUBINT", "Output subint length [s]", "text", "10", "8"));
-    array_push($a, $this->build_hash("fold", "output_nstokes", "OUTNSTOKES", "Number of Stokes parameters", "text", "4", "1"));
+    array_push($a, $this->build_hash("fold", "output_nchan", "FOLD_OUTNCHAN", "Number of output channels", "text", "128", "8"));
+    array_push($a, $this->build_hash("fold", "custom_dm", "FOLD_DM", "Custom DM", "text", "-1", "8"));
+    array_push($a, $this->build_hash("fold", "output_nbin", "FOLD_OUTNBIN", "Number of output phase bins", "text", "1024", "8"));
+    array_push($a, $this->build_hash("fold", "output_tsubint", "FOLD_OUTTSUBINT", "Output subint length [s]", "text", "10", "8"));
+    array_push($a, $this->build_hash("fold", "output_npol", "FOLD_OUTNPOL", "Number of output polarisations", "text", "4", "1"));
     array_push($a, $this->build_hash("fold", "mode", "MODE", "Observing Type", "radio", array("PSR" => "true", "CAL" => false), "8"));
     return $a;
   }
@@ -101,21 +101,21 @@ class tests extends spip_webpage
   function get_search_config()
   {
     $a = array();
-    array_push($a, $this->build_hash("search", "output_nchan", "OUTNCHAN", "Output channels", "text", "1024", "8"));
-    array_push($a, $this->build_hash("search", "custom_dm", "DM", "Custom DM", "text", "-1", "8"));
-    array_push($a, $this->build_hash("search", "output_nbit", "OUTNBIT", "Output bits per sample", "text", "8", "2"));
-    array_push($a, $this->build_hash("search", "output_tdec", "OUTTDEC", "Sample integration factor", "text", "512", "8"));
-    array_push($a, $this->build_hash("search", "output_tsubint", "OUTTSUBINT", "Output subint length [s]", "text", "10", "8"));
-    array_push($a, $this->build_hash("search", "output_nstokes", "OUTNSTOKES", "Number of Stokes parameters", "text", "4", "1"));
+    array_push($a, $this->build_hash("search", "output_nchan", "SEARCH_OUTNCHAN", "Output channels", "text", "1024", "8"));
+    array_push($a, $this->build_hash("search", "custom_dm", "SEARCH_DM", "Custom DM", "text", "-1", "8"));
+    array_push($a, $this->build_hash("search", "output_nbit", "SEARCH_OUTNBIT", "Output bits per sample", "text", "8", "2"));
+    array_push($a, $this->build_hash("search", "output_tdec", "SEARCH_OUTTDEC", "Sample integration factor", "text", "512", "8"));
+    array_push($a, $this->build_hash("search", "output_tsubint", "SEARCH_OUTTSUBINT", "Output subint length [s]", "text", "10", "8"));
+    array_push($a, $this->build_hash("search", "output_npol", "SEARCH_OUTNPOL", "Number of output polarisations", "text", "4", "1"));
     return $a;
   }
 
   function get_continuum_config()
   {
     $a = array();
-    array_push($a, $this->build_hash("continuum", "output_nchan", "OUTNCHAN", "Output channels", "text", "32768", "8"));
-    array_push($a, $this->build_hash("continuum", "output_tsubint", "OUTTSUBINT", "Output integration length [s]", "text", "10", "8"));
-    array_push($a, $this->build_hash("continuum", "output_nstokes", "OUTNSTOKES", "Number of Stokes parameters", "text", "4", "1"));
+    array_push($a, $this->build_hash("continuum", "output_nchan", "CONTINUUM_OUTNCHAN", "Output channels", "text", "32768", "8"));
+    array_push($a, $this->build_hash("continuum", "output_tsubint", "CONTINUUM_OUTTSUBINT", "Output integration length [s]", "text", "10", "8"));
+    array_push($a, $this->build_hash("continuum", "output_npol", "CONTINUUM_OUTNPOL", "Number of output polarisations", "text", "4", "1"));
     return $a;
   }
 

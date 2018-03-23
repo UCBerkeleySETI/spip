@@ -21,6 +21,7 @@ class ServerBased(Basis):
     self.req_host = cfg["SERVER_HOST"]
     self.log_dir  = cfg["SERVER_LOG_DIR"]
     self.control_dir = cfg["SERVER_CONTROL_DIR"]
+    self.cpu_list = cfg["SERVER_CPU_LIST"]
 
 class BeamBased(Basis):
   
@@ -30,6 +31,7 @@ class BeamBased(Basis):
     (self.req_host, self.beam_id) = self.getConfig(id, cfg)
     self.log_dir     = cfg["SERVER_LOG_DIR"]
     self.control_dir = cfg["SERVER_CONTROL_DIR"]
+    self.cpu_list    = cfg["BEAM_CPU_LIST_" + str(id)] 
 
   def getConfig (self, id, cfg):
     stream_config = cfg["STREAM_" + str(id)]
@@ -44,6 +46,7 @@ class StreamBased(Basis):
     (self.req_host, self.beam_id, self.subband_id) = self.getConfig(id, cfg)
     self.log_dir     = cfg["CLIENT_LOG_DIR"]
     self.control_dir = cfg["CLIENT_CONTROL_DIR"]
+    self.cpu_list    = cfg["STREAM_CPU_LIST_" + str(id)] 
 
   def getConfig (self, id, cfg):
     stream_config = cfg["STREAM_" + str(id)]
@@ -58,6 +61,7 @@ class RecvBased(Basis):
     (self.req_host, self.beam_id) = self.getConfig(id, cfg)
     self.log_dir     = self.cfg["CLIENT_LOG_DIR"]
     self.control_dir = self.cfg["CLIENT_CONTROL_DIR"]
+    self.cpu_list    = cfg["STREAM_CPU_LIST_" + str(id)] 
 
   def getConfig (self, id, cfg):
     stream_config = cfg["STREAM_" + str(id)]
@@ -70,10 +74,10 @@ class HostBased(Basis):
     Basis.__init__(self, "host")
     self.id = hostname
     self.req_host = hostname
+    self.cpu_list    = cfg["SERVER_CPU_LIST"] 
     if self.req_host == cfg["SERVER_HOST"]:
       self.log_dir     = cfg["SERVER_LOG_DIR"]
       self.control_dir = cfg["SERVER_CONTROL_DIR"]
     else:
       self.log_dir     = self.cfg["CLIENT_LOG_DIR"]
       self.control_dir = self.cfg["CLIENT_CONTROL_DIR"]
-

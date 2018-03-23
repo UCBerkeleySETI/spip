@@ -65,7 +65,7 @@ class MEERKATFoldDaemon (MEERKATProcDaemon):
       db_key_file.write("key " +  self.db_key + "\n")
       db_key_file.close()
 
-    outnstokes = -1
+    outnpol = -1
     outtsubint = -1
     dm = -1
     outnbin = -1
@@ -73,39 +73,49 @@ class MEERKATFoldDaemon (MEERKATProcDaemon):
     outnchan = innchan
 
     try:
-      outnstokes = int(self.header["OUTNSTOKES"])
+      outnpol = int(self.header["FOLD_OUTNPOL"])
     except:
-      outnstokes = 4
+      outnpol = 4
+      self.log(-1, "FOLD_OUTNPOL not present in header, assuming " + str(outnpol))
+      self.header["FOLD_OUTNPOL"] = str(outnpol)
 
     try:
-      outtsub = int(self.header["OUTTSUBINT"])
+      outtsub = int(self.header["FOLD_OUTTSUBINT"])
     except:
       outtsub = 8
+      self.log(-1, "FOLD_OUTTSUBINT not present in header, assuming " + str(outtsubint))
+      self.header["FOLD_OUTTSUBINT"] = str(outtsubint)
 
     try:
-      outnbin = int(self.header["OUTNBIN"])
+      outnbin = int(self.header["FOLD_OUTNBIN"])
     except:
       outnbin = 1024
+      self.log(-1, "FOLD_OUTNBIN not present in header, assuming " + str(outnbin))
+      self.header["FOLD_OUTNBIN"] = str(outnbin)
 
     try:
-      outnchan = int(self.header["OUTNCHAN"])
+      outnchan = int(self.header["FOLD_OUTNCHAN"])
     except:
-      outnchan = 0
-      innchan = 0
+      outnchan = innchan
+      self.log(-1, "FOLD_OUTNCHAN not present in header, assuming " + str(outnchan))
+      self.header["FOLD_OUTNCHAN"] = str(outnchan)
 
     try:
-      dm = float(self.header["DM"])
+      dm = float(self.header["FOLD_DM"])
     except:
       dm = -1
+      self.log(-1, "FOLD_OUTDM not present in header, assuming " + str(dm))
+      self.header["FOLD_OUTDM"] = str(dm)
+
 
     # configure the command to be run
     self.cmd = "dspsr -Q " + db_key_filename + " -minram 2048 -cuda " + self.gpu_id + " -no_dyn"
 
     # handle detection options
-    if outnstokes == 1 or outnstokes == 2 or outnstokes == 4:
-      self.cmd = self.cmd + " -d " + str(outnstokes)
+    if outnpol == 1 or outnpol == 2 or outnpol == 3 or outnpol == 4:
+      self.cmd = self.cmd + " -d " + str(outnpol)
     else:
-      self.log(-1, "ignoring invalid outnstokes of " + str(outnstokes))
+      self.log(-1, "ignoring invalid outnpol of " + str(outnpol))
 
     # handle channelisation
     if outnchan > innchan:
@@ -128,8 +138,6 @@ class MEERKATFoldDaemon (MEERKATProcDaemon):
 
     # set a minimum kernel length
     self.cmd = self.cmd + " -x 2048"
-
-    #self.cmd = "dada_dbdisk -D /data/spip/scratch/" + self.cfreq + " -s -k " + self.db_key + " -z"
 
     self.log_prefix = "fold_src"
 
