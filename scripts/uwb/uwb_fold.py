@@ -72,6 +72,9 @@ class UWBFoldDaemon (UWBProcDaemon):
     outnbin = -1
     innchan = int(self.header["NCHAN"])
     outnchan = innchan
+    sk = False
+    sk_threshold = -1
+    sk_nsamps = -1
 
     try:
       outnstokes = int(self.header["OUTNSTOKES"])
@@ -98,6 +101,21 @@ class UWBFoldDaemon (UWBProcDaemon):
       dm = float(self.header["DM"])
     except:
       dm = -1
+
+    try:
+      sk = self.header["FOLD_SK"] == "1"
+    except:
+      sk = False
+
+    try:
+      sk_threshold = float(self.header["FOLD_SK_THRESHOLD"])
+    except:
+      sk_threshold = 3
+
+    try:
+      sk_nsamps = int(self.header["FOLD_SK_NSAMPS"])
+    except:
+      sk_nsamps = 1024
 
     # configure the command to be run
     self.cmd = "dspsr -Q " + db_key_filename + " -minram 2048 -cuda " + self.gpu_id + " -no_dyn"
@@ -136,8 +154,17 @@ class UWBFoldDaemon (UWBProcDaemon):
     if dm >= 0:
       self.cmd = self.cmd + " -D " + str(dm)
 
-    # set a minimum kernel length : TODO remove this via CUDA benchmark
-    self.cmd = self.cmd + " -x 2048"
+    if sk:
+      self.cmd = self.cmd + " -skz"
+
+      if sk_threshold != -1:
+        self.cmd = self.cmd + " -skzs " + str(sk_threshold)
+
+      if sk_nsamps != -1:
+        self.cmd = self.cmd + " -skzm " + str(sk_nsamps)
+
+    # set the optimal filterbank kernel length
+    self.cmd = self.cmd + " -fft-bench"
 
     self.log_prefix = "fold_src"
 
