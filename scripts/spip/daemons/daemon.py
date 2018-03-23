@@ -42,7 +42,7 @@ class Daemon(object):
 
     self.log_dir = self.cfg["SERVER_LOG_DIR"]
     self.control_dir = self.cfg["SERVER_CONTROL_DIR"]
-
+      
     # append the streamid/beamid/hostname
     self.name += "_" + str (self.id)
 
@@ -73,8 +73,6 @@ class Daemon(object):
     if become_daemon: 
       self.daemonize ()
 
-    self.log (2, "Daemon::configure: log_file=" + self.log_file)
-
     # instansiate a threaded event signal
     self.quit_event = threading.Event()
 
@@ -87,6 +85,13 @@ class Daemon(object):
 
     type = self.getBasis()
     self.configureLogs (source, dest, type)
+
+    # constrain to cpu cores, if specified
+    if not self.cpu_list == "-1":
+      pid = str(os.getpid())
+      cmd = "taskset -pc " + self.cpu_list + " " + pid 
+      self.log (1, "Daemon::configure " + cmd)
+      self.system(cmd, 2)
 
     # start a control thread to handle quit requests
     self.control_thread = ControlThread(self)
@@ -145,6 +150,7 @@ class Daemon(object):
     register(self.delpid)
     pid = str(os.getpid())
     file(self.pid_file,'w+').write("%s\n" % pid)
+
 
   def delpid(self):
     if os.path.exists(self.pid_file):
