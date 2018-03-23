@@ -75,6 +75,8 @@ if __name__ == "__main__":
   stream_id = sys.argv[1]
 
   script = MeerKATRecvDaemon ("meerkat_recv", stream_id)
+  script.cpu_list = "-1"
+
   state = script.configure (DAEMONIZE, DL, "recv", "recv")
   if state != 0:
     sys.exit(state)
