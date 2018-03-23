@@ -81,7 +81,7 @@ class PubSubThread (threading.Thread):
     sensors["DESCRIPTION"]      = {"comp": "sub", "sensor": "observation.script-description"}
     sensors["ANTENNAE"]         = {"comp": "sub", "sensor": "observation.script-ants"}
 
-    self.chatty_sensors = ["PRECISETIME_FRACTION_POLH", "PRECISETIME_UNCERTAINTY_POLH", "PRECISETIME_FRACTION_POLV", "PRECISETIME_UNCERTAINTY_POLV"]
+    self.chatty_sensors = ["RA", "DEC", "PRECISETIME_FRACTION_POLH", "PRECISETIME_UNCERTAINTY_POLH", "PRECISETIME_FRACTION_POLV", "PRECISETIME_UNCERTAINTY_POLV"]
 
     # TODO CAM ICD mandates observation.script-proposal-id
 
