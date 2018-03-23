@@ -90,7 +90,7 @@ class Daemon(object):
     if not self.cpu_list == "-1":
       pid = str(os.getpid())
       cmd = "taskset -pc " + self.cpu_list + " " + pid 
-      self.log (1, "Daemon::configure " + cmd)
+      self.log (2, "Daemon::configure " + cmd)
       self.system(cmd, 2)
 
     # start a control thread to handle quit requests
