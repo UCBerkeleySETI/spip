@@ -187,12 +187,47 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
   if (header.get ("PRECISETIME_FRACTION_POLV", "%lf", &precise_time_fraction_polv) != 1)
     cerr << "PRECISETIME_FRACTION_POLV did not exist in header" << endl;
 
-  double precise_time_fraction_microseconds = (precise_time_fraction_polh + precise_time_fraction_polv) / 2;
-  int64_t precise_time_fraction_picoseconds = int64_t(precise_time_fraction_microseconds * 1e6);
-  header.set ("PRECISETIME_FRACTION_AVG", "%lf", precise_time_fraction_microseconds);
+  // check that both sensors are non zero
+  double precise_time_fraction_nanoseconds = 0;
+  unsigned precise_time_fraction_count = 0;
+
+  if (fabs(precise_time_fraction_polh) > 0)
+  {
+    precise_time_fraction_nanoseconds += precise_time_fraction_polh;
+    precise_time_fraction_count++;
+  }
+  if (fabs(precise_time_fraction_polv) > 0)
+  {
+    precise_time_fraction_nanoseconds += precise_time_fraction_polv;
+    precise_time_fraction_count++;
+  }
+
+  // if both sensors are good
+  if (precise_time_fraction_count == 2)
+  {
+    precise_time_fraction_nanoseconds /= 2;
+    double difference = fabs(precise_time_fraction_polh - precise_time_fraction_polv);
+    double adc_sampling_time_ns = double(1e9) / double(adc_sample_rate);
+    if (difference > 32 * adc_sampling_time_ns)
+      cerr << "Warning: difference between precisetime sensors " 
+           << difference << " > 32 ADC samples" << endl;
+  }
+  else if (precise_time_fraction_count == 1)
+  {
+    cerr << "Warning: one of the precise time sensors was zero: "
+         << "  polh=" << precise_time_fraction_polh
+         << "  polv=" << precise_time_fraction_polv << endl;
+  }
+  else
+    cerr << "Warning: both precise time sensors were zero" << endl;
+
+  header.set ("PRECISETIME_FRACTION_AVG", "%lf", precise_time_fraction_nanoseconds);
+
+  int64_t precise_time_fraction_picoseconds = int64_t(precise_time_fraction_nanoseconds * 1e3);
 
 #ifdef _DEBUG
-  cerr << "precise_time_fraction polh= " << precise_time_fraction_polh << " polv=" << precise_time_fraction_polv << endl;
+  cerr << "precise_time_fraction polh= " << precise_time_fraction_polh 
+       << " polv=" << precise_time_fraction_polv << endl;
   cerr << "precise_time_fraction avg=" << precise_time_fraction_picoseconds << endl;
 #endif
   picoseconds += precise_time_fraction_picoseconds;
