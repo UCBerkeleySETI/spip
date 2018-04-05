@@ -162,6 +162,7 @@ if __name__ == "__main__":
   stream_id = sys.argv[1]
 
   script = MEERKATSearchDaemon ("meerkat_search", stream_id)
+  script.cpu_list = "-1"
 
   state = script.configure (DAEMONIZE, DL, "search", "search") 
   if state != 0:
