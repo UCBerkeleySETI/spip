@@ -335,6 +335,8 @@ bool spip::UDPReceiveMerge2DB::open ()
     if (header2.set ("UTC_START", "%s", utc_str.c_str()) < 0)
       throw invalid_argument ("failed to write UTC_START to header2");
   }
+  else
+    cerr << "UTC_START=" << buffer << endl; 
 
   uint64_t obs_offset;
   if (header1.get("OBS_OFFSET", "%lu", &obs_offset) == -1)
