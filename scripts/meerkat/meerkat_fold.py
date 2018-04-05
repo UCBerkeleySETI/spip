@@ -155,7 +155,7 @@ if __name__ == "__main__":
   stream_id = sys.argv[1]
 
   script = MEERKATFoldDaemon ("meerkat_fold", stream_id)
-
+  script.cpu_list = "-1"
   state = script.configure (DAEMONIZE, DL, "fold", "fold") 
   if state != 0:
     sys.exit(state)
