@@ -25,6 +25,14 @@
 
 using namespace std;
 
+template<typename T>
+static inline T extract_bits(T value, int first, int cnt)
+{
+    assert(0 <= first && first + cnt <= 8 * sizeof(T));
+    assert(cnt > 0 && cnt < 8 * sizeof(T));
+    return (value >> first) & ((T(1) << cnt) - 1);
+}
+
 spip::UDPFormatMeerKATSPEAD::UDPFormatMeerKATSPEAD()
 {
   packet_header_size = 56 + 8;
@@ -296,8 +304,163 @@ void spip::UDPFormatMeerKATSPEAD::decode_spead (char * buf)
   spead2::recv::decode_packet (header, (const uint8_t *) buf, 4160);
 }
 
-// return byte offset for this payload in the whole data stream
+inline std::size_t spip::UDPFormatMeerKATSPEAD::decode_cbf_packet (spip::cbf_packet_header &out, const uint8_t *data, std::size_t max_size)
+{
+  std::uint64_t header = spead2::load_be<std::uint64_t>(data);
+  if (extract_bits(header, 48, 16) != magic_version)
+  {
+    cerr << "packet rejected because magic or version did not match"  << endl;
+    return 0;
+  }
+
+  int item_id_bits = extract_bits(header, 40, 8) * 8;
+  int heap_address_bits = extract_bits(header, 32, 8) * 8;
+  if (item_id_bits == 0 || heap_address_bits == 0)
+  {
+    cerr << "packet rejected because flavour is invalid" << endl;
+    return 0;
+  }
+
+#ifdef _DEBUG
+  if (item_id_bits + heap_address_bits != 8 * sizeof(spead2::item_pointer_t))
+  {
+    cerr << "packet rejected because flavour is not SPEAD-64-*" << endl;;
+    return 0;
+  }
+#endif
+
+  out.n_items = extract_bits(header, 0, 16);
+  if (std::size_t(out.n_items) * sizeof(spead2::item_pointer_t) + 8 > max_size)
+  {
+    cerr << "packet rejected because the items overflow the packet" << endl;
+    return 0;
+  }
+
+  // Mark specials as not found
+  out.heap_cnt = -1;
+  out.heap_length = -1;
+  out.payload_offset = -1;
+  out.payload_length = -1;
+  out.timestamp = -1;
+  out.channel = -1;
+
+  // Look for special items
+  spead2::recv::pointer_decoder decoder(heap_address_bits);
+  int first_regular = out.n_items;
+  for (int i = 0; i < out.n_items; i++)
+  {
+    spead2::item_pointer_t pointer = spead2::load_be<spead2::item_pointer_t>(data + 8 + i * sizeof(spead2::item_pointer_t));
+    bool special;
+    if (decoder.is_immediate(pointer))
+    {
+      special = true;
+      switch (decoder.get_id(pointer))
+      {
+        case spead2::HEAP_CNT_ID:
+          out.heap_cnt = decoder.get_immediate(pointer);
+          break;
+        case spead2::HEAP_LENGTH_ID:
+          out.heap_length = decoder.get_immediate(pointer);
+          break;
+        case spead2::PAYLOAD_OFFSET_ID:
+          out.payload_offset = decoder.get_immediate(pointer);
+          break;
+        case spead2::PAYLOAD_LENGTH_ID:
+          out.payload_length = decoder.get_immediate(pointer);
+          break;
+        case 0x1600:
+          out.timestamp = decoder.get_immediate(pointer);
+          break;
+        case 0x4103:
+          out.channel = decoder.get_immediate(pointer);
+          break;
+        default:
+          special = false;
+          break;
+      }
+    }
+    else
+      special = false;
+      if (!special)
+          first_regular = std::min(first_regular, i);
+  }
+
+  if (out.heap_cnt == -1 || out.payload_offset == -1 || out.payload_length == -1)
+  {
+    cerr << "packet rejected because it does not have required items" << endl;
+    return 0;
+  }
+
+  std::size_t size = out.payload_length + out.n_items * sizeof(spead2::item_pointer_t) + 8;
+  if (size > max_size)
+  {
+    cerr << "packet rejected because payload length overflows packet size" << endl;
+    return 0;
+  }
+  if (out.heap_length >= 0 && out.payload_offset + out.payload_length > out.heap_length)
+  {
+    cerr << "packet rejected because payload would overflow given heap length" << endl;
+    return 0;
+  }
+
+  // Adjust the pointers to skip the specials, since live_heap::add_packet does not
+  // need them
+  out.pointers = data + 8 + first_regular * sizeof(spead2::item_pointer_t);
+  out.n_items -= first_regular;
+  out.payload = out.pointers + out.n_items * sizeof(spead2::item_pointer_t);
+  out.heap_address_bits = heap_address_bits;
+  return size;
+}
+
 inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned * pkt_size)
+{
+  decode_cbf_packet (cbf_header, (const uint8_t *) buf, 4160);
+
+  *pkt_size = (unsigned) header.payload_length;
+
+  if (!prepared || !configured)
+    throw runtime_error ("Cannot process packet if not configured and prepared");
+
+  // if this packet is a valid CBF packet
+  if (cbf_header.n_items == 3 && cbf_header.heap_length == heap_size)
+  {
+    // determine the spead stream for this packet
+    int64_t spead_stream = (cbf_header.channel - start_channel) / channels_per_spead_stream;
+
+    // check the spead stream is valid
+    if ((spead_stream < 0) || (spead_stream >= num_spead_streams))
+      return -1;
+
+    // if the heap_cnt is different, then this is a new heap, compute the offsets
+    if (curr_heap_cnts[spead_stream] != cbf_header.heap_cnt)
+    {
+      // save the heap count for this stream
+      curr_heap_cnts[spead_stream] == cbf_header.heap_cnt;
+
+      // determine the sample relative to start
+      int64_t obs_sample = cbf_header.timestamp - obs_start_sample;
+
+      // if this packet pre-dates our start time, ignore
+      if (obs_sample < 0)
+        return -1;
+
+      // save the byte offset for future calculations
+      curr_heap_offsets[spead_stream] = (uint64_t) (obs_sample * samples_to_byte_offset) + 
+                                        (spead_stream * cbf_header.heap_length);
+    }
+    return curr_heap_offsets[spead_stream] + cbf_header.payload_offset;
+  }
+  else
+  {
+    if (check_stream_stop ())
+      return -2;
+    else
+      return -1;
+  }
+}
+
+// return byte offset for this payload in the whole data stream
+inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet_old (char* buf, unsigned * pkt_size)
 {
   spead2::recv::decode_packet (header, (const uint8_t *) buf, 4160);
 
