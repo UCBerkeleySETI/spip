@@ -402,6 +402,7 @@ class KATCPServer (DeviceServer):
     self.script.beam_config["PRECISETIME_FRACTION_POLH"] = self.script.cam_config["PRECISETIME_FRACTION_POLH"]
     self.script.beam_config["PRECISETIME_UNCERTAINTY_POLV"] = self.script.cam_config["PRECISETIME_UNCERTAINTY_POLV"]
     self.script.beam_config["PRECISETIME_UNCERTAINTY_POLH"] = self.script.cam_config["PRECISETIME_UNCERTAINTY_POLH"]
+    self.script.beam_config["TFR_GNSS_KTT"] = self.script.cam_config["TFR_GNSS_KTT"]
 
     self.script.beam_config["OBSERVER"] = self.script.cam_config["OBSERVER"]
     self.script.beam_config["ANTENNAE"] = self.script.cam_config["ANTENNAE"]
@@ -585,14 +586,14 @@ class KATCPServer (DeviceServer):
         self.script.log (2, "configure: streams="+str(streams))
 
         # check if the number of existing + new beams > available
-        (cfreq, bwd, nchan1) = self.script.cfg["SUBBAND_CONFIG_0"].split(":")
-        (cfreq, bwd, nchan2) = self.script.cfg["SUBBAND_CONFIG_1"].split(":")
-        nchan = int(nchan1) + int(nchan2)
-        if nchan != int(n_channels):
-          self._data_product.pop(data_product_id, None)
-          response = "PTUSE configured for " + str(nchan) + " channels"
-          self.script.log (-1, "configure: " + response)
-          return ("fail", response)
+        # (cfreq, bwd, nchan1) = self.script.cfg["SUBBAND_CONFIG_0"].split(":")
+        # (cfreq, bwd, nchan2) = self.script.cfg["SUBBAND_CONFIG_1"].split(":")
+        # nchan = int(nchan1) + int(nchan2)
+        #if nchan != int(n_channels):
+        #  self._data_product.pop(data_product_id, None)
+        #  response = "PTUSE configured for " + str(nchan) + " channels"
+        #  self.script.log (-1, "configure: " + response)
+        #  return ("fail", response)
 
         self._data_product['id'] = data_product_id
         self._data_product['antennas'] = antennas

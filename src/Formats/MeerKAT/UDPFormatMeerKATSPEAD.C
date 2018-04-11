@@ -188,6 +188,8 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
   }
 
   // apply the MeerKAT Precise Time offset
+  double precise_time_fraction_nanoseconds = 0;
+#ifdef MEERKAT_BOTH_PT_SENSORS
   double precise_time_fraction_polh = 0;
   double precise_time_fraction_polv = 0;
   if (header.get ("PRECISETIME_FRACTION_POLH", "%lf", &precise_time_fraction_polh) != 1)
@@ -196,7 +198,6 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
     cerr << "PRECISETIME_FRACTION_POLV did not exist in header" << endl;
 
   // check that both sensors are non zero
-  double precise_time_fraction_nanoseconds = 0;
   unsigned precise_time_fraction_count = 0;
 
   if (fabs(precise_time_fraction_polh) > 0)
@@ -228,6 +229,17 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
   }
   else
     cerr << "Warning: both precise time sensors were zero" << endl;
+
+#else
+
+  // 6-Apr-2018
+  // Thomas Abbott advised only to use Vpol sensor
+  double precise_time_fraction_polv = 0;
+  if (header.get ("PRECISETIME_FRACTION_POLV", "%lf", &precise_time_fraction_polv) != 1)
+    cerr << "PRECISETIME_FRACTION_POLV did not exist in header" << endl;
+  precise_time_fraction_nanoseconds = precise_time_fraction_polv;
+
+#endif
 
   header.set ("PRECISETIME_FRACTION_AVG", "%lf", precise_time_fraction_nanoseconds);
 
