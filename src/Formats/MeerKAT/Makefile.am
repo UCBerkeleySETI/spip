@@ -42,12 +42,12 @@ libmeerkat_headers += spip/UDPFormatMeerKATSPEAD.h
 
 libmeerkat_la_SOURCES += UDPFormatMeerKATSPEAD.C
 
-bin_PROGRAMS += meerkat_speadrecv meerkat_speadrecvmerge meerkat_speadmeta meerkat_speadtimestamp
+bin_PROGRAMS += meerkat_speadrecv meerkat_speadrecvmerge meerkat_speadmeta # meerkat_speadtimestamp
 
 meerkat_speadrecv_SOURCES = meerkat_speadrecv.C
 meerkat_speadrecvmerge_SOURCES = meerkat_speadrecvmerge.C
 meerkat_speadmeta_SOURCES = meerkat_speadmeta.C
-meerkat_speadtimestamp_SOURCES = meerkat_speadtimestamp.C
+# meerkat_speadtimestamp_SOURCES = meerkat_speadtimestamp.C
 
 if HAVE_PSRDADA 
 

@@ -18,6 +18,7 @@ static uint16_t magic_version = 0x5304;  // 0x53 is the magic, 4 is the version
 
 namespace spip {
 
+#ifndef OLD_DECODER
   struct cbf_packet_header
   {
     /// Number of bits in addresses/immediates (from SPEAD flavour)
@@ -42,7 +43,7 @@ namespace spip {
     /// Start of the packet payload
     const std::uint8_t *payload;
   };
-
+#endif
 
   class UDPFormatMeerKATSPEAD : public UDPFormat {
 
@@ -79,21 +80,23 @@ namespace spip {
       inline void encode_header (char * buf);
 
       void decode_spead (char * buf);
+
+#ifdef OLD_DECODER
+      void set_heap_num (int64_t heap_num ) { header.heap_cnt = heap_num * 8192; };
+      void print_packet_timestamp ();
+#else
       std::size_t decode_cbf_packet (cbf_packet_header &out, const uint8_t *data, std::size_t max_size);
+#endif
       inline int64_t decode_packet (char * buf, unsigned *payload_size);
-      inline int64_t decode_packet_old (char * buf, unsigned *payload_size);
       inline int64_t get_subband (int64_t byte_offset, int nsubband);
       inline int insert_last_packet (char * buf);
 
       void print_packet_header ();
-      void print_packet_timestamp ();
       bool check_stream_stop ();
-
 
       inline void gen_packet (char * buf, size_t bufsz);
 
       // accessor methods for header params
-      void set_heap_num (int64_t heap_num ) { header.heap_cnt = heap_num * 8192; };
       void set_chan_no (int16_t chan_no)    { ; };
       void set_beam_no (int16_t beam_no)    { ; };
 
@@ -101,9 +104,11 @@ namespace spip {
 
     private:
 
+#ifdef OLD_DECODER
       spead2::recv::packet_header header;
-
+#else
       spip::cbf_packet_header cbf_header;
+#endif
 
       time_t adc_sync_time;
 
