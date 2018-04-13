@@ -78,14 +78,13 @@ void spip::UDPFormatMeerKATSPEAD::configure(const spip::AsciiHeader& config, con
     throw invalid_argument ("ADC_SAMPLE_RATE did not exist in config");
   if (config.get ("BW", "%lf", &bw) != 1)
     throw invalid_argument ("BW did not exist in config");
-  //if (config.get ("NUM_PARTITIONS", "%d", &num_spead_streams) != 1)
-  //  throw invalid_argument ("NUM_PARTITIONS did not exist in config");
 
-  num_spead_streams = 1;
+  nchan_per_stream = 1;
   nchan = (end_channel - start_channel) + 1;
+  nstream = nchan / nchan_per_stream;
   nbytes_per_heap = nsamp_per_heap * nchan * nbytes_per_samp;
   samples_to_byte_offset = (double) (bw * 1e6 * ndim * header_npol) / adc_sample_rate; 
-  heap_size = nbytes_per_heap / num_spead_streams;
+  heap_size = nbytes_per_heap / nstream;
 
   configured = true;
 }
@@ -100,42 +99,33 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
   else
     offset = 1;
 
-  num_spead_streams = 1;
-  sprintf(key, "DATA_MCAST%s", suffix);
-  if (header.get (key, "%s", val) == 1)
-  {
-    std::string data_mcast = string (val);
-    std::string delimiter = "+";
-    // check for XXX.XXX.XXX.XXX+Y notation
-    size_t pos = data_mcast.find(delimiter);
-    if (pos != std::string::npos)
-    {
-      std::string plus = data_mcast.substr(pos + delimiter.length());
-      num_spead_streams = std::stoi (plus) + 1;
-    }
-  }
-
-  half_num_spead_streams = num_spead_streams / 2;
+  if (header.get ("NCHAN_PER_STREAM", "%u", &nchan_per_stream) != 1)
+    throw invalid_argument ("NCHAN_PER_STREAM did not exist in header");
+  nstream = nchan / nchan_per_stream;
+  half_nstream = nstream / 2;
   
 #ifdef _DEBUG
-  cerr << "spip::UDPFormatMeerKATSPEAD::prepare num_spead_streams=" << num_spead_streams << endl;
+  cerr << "spip::UDPFormatMeerKATSPEAD::prepare nstream=" << nstream 
+       << " half_nstream=" << half_nstream << endl;
 #endif
 
-  heap_size = nbytes_per_heap / num_spead_streams;
-  channels_per_spead_stream = nchan / num_spead_streams;
-  curr_heap_cnts.resize(num_spead_streams);
-  curr_heap_offsets.resize(num_spead_streams);
-  timestamps.resize(num_spead_streams);
-  channels.resize(num_spead_streams);
+  heap_size = nbytes_per_heap / nstream;
 
-  for (unsigned i=0; i<num_spead_streams; i++)
+#ifdef OLD_DECORDER
+  curr_heap_cnts.resize(nstream);
+  curr_heap_offsets.resize(nstream);
+  timestamps.resize(nstream);
+  channels.resize(nstream);
+
+  for (unsigned i=0; i<nstream; i++)
   {
     curr_heap_cnts[i] = -1;
-    channels[i] = (i * channels_per_spead_stream) + start_channel;
+    channels[i] = (i * nchan_per_stream) + start_channel;
 #ifdef _DEBUG
   cerr << "spip::UDPFormatMeerKATSPEAD::prepare channels[" << i << "]=" << channels[i] << endl;
 #endif
   }
+#endif
 
   if (header.get ("ADC_SYNC_TIME", "%ld", &adc_sync_time) != 1)
     throw invalid_argument ("ADC_SYNC_TIME did not exist in config");
@@ -288,7 +278,7 @@ uint64_t spip::UDPFormatMeerKATSPEAD::get_samples_for_bytes (uint64_t nbytes)
 
 uint64_t spip::UDPFormatMeerKATSPEAD::get_resolution ()
 {
-  return heap_size * num_spead_streams;
+  return heap_size * nstream;
 }
 
 void spip::UDPFormatMeerKATSPEAD::set_channel_range (unsigned start, unsigned end) 
@@ -434,57 +424,37 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
   if (cbf_header.n_items == 1 && cbf_header.heap_length == heap_size)
   {
     // determine the spead stream for this packet
-    spead_stream = (cbf_header.channel - start_channel) / channels_per_spead_stream;
+    spead_stream = (cbf_header.channel - start_channel) / nchan_per_stream;
 
     // check the spead stream is valid
-    if ((spead_stream < 0) || (spead_stream >= num_spead_streams))
+    if ((spead_stream < 0) || (spead_stream >= nstream))
       return -1;
 
-    // if the heap_cnt is different, then this is a new heap, compute the offsets
-    if (curr_heap_cnts[spead_stream] != cbf_header.heap_cnt)
-    {
-      // determine the sample relative to start
-      int64_t obs_sample = cbf_header.timestamp - obs_start_sample;
-
+    // determine the sample relative to start
+    const int64_t obs_sample = cbf_header.timestamp - obs_start_sample;
+   
 #ifdef _DEBUG
       if (!first_packet)
       {
         if (offset == 1)
-          cerr << "FIRST PACKET timestamp=" << cbf_header.timestamp
+          cerr << "FIRST PACKET cbf_header.timestamp=" << cbf_header.timestamp
                << " obs_start_sample=" << obs_start_sample
                << " obs_sample=" << obs_sample
                << " samples_to_byte_offset=" << samples_to_byte_offset
-               << " curr_heap_offset=" << (int64_t) (obs_sample * samples_to_byte_offset) << endl;
+               << " heap_offset=" << (int64_t) (obs_sample * samples_to_byte_offset) << endl;
         first_packet = true;
       }
 #endif
 
-      // if this packet pre-dates our start time, ignore
-      if (obs_sample < 0)
-        return -1;
+    // if this packet pre-dates our start time, ignore
+    if (obs_sample < 0)
+     return -1;
 
-#ifdef _DEBUG
-      if (curr_heap_cnts[spead_stream] == -1)
-      {
-        if (offset == 1)
-          cerr << "FIRST HEAP timestamp=" << cbf_header.timestamp
-               << " obs_start_sample=" << obs_start_sample
-               << " obs_sample=" << obs_sample
-               << " samples_to_byte_offset=" << samples_to_byte_offset
-               << " curr_heap_offset=" << (int64_t) (obs_sample * samples_to_byte_offset)
-               << " spead_stream=" << spead_stream
-               << " heap_cnt=" << cbf_header.heap_cnt << endl;
-      }
-#endif
-
-      // save the heap count for this stream
-      curr_heap_cnts[spead_stream] = cbf_header.heap_cnt;
-
-      // save the byte offset for future calculations
-      curr_heap_offsets[spead_stream] = (uint64_t) (obs_sample * samples_to_byte_offset) + (spead_stream * cbf_header.heap_length);
-    }
-    return curr_heap_offsets[spead_stream] + cbf_header.payload_offset;
-  }
+    // compute the byte offset for this stream
+    return uint64_t(obs_sample * samples_to_byte_offset) + 
+                   (spead_stream * cbf_header.heap_length) +
+                    cbf_header.payload_offset;
+  } 
   else
   {
     //print_cbf_packet_header();
@@ -517,7 +487,7 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
 
   // check if this packet belongs to a heap that is currently being accepted
   spead_stream = -1;
-  for (int i=0; i<num_spead_streams; i++)
+  for (int i=0; i<nstream; i++)
   {
     if (header.heap_cnt == curr_heap_cnts[i])
       spead_stream = i; 
@@ -610,7 +580,7 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
 
 inline int64_t spip::UDPFormatMeerKATSPEAD::get_subband (int64_t byte_offset, int nsubband)
 {
-  if (spead_stream >= half_num_spead_streams)
+  if (spead_stream >= half_nstream)
     return 1;
   else
     return 0;
@@ -691,7 +661,7 @@ int64_t spip::UDPFormatMeerKATSPEAD::get_timestamp_and_channel()
     }
   }
 
-  int64_t spead_stream = (channel - start_channel) / channels_per_spead_stream;
+  int64_t spead_stream = (channel - start_channel) / nchan_per_stream;
   timestamps[spead_stream] = timestamp;
   assert (channels[spead_stream] == channel);
   return spead_stream;

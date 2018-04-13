@@ -138,6 +138,7 @@ namespace spip {
 
       unsigned pkts_per_heap;
 
+#ifdef OLD_DECORDER
       std::vector<int64_t> timestamps;
 
       std::vector<int64_t> channels;
@@ -145,6 +146,7 @@ namespace spip {
       std::vector<int64_t> curr_heap_cnts;
 
       std::vector<uint64_t> curr_heap_offsets;
+#endif
 
       unsigned nbytes_per_heap;
 
@@ -158,11 +160,11 @@ namespace spip {
 
       int offset ;
 
-      int num_spead_streams;
+      int nstream;
 
-      int channels_per_spead_stream;
+      int nchan_per_stream;
 
-      int half_num_spead_streams;
+      int half_nstream;
 
       int spead_stream;
 

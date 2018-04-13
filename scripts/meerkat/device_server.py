@@ -398,6 +398,8 @@ class KATCPServer (DeviceServer):
     if self.script.cam_config["ADC_SYNC_TIME"] != "0":
       self.script.beam_config["ADC_SYNC_TIME"] = self.script.cam_config["ADC_SYNC_TIME"]
 
+    self.script.beam_config["NCHAN_PER_STREAM"] = self.script.cam_config["NCHAN_PER_STREAM"]
+    self.script.beam_config["TFR_GNSS_KTT"] = self.script.cam_config["TFR_GNSS_KTT"]
     self.script.beam_config["PRECISETIME_FRACTION_POLV"] = self.script.cam_config["PRECISETIME_FRACTION_POLV"]
     self.script.beam_config["PRECISETIME_FRACTION_POLH"] = self.script.cam_config["PRECISETIME_FRACTION_POLH"]
     self.script.beam_config["PRECISETIME_UNCERTAINTY_POLV"] = self.script.cam_config["PRECISETIME_UNCERTAINTY_POLV"]

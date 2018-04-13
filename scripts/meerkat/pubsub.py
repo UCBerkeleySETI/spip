@@ -70,6 +70,7 @@ class PubSubThread (threading.Thread):
     sensors["FREQ"]              = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.centre-frequency'}
     sensors["BW"]                = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.bandwidth'}
     sensors["SIDEBAND"]          = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.sideband'}
+    sensors["NCHAN_PER_STREAM"]  = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.n-chans-per-substream'}
     sensors["PRECISETIME_FRACTION_POLH"]    = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.precise-time.epoch-fraction'}
     sensors["PRECISETIME_UNCERTAINTY_POLH"] = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.precise-time.uncertainty'}
     sensors["PRECISETIME_FRACTION_POLV"]    = {"comp": "sub", "sensor": 'streams.' + self.polv_stream + '.precise-time.epoch-fraction'}
