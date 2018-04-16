@@ -65,12 +65,12 @@ class PubSubThread (threading.Thread):
     sensors["DEC"]               = {"comp": "cbf", "sensor": "pos.request-base-dec"}
     sensors["NCHAN"]             = {"comp": "cbf", "sensor": self.fengine_stream + '.antenna-channelised-voltage-n-chans'}
     sensors["ADC_SYNC_TIME"]     = {"comp": "cbf", "sensor": self.fengine_stream + '.synchronisation-epoch'}
+    sensors["NCHAN_PER_STREAM"]  = {"comp": "cbf", "sensor": self.polh_stream + '.n-chans-per-substream'}
     sensors["ITRF"]              = {"comp": "sub", "sensor": "array-position-itrf"}
     sensors["SCHEDULE_BLOCK_ID"] = {"comp": "sub", "sensor": "active-sbs"}
     sensors["FREQ"]              = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.centre-frequency'}
     sensors["BW"]                = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.bandwidth'}
     sensors["SIDEBAND"]          = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.sideband'}
-    sensors["NCHAN_PER_STREAM"]  = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.n-chans-per-substream'}
     sensors["PRECISETIME_FRACTION_POLH"]    = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.precise-time.epoch-fraction'}
     sensors["PRECISETIME_UNCERTAINTY_POLH"] = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.precise-time.uncertainty'}
     sensors["PRECISETIME_FRACTION_POLV"]    = {"comp": "sub", "sensor": 'streams.' + self.polv_stream + '.precise-time.epoch-fraction'}
