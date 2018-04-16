@@ -634,7 +634,7 @@ class KATCPServer (DeviceServer):
           self.script.log (2,"configure: polh_stream="+str(polh_stream))
 
         if cam_server != "None" and fengine_stream != "None" and polh_stream != "None":
-          self.script.pubsub.update_cam (cam_server, fengine_stream, polh_stream, polv_stream)
+          self.script.pubsub.update_cam (cam_server, fengine_stream, polh_stream, polv_stream, antennas)
         else:
           response = "Could not extract streams[cam.http][camdata]"
           self.script.log (1, "configure: cam_server=" + cam_server)
