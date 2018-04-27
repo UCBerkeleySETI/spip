@@ -66,7 +66,9 @@ void spip::UDPSocketSend::open_multicast (string group_address, int port, string
   }
   else
   {
+#ifdef _DEBUG
     cerr << "spip::UDPSocketSend::open_multicast only using first multicast group" << endl;
+#endif
 
     // get the XXX.XXX.XXX.XXX
     std::string mcast = group_address.substr(0, pos);
@@ -78,12 +80,16 @@ void spip::UDPSocketSend::open_multicast (string group_address, int port, string
     std::string mcast_prefix = mcast.substr(0, mcast_prefix_pos);
     size_t mcast_suffix = std::stoi(mcast.substr(mcast_prefix_pos+1));
 
+#ifdef _DEBUG
     cerr << "mcast_prefix=" << mcast_prefix << " mcast_suffix=" << mcast_suffix << endl;
+#endif
 
     group = mcast_prefix + "." + std::to_string(mcast_suffix);
   }
 
+#ifdef _DEBUG
   cerr << "spip::UDPSocketSend::open_multicast open(" << group << ", " << port << ")" << endl;
+#endif
   open (group, port, local_ip_address);
 }
 
