@@ -167,7 +167,9 @@ int spip::UDPReceiveMerge2DB::configure (const char * config_str)
     throw invalid_argument ("failed to write NPOL to config"); 
 
   overflow_bufsz = (formats[0]->get_resolution() + formats[0]->get_resolution()) / 2;
-  cerr << "spip::UDPReceiveMerge2DB::configure overflow_bufsz=" << overflow_bufsz << endl;
+
+  // this appears to be necessary for MeerKAT. More generalized solution required
+  overflow_bufsz *= 4;
   for (unsigned i=0; i<2; i++)
   {
     stats[i] = new UDPStats (formats[i]->get_header_size(), formats[i]->get_data_size());
@@ -862,7 +864,7 @@ bool spip::UDPReceiveMerge2DB::receive_thread (int p)
                    << " data_bufsz=" << data_bufsz 
                    << " overflow_lastbytes[" << p << "][0]=" << overflow_lastbytes[p][0]
                    << " overflow_lastbytes[" << p << "][1]=" << overflow_lastbytes[p][1]
-                   << " filled_this_buffer=" << filled_this_buffer << endl;
+                   << " filled_this_buffer=" << filled_this_buffer endl;
 #endif
             stat->dropped_bytes (data_bufsz - pol_bytes_this_buf);
             filled_this_buffer = true;
@@ -959,9 +961,10 @@ void spip::UDPReceiveMerge2DB::stats_thread()
       }
 
       // determine how much memory is free in the receivers
-      fprintf (stderr,"Recv %6.3f (%6.3f, %6.3f) [Gb/s] Dropped %6.3f (%6.3f + %6.3f) [Gb/s]\n", 
+      fprintf (stderr,"Recv %6.3f (%6.3f, %6.3f) [Gb/s] Dropped %6.3f (%6.3f + %6.3f) [Gb/s] Total %lu B\n", 
                gb_recv_ps[0] + gb_recv_ps[1], gb_recv_ps[0], gb_recv_ps[1],
-               gb_drop_ps[0] + gb_drop_ps[1], gb_drop_ps[0], gb_drop_ps[1]);
+               gb_drop_ps[0] + gb_drop_ps[1], gb_drop_ps[0], gb_drop_ps[1],
+               b_drop_total[0] + b_drop_total[1]);
       sleep (1);
     }
     sleep(1);
