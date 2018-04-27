@@ -86,10 +86,10 @@ class PubSubThread (threading.Thread):
     # TODO CAM ICD mandates observation.script-proposal-id
     self.chatty_first_update = times.getCurrentDateTime()
     fixed_sensors = {}
-    fixed_sensors["TFR_GNSS_KTT"] = "anc_tfr_gnss_ktt"
+    fixed_sensors["TFR_KTT_GNSS"] = "anc_tfr_ktt_gnss"
 
     self.chatty_sensors = ["RA", "DEC", "PRECISETIME_FRACTION_POLH", "PRECISETIME_UNCERTAINTY_POLH", \
-                           "PRECISETIME_FRACTION_POLV", "PRECISETIME_UNCERTAINTY_POLV", "TFR_GNSS_KTT"]
+                           "PRECISETIME_FRACTION_POLV", "PRECISETIME_UNCERTAINTY_POLV", "TFR_KTT_GNSS"]
     
     self.script.log(3, "PubSubThread::configure sensors=" + str(sensors))
     for key in sensors.keys():
