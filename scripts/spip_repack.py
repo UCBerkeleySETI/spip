@@ -288,9 +288,10 @@ class RepackDaemon(Daemon):
               all_finished = False
             filename = obs_dir + "/" + subband["cfreq"] + "/obs.failed"
             if os.path.exists(filename):
-              self.log (-1, "found failed subband: " + filename)
-              any_failed = True
-         
+              if os.path.getmtime(filename) + 30 > time.time():
+                self.log (-1, "found failed subband: " + filename)
+                any_failed = True
+
           # check that at least 1 archive was produced
           if all_finished:
             cmd = "find " + out_dir + " -type f -name '????-??-??-??:??:??.ar' | wc -l"
@@ -309,7 +310,7 @@ class RepackDaemon(Daemon):
             if not os.path.exists(fail_parent_dir):
               os.makedirs(fail_parent_dir, 0755)
             fail_dir = self.failed_dir + "/" + beam + "/" + utc + "/" + source
-            self.log (2, "main: fail_observation("+obs_dir+")")
+            self.log (2, "main: fail_observation("+beam+","+obs_dir+","+fail_dir+","+out_dir+")")
             (rval, response) = self.fail_observation (beam, obs_dir, fail_dir, out_dir)
             if rval:
               self.log (-1, "failed to finalise observation: " + response)
@@ -339,6 +340,7 @@ class RepackDaemon(Daemon):
               # remove sub-band files and directories that are now superfluous
               for i in range(len(self.subbands)):
                 os.remove (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.finished")
+                os.remove (fin_dir + "/" + self.subbands[i]["cfreq"] + "/obs.header")
                 os.rmdir (fin_dir + "/" + self.subbands[i]["cfreq"])
 
           processed_this_loop += processed_this_obs
@@ -589,10 +591,6 @@ class RepackDaemon(Daemon):
       self.log (2, "RepackDaemon::acquire_obs_header header_file[" + str(i)+ "]=" + in_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
       header_sub = Config.readCFGFileIntoDict (in_dir + "/" + self.subbands[i]["cfreq"] + "/obs.header")
       header = Config.mergeHeaderFreq (header, header_sub)
-      os.remove (in_dir + "/" + self.subbands[i]["cfreq"] + "/obs.header")
-
-    # remove the first header
-    os.remove (in_dir + "/" + self.subbands[0]["cfreq"] + "/obs.header")
 
     # write the combined header
     self.log (2, "RepackDaemon::acquire_obs_header writing header to " + in_dir + "/" + "obs.header")
@@ -751,8 +749,11 @@ class RepackDaemon(Daemon):
 
   def fail_observation (self, beam, obs_dir, fail_dir, arch_dir):
 
+    self.log(3, "fail_observation()")
+
     self.end_observation (beam, obs_dir, fail_dir, arch_dir)
 
+    # ensure the archived / beam / utc_start / source directory exists
     cmd = "mkdir -p " + arch_dir
     rval, lines = self.system (cmd, 3)
     if rval:
@@ -762,21 +763,45 @@ class RepackDaemon(Daemon):
     cmd = "touch " + arch_dir + "/obs.failed"
     rval, lines = self.system (cmd, 3)
 
-    # simply move the observation to the failed directory
-    try:
-      fail_parent_dir = os.path.dirname(fail_dir)
-      if not os.path.exists(fail_parent_dir):
-        os.mkdir (fail_parent_dir, 0755) 
-      shutil.move (obs_dir, fail_dir)
-    except OSError, e:
-      self.log (0, "fail_observation failed to rename " + obs_dir + " to " + fail_dir)
-      self.log (0, str(e))
-      return (1, "failed to rename obs_dir to fail_dir")
+    # create the failed / beam / utc_start / source directory
+    cmd = "mkdir -p " + fail_dir
+    rval, lines = self.system (cmd, 3)
+    if rval:
+      return (1, "finalise_observation: failed to create " + fail_dir)
 
-    # delete the parent directory of obs_dir
-    parent_dir = os.path.dirname (obs_dir)
-    os.rmdir(parent_dir)
-    return (0, "")
+    # move any subdirs
+    subdirs = [item for item in os.listdir(obs_dir) if os.path.isdir(os.path.join(obs_dir, item))]
+    for s in subdirs:
+      try:
+        shutil.move (obs_dir + "/" + s, fail_dir + "/" + s)
+      except OSError, e:
+        self.log (0, "fail_observation failed to rename " + \
+                  obs_dir + "/" + s + " to " + \
+                  fail_dir + "/" + s)
+        return (1, "failed to rename obs_dir to fail_dir")
+
+    # move each png file from obs_dir to fail_dir
+    pngs = [file for file in os.listdir(obs_dir) if file.lower().endswith(".png")]
+    for p in pngs:
+      try:
+        shutil.move (obs_dir + "/" + p, fail_dir + "/" + p)
+      except OSError, e:
+        self.log (0, "fail_observation failed to move " + \
+                  obs_dir + "/" + p + " to " + \
+                  fail_dir + "/" + sp)
+        return (1, "failed to move png from obs_dir to fail_dir")
+
+    # check if directory empty
+    cmd = "find " + obs_dir + " -mindepth 1 | wc -l"
+    rval, lines = self.system (cmd, 3)
+    if rval == 0 and lines[0] == "0":
+      # delete the beam / utc_start / source directory
+      os.rmdir (obs_dir)
+      # delete the beam / utc_start directory
+      os.rmdir ( os.path.dirname (obs_dir))
+      return (0, "")
+    else:
+      return (0, "")
 
 
   # transition observation from processing to finished
