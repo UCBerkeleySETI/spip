@@ -25,7 +25,7 @@ class ResultsReportingThread(ReportingThread):
   def __init__ (self, script, id):
     host = sockets.getHostNameShort()
     port = int(script.cfg["BEAM_RESULTS_PORT"])
-    if id >= 0:
+    if int(id) >= 0:
       port += int(id)
     ReportingThread.__init__(self, script, host, port)
 
@@ -238,6 +238,8 @@ class ResultsDaemon(Daemon):
         cmd = "find " + beam_dir + " -mindepth 2 -maxdepth 2 -type d | sort"
         rval, observations = self.system (cmd, 3)
 
+        self.log (2, "main: found " + str(observations))
+
         # for each observation      
         for observation in observations:
 
@@ -249,6 +251,8 @@ class ResultsDaemon(Daemon):
 
           (utc_start, source) = observation.split("/")
 
+          self.log (2, "main: utc_start=" + utc_start + " source=" + source)
+
           if source == "stats":
             continue
       
@@ -257,6 +261,7 @@ class ResultsDaemon(Daemon):
           # check if summary data on this observation has already been collected
           if utc_start in self.results.keys():
             if source in self.results[utc_start].keys():
+              self.log (2, "main: " + source + " in results[" + utc_start + "].keys()")
               self.results_lock.release()
               continue
             else:
@@ -269,9 +274,9 @@ class ResultsDaemon(Daemon):
           # collect summary data for this observation
           obs_dir = beam_dir + "/" + utc_start + "/" + source
 
-          self.log (3, "main: collecting data for beam="+beam+" utc_start="+utc_start+" source="+source)
-
+          self.log (2, "main: collecting data for beam="+beam+" utc_start="+utc_start+" source="+source)
           (result, response) = self.collect_data (obs_dir, beam, utc_start, source)
+          self.log (2, "main: result=" + result + " response=" + response)
           if not result == "ok":
             self.log (2, "main: removing beam="+beam+" utc_start="+utc_start+" source="+source)
             del self.results[utc_start][source]
