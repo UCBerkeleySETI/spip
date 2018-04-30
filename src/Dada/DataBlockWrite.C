@@ -143,6 +143,7 @@ void spip::DataBlockWrite::write_header (const char* header)
     to_copy = header_bufsz -1;
 
   memcpy (header_buf, header, to_copy);
+  header_buf[to_copy] = '\0';
 
   if (ipcbuf_mark_filled (header_block, header_bufsz) < 0)
     throw runtime_error ("could not mark header buffer filled");

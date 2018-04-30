@@ -25,6 +25,14 @@
 
 using namespace std;
 
+template<typename T>
+static inline T extract_bits(T value, int first, int cnt)
+{
+    assert(0 <= first && first + cnt <= 8 * sizeof(T));
+    assert(cnt > 0 && cnt < 8 * sizeof(T));
+    return (value >> first) & ((T(1) << cnt) - 1);
+}
+
 spip::UDPFormatMeerKATSPEAD::UDPFormatMeerKATSPEAD()
 {
   packet_header_size = 56 + 8;
@@ -70,14 +78,13 @@ void spip::UDPFormatMeerKATSPEAD::configure(const spip::AsciiHeader& config, con
     throw invalid_argument ("ADC_SAMPLE_RATE did not exist in config");
   if (config.get ("BW", "%lf", &bw) != 1)
     throw invalid_argument ("BW did not exist in config");
-  //if (config.get ("NUM_PARTITIONS", "%d", &num_spead_streams) != 1)
-  //  throw invalid_argument ("NUM_PARTITIONS did not exist in config");
 
-  num_spead_streams = 1;
+  nchan_per_stream = 1;
   nchan = (end_channel - start_channel) + 1;
+  nstream = nchan / nchan_per_stream;
   nbytes_per_heap = nsamp_per_heap * nchan * nbytes_per_samp;
   samples_to_byte_offset = (double) (bw * 1e6 * ndim * header_npol) / adc_sample_rate; 
-  heap_size = nbytes_per_heap / num_spead_streams;
+  heap_size = nbytes_per_heap / nstream;
 
   configured = true;
 }
@@ -92,42 +99,33 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
   else
     offset = 1;
 
-  num_spead_streams = 1;
-  sprintf(key, "DATA_MCAST%s", suffix);
-  if (header.get (key, "%s", val) == 1)
-  {
-    std::string data_mcast = string (val);
-    std::string delimiter = "+";
-    // check for XXX.XXX.XXX.XXX+Y notation
-    size_t pos = data_mcast.find(delimiter);
-    if (pos != std::string::npos)
-    {
-      std::string plus = data_mcast.substr(pos + delimiter.length());
-      num_spead_streams = std::stoi (plus) + 1;
-    }
-  }
-
-  half_num_spead_streams = num_spead_streams / 2;
+  if (header.get ("NCHAN_PER_STREAM", "%u", &nchan_per_stream) != 1)
+    throw invalid_argument ("NCHAN_PER_STREAM did not exist in header");
+  nstream = nchan / nchan_per_stream;
+  half_nstream = nstream / 2;
   
 #ifdef _DEBUG
-  cerr << "spip::UDPFormatMeerKATSPEAD::prepare num_spead_streams=" << num_spead_streams << endl;
+  cerr << "spip::UDPFormatMeerKATSPEAD::prepare nstream=" << nstream 
+       << " half_nstream=" << half_nstream << endl;
 #endif
 
-  heap_size = nbytes_per_heap / num_spead_streams;
-  channels_per_spead_stream = nchan / num_spead_streams;
-  curr_heap_cnts.resize(num_spead_streams);
-  curr_heap_offsets.resize(num_spead_streams);
-  timestamps.resize(num_spead_streams);
-  channels.resize(num_spead_streams);
+  heap_size = nbytes_per_heap / nstream;
 
-  for (unsigned i=0; i<num_spead_streams; i++)
+#ifdef OLD_DECORDER
+  curr_heap_cnts.resize(nstream);
+  curr_heap_offsets.resize(nstream);
+  timestamps.resize(nstream);
+  channels.resize(nstream);
+
+  for (unsigned i=0; i<nstream; i++)
   {
     curr_heap_cnts[i] = -1;
-    channels[i] = (i * channels_per_spead_stream) + start_channel;
+    channels[i] = (i * nchan_per_stream) + start_channel;
 #ifdef _DEBUG
   cerr << "spip::UDPFormatMeerKATSPEAD::prepare channels[" << i << "]=" << channels[i] << endl;
 #endif
   }
+#endif
 
   if (header.get ("ADC_SYNC_TIME", "%ld", &adc_sync_time) != 1)
     throw invalid_argument ("ADC_SYNC_TIME did not exist in config");
@@ -180,6 +178,8 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
   }
 
   // apply the MeerKAT Precise Time offset
+  double precise_time_fraction_nanoseconds = 0;
+#ifdef MEERKAT_BOTH_PT_SENSORS
   double precise_time_fraction_polh = 0;
   double precise_time_fraction_polv = 0;
   if (header.get ("PRECISETIME_FRACTION_POLH", "%lf", &precise_time_fraction_polh) != 1)
@@ -188,7 +188,6 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
     cerr << "PRECISETIME_FRACTION_POLV did not exist in header" << endl;
 
   // check that both sensors are non zero
-  double precise_time_fraction_nanoseconds = 0;
   unsigned precise_time_fraction_count = 0;
 
   if (fabs(precise_time_fraction_polh) > 0)
@@ -220,6 +219,17 @@ void spip::UDPFormatMeerKATSPEAD::prepare (spip::AsciiHeader& header, const char
   }
   else
     cerr << "Warning: both precise time sensors were zero" << endl;
+
+#else
+
+  // 6-Apr-2018
+  // Thomas Abbott advised only to use Vpol sensor
+  double precise_time_fraction_polv = 0;
+  if (header.get ("PRECISETIME_FRACTION_POLV", "%lf", &precise_time_fraction_polv) != 1)
+    cerr << "PRECISETIME_FRACTION_POLV did not exist in header" << endl;
+  precise_time_fraction_nanoseconds = precise_time_fraction_polv;
+
+#endif
 
   header.set ("PRECISETIME_FRACTION_AVG", "%lf", precise_time_fraction_nanoseconds);
 
@@ -268,7 +278,7 @@ uint64_t spip::UDPFormatMeerKATSPEAD::get_samples_for_bytes (uint64_t nbytes)
 
 uint64_t spip::UDPFormatMeerKATSPEAD::get_resolution ()
 {
-  return heap_size * num_spead_streams;
+  return heap_size * nstream;
 }
 
 void spip::UDPFormatMeerKATSPEAD::set_channel_range (unsigned start, unsigned end) 
@@ -291,9 +301,179 @@ inline void spip::UDPFormatMeerKATSPEAD::encode_header (char * buf)
   //memcpy (buf, (void *) &header, sizeof (meerkat_spead_udp_hdr_t));
 }
 
+
+#ifndef OLD_DECODER
+inline std::size_t spip::UDPFormatMeerKATSPEAD::decode_cbf_packet (spip::cbf_packet_header &out, const uint8_t *data, std::size_t max_size)
+{
+  std::uint64_t header = spead2::load_be<std::uint64_t>(data);
+  if (extract_bits(header, 48, 16) != magic_version)
+  {
+    cerr << "packet rejected because magic or version did not match"  << endl;
+    return 0;
+  }
+
+  int item_id_bits = extract_bits(header, 40, 8) * 8;
+  int heap_address_bits = extract_bits(header, 32, 8) * 8;
+  if (item_id_bits == 0 || heap_address_bits == 0)
+  {
+    cerr << "packet rejected because flavour is invalid" << endl;
+    return 0;
+  }
+
+#ifdef _DEBUG
+  if (item_id_bits + heap_address_bits != 8 * sizeof(spead2::item_pointer_t))
+  {
+    cerr << "packet rejected because flavour is not SPEAD-64-*" << endl;;
+    return 0;
+  }
+#endif
+
+  out.n_items = extract_bits(header, 0, 16);
+  if (std::size_t(out.n_items) * sizeof(spead2::item_pointer_t) + 8 > max_size)
+  {
+    cerr << "packet rejected because the items overflow the packet" << endl;
+    return 0;
+  }
+
+  // Mark specials as not found
+  out.heap_cnt = -1;
+  out.heap_length = -1;
+  out.payload_offset = -1;
+  out.payload_length = -1;
+  out.timestamp = -1;
+  out.channel = -1;
+
+  // Look for special items
+  spead2::recv::pointer_decoder decoder(heap_address_bits);
+  int first_regular = out.n_items;
+  for (int i = 0; i < out.n_items; i++)
+  {
+    spead2::item_pointer_t pointer = spead2::load_be<spead2::item_pointer_t>(data + 8 + i * sizeof(spead2::item_pointer_t));
+    bool special;
+    if (decoder.is_immediate(pointer))
+    {
+      special = true;
+      switch (decoder.get_id(pointer))
+      {
+        case spead2::HEAP_CNT_ID:
+          out.heap_cnt = decoder.get_immediate(pointer);
+          break;
+        case spead2::HEAP_LENGTH_ID:
+          out.heap_length = decoder.get_immediate(pointer);
+          break;
+        case spead2::PAYLOAD_OFFSET_ID:
+          out.payload_offset = decoder.get_immediate(pointer);
+          break;
+        case spead2::PAYLOAD_LENGTH_ID:
+          out.payload_length = decoder.get_immediate(pointer);
+          break;
+        case 0x1600:
+          out.timestamp = decoder.get_immediate(pointer);
+          break;
+        case 0x4103:
+          out.channel = decoder.get_immediate(pointer);
+          break;
+        default:
+          special = false;
+          break;
+      }
+    }
+    else
+      special = false;
+      if (!special)
+          first_regular = std::min(first_regular, i);
+  }
+
+  if (out.heap_cnt == -1 || out.payload_offset == -1 || out.payload_length == -1)
+  {
+    cerr << "packet rejected because it does not have required items" << endl;
+    return 0;
+  }
+
+  std::size_t size = out.payload_length + out.n_items * sizeof(spead2::item_pointer_t) + 8;
+  if (size > max_size)
+  {
+    cerr << "packet rejected because payload length overflows packet size" << endl;
+    return 0;
+  }
+  if (out.heap_length >= 0 && out.payload_offset + out.payload_length > out.heap_length)
+  {
+    cerr << "packet rejected because payload would overflow given heap length" << endl;
+    return 0;
+  }
+
+  // Adjust the pointers to skip the specials, since live_heap::add_packet does not
+  // need them
+  out.pointers = data + 8 + first_regular * sizeof(spead2::item_pointer_t);
+  out.n_items -= first_regular;
+  out.payload = out.pointers + out.n_items * sizeof(spead2::item_pointer_t);
+  out.heap_address_bits = heap_address_bits;
+  return size;
+}
+
+inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned * pkt_size)
+{
+  decode_cbf_packet (cbf_header, (const uint8_t *) buf, 4160);
+
+  *pkt_size = (unsigned) cbf_header.payload_length;
+
+  if (!prepared || !configured)
+    throw runtime_error ("Cannot process packet if not configured and prepared");
+
+  // if this packet is a valid CBF packet
+  if (cbf_header.n_items == 1 && cbf_header.heap_length == heap_size)
+  {
+    // determine the spead stream for this packet
+    spead_stream = (cbf_header.channel - start_channel) / nchan_per_stream;
+
+    // check the spead stream is valid
+    if ((spead_stream < 0) || (spead_stream >= nstream))
+      return -1;
+
+    // determine the sample relative to start
+    const int64_t obs_sample = cbf_header.timestamp - obs_start_sample;
+   
+#ifdef _DEBUG
+      if (!first_packet)
+      {
+        if (offset == 1)
+          cerr << "FIRST PACKET cbf_header.timestamp=" << cbf_header.timestamp
+               << " obs_start_sample=" << obs_start_sample
+               << " obs_sample=" << obs_sample
+               << " samples_to_byte_offset=" << samples_to_byte_offset
+               << " heap_offset=" << (int64_t) (obs_sample * samples_to_byte_offset) << endl;
+        first_packet = true;
+      }
+#endif
+
+    // if this packet pre-dates our start time, ignore
+    if (obs_sample < 0)
+     return -1;
+
+    // compute the byte offset for this stream
+    return uint64_t(obs_sample * samples_to_byte_offset) + 
+                   (spead_stream * cbf_header.heap_length) +
+                    cbf_header.payload_offset;
+  } 
+  else
+  {
+    //print_cbf_packet_header();
+    if (check_stream_stop ())
+      return -2;
+    else
+      return -1;
+  }
+}
+
+#else
+
 void spip::UDPFormatMeerKATSPEAD::decode_spead (char * buf)
 {
+#ifdef OLD_DECODER
   spead2::recv::decode_packet (header, (const uint8_t *) buf, 4160);
+#else
+  decode_cbf_packet (cbf_header, (const uint8_t *) buf, 4160);
+#endif
 }
 
 // return byte offset for this payload in the whole data stream
@@ -307,7 +487,7 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
 
   // check if this packet belongs to a heap that is currently being accepted
   spead_stream = -1;
-  for (int i=0; i<num_spead_streams; i++)
+  for (int i=0; i<nstream; i++)
   {
     if (header.heap_cnt == curr_heap_cnts[i])
       spead_stream = i; 
@@ -396,20 +576,29 @@ inline int64_t spip::UDPFormatMeerKATSPEAD::decode_packet (char* buf, unsigned *
   return (int64_t) curr_heap_offsets[spead_stream] + header.payload_offset;
 }
 
+#endif
+
 inline int64_t spip::UDPFormatMeerKATSPEAD::get_subband (int64_t byte_offset, int nsubband)
 {
-  if (spead_stream >= half_num_spead_streams)
+  if (spead_stream >= half_nstream)
     return 1;
   else
     return 0;
 }
 
+#ifdef OLD_DECODER
 inline int spip::UDPFormatMeerKATSPEAD::insert_last_packet (char * buffer)
 {
   memcpy (buffer, header.payload, header.payload_length);
   return 0;
 }
-
+#else
+inline int spip::UDPFormatMeerKATSPEAD::insert_last_packet (char * buffer)
+{
+  memcpy (buffer, cbf_header.payload, cbf_header.payload_length);
+  return 0;
+}
+#endif
 
 // generate the next packet in the cycle
 inline void spip::UDPFormatMeerKATSPEAD::gen_packet (char * buf, size_t bufsz)
@@ -432,6 +621,8 @@ inline void spip::UDPFormatMeerKATSPEAD::gen_packet (char * buf, size_t bufsz)
   */
 
 }
+
+#ifdef OLD_DECODER
 // assume packet has been decoded
 int64_t spip::UDPFormatMeerKATSPEAD::get_timestamp_fast ()
 {
@@ -470,7 +661,7 @@ int64_t spip::UDPFormatMeerKATSPEAD::get_timestamp_and_channel()
     }
   }
 
-  int64_t spead_stream = (channel - start_channel) / channels_per_spead_stream;
+  int64_t spead_stream = (channel - start_channel) / nchan_per_stream;
   timestamps[spead_stream] = timestamp;
   assert (channels[spead_stream] == channel);
   return spead_stream;
@@ -530,3 +721,46 @@ void spip::UDPFormatMeerKATSPEAD::print_packet_timestamp ()
   cerr << packet_gmtime << "." << (adc_time - adc_time_secs) << " UTC" << endl;
 
 }
+
+#else
+
+bool spip::UDPFormatMeerKATSPEAD::check_stream_stop ()
+{
+  spead2::recv::pointer_decoder decoder(cbf_header.heap_address_bits);
+  for (int i = 0; i < cbf_header.n_items; i++)
+  {
+    spead2::item_pointer_t pointer = spead2::load_be<spead2::item_pointer_t>(cbf_header.pointers + i * sizeof(spead2::item_pointer_t));
+    spead2::s_item_pointer_t item_id = decoder.get_id(pointer);
+    if (item_id == spead2::STREAM_CTRL_ID && decoder.is_immediate(pointer) &&
+        decoder.get_immediate(pointer) == spead2::CTRL_STREAM_STOP)
+      return true;
+  }
+  return false;
+}
+
+void spip::UDPFormatMeerKATSPEAD::print_packet_header()
+{
+  cerr << "heap_cnt=" << cbf_header.heap_cnt << " heap_length=" << cbf_header.heap_length
+       << " payload_offset=" << cbf_header.payload_offset
+       << " payload_length=" << cbf_header.payload_length << " n_items="
+       << cbf_header.n_items << endl;
+
+  spead2::recv::pointer_decoder decoder(cbf_header.heap_address_bits);
+  for (int i = 0; i < cbf_header.n_items; i++)
+  {
+    // there should be items 
+    spead2::item_pointer_t pointer = spead2::load_be<spead2::item_pointer_t>(cbf_header.pointers + i * sizeof(spead2::item_pointer_t));
+
+    spead2::s_item_pointer_t item_id = decoder.get_id(pointer);
+    if (decoder.is_immediate(pointer))
+    {
+      uint64_t value = decoder.get_immediate(pointer);
+      cerr << "item[" << i << "] is_immediate " << " item_id=" << item_id << " value=" << value << endl;
+    }
+    else
+      cerr << "item[" << i << "] item_id=" << item_id << endl;
+
+  }
+}
+#endif
+

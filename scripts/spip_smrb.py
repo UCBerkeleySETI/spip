@@ -300,6 +300,7 @@ if __name__ == "__main__":
   stream_id = sys.argv[1]
 
   script = SMRBDaemon ("spip_smrb", stream_id)
+  script.cpu_list = "-1"
   state = script.configure (DAEMONIZE, DL, "smrb", "smrb")
   if state != 0:
     sys.exit(state)

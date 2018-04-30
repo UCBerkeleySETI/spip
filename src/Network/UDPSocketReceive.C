@@ -108,6 +108,7 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
 #ifdef _DEBUG
    cerr << "spip::UDPSocketReceive::open_multicast num_multicast=" << num_multicast << endl;
 #endif
+
     // build multicast addresses
     groups.resize(num_multicast);
     mreqs.resize(num_multicast);

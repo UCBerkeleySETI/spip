@@ -345,6 +345,7 @@ class TCSDaemon(Daemon):
             key = s[k]["@key"]
             val = s[k]["#text"]
             obs[key] = val
+            self.log(1, key + "=" + val)
  
           # inject the observation parameters         
           o = self.beam_states[b]["config"]["observation_parameters"]
@@ -438,7 +439,7 @@ class TCSDaemon(Daemon):
               self.log(2, "TCSDaemon::issue_start_cmd openSocket("+host+","+str(ctrl_port)+")")
               recv_sock = sockets.openSocket (DL, host, ctrl_port, 5)
               if recv_sock:
-                self.log(3, "TCSDaemon::issue_start_cmd sending obs_header")
+                self.log(3, "TCSDaemon::issue_start_cmd sending obs_header length=" + str(len(obs_header)))
                 recv_sock.send(obs_header)
                 self.log(3, "TCSDaemon::issue_start_cmd header sent")
                 recv_sock.close()
@@ -507,7 +508,7 @@ class TCSDaemon(Daemon):
               self.log(3, "issue_stop_cmd: openSocket("+host+","+str(ctrl_port)+")")
               sock = sockets.openSocket (DL, host, ctrl_port, 1)
               if sock:
-                self.log(3, "issue_stop_cmd: sending obs_header")
+                self.log(3, "issue_stop_cmd: sending obs_header len=" + str(len(obs_header)))
                 sock.send(obs_header)
                 self.log(3, "issue_stop_cmd: command sent")
                 sock.close()
