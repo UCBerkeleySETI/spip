@@ -205,7 +205,7 @@ int spip::AsciiHeader::set (const char* keyword, const char* format, ...)
     dup = strdup (eol);
 
   /* %Xs dictates only a minumum string length */
-  if (sprintf (key, "%-12s %-20s   ", keyword, value) < 0) {
+  if (sprintf (key, "%-19s %-20s   ", keyword, value) < 0) {
     if (dup)
       free (dup);
     perror ("ascii_header_set: error sprintf\n");
