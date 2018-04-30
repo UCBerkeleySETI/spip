@@ -166,7 +166,7 @@ void spip::UDPReceiver::receive ()
   if (verbose)
     cerr << "spip::UDPReceiver::receive sock->resize(" << sock_size << ")" << endl;
   sock->resize (sock_size);
-  sock->resize_kernel_buffer (16*1024*1024);
+  sock->resize_kernel_buffer (64*1024*1024);
 
   // virtual block, make about 128 MB
   size_t data_bufsz = nchan * ndim * npol;
@@ -187,7 +187,7 @@ void spip::UDPReceiver::receive ()
 
   // overflow buffer
   int64_t overflow_bufsz = nchan * ndim * npol;
-  while (overflow_bufsz < 2*1024*1024)
+  while (overflow_bufsz < 4*1024*1024)
     overflow_bufsz *= 2;
 
   int64_t overflow_lastbyte = 0;
@@ -209,7 +209,7 @@ void spip::UDPReceiver::receive ()
     got = sock->recv_from();
 
     // received a bad packet, brutal exit
-    if (got != packet_size)
+    if (got < packet_size)
     {
       cerr << "Received UDP packet of " << got << " bytes, expected " << packet_size << endl;
       spip::UDPSocketReceive::keep_receiving = false;
@@ -222,14 +222,14 @@ void spip::UDPReceiver::receive ()
 
         // update absolute limits
         curr_byte_offset = next_byte_offset;
-        next_byte_offset += data_bufsz;
+        next_byte_offset = curr_byte_offset + data_bufsz;
+        overflow_maxbyte = next_byte_offset + overflow_bufsz;
 
 #ifdef _DEBUG
         cerr << "spip::UDPReceiver::receive [" << curr_byte_offset << " - "
-             << next_byte_offset << "] (" << bytes_this_buf << ")" << endl;
+             << next_byte_offset << " - " << overflow_maxbyte
+             << "] (" << bytes_this_buf << ")" << endl;
 #endif
-
-        overflow_maxbyte = next_byte_offset + overflow_bufsz;
 
         if (overflow_lastbyte > 0)
         {
@@ -283,7 +283,7 @@ void spip::UDPReceiver::receive ()
 #ifdef _DEBUG
         cerr << "ELSE byte_offset=" << byte_offset << " [" << curr_byte_offset <<" - " << next_byte_offset << " - " << overflow_maxbyte << "] bytes_received=" << bytes_received << " bytes_this_buf=" << bytes_this_buf << endl; 
 #endif
-      need_next_block = true;
+        need_next_block = true;
       }
 
       if (bytes_this_buf >= data_bufsz || need_next_block)
