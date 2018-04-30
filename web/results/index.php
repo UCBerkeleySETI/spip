@@ -19,7 +19,6 @@ class results extends spip_webpage
 
     $this->config = spip::get_config();
     $this->beams = array();
-    $this->streams = array();
 
     $this->callback_freq = 60 * 1000;
     $this->inline_images = true;
@@ -34,9 +33,14 @@ class results extends spip_webpage
     {
       list ($host, $ibeam, $subband) = explode (":", $this->config["STREAM_".$istream]);
 
+      # determine if the results is running on streams or server
+      if (strpos($this->config["SERVER_DAEMONS"], "spip_results") !== false)
+      {
+        $host = $this->config["SERVER_HOST"];
+      }
+
       $beam_name = $this->config["BEAM_".$ibeam];
-      $this->beams[$istream] = array("beam_name" => $beam_name, "host" => $host, "port" => ($this->config["BEAM_RESULTS_PORT"] + $ibeam));
-      $this->streams[$istream] = array("beam_name" => $beam_name, "host" => $host, "port" => ($this->config["BEAM_RESULTS_PORT"] + $ibeam));
+      $this->beams[$ibeam] = array("beam_name" => $beam_name, "host" => $host, "port" => ($this->config["BEAM_RESULTS_PORT"] + $ibeam));
     }
   }
 
@@ -255,15 +259,16 @@ class results extends spip_webpage
     $index = isset($get["index"]) ? $get["index"] : 0;
     $count = isset($get["count"]) ? $get["count"] : 20;
 
-    $xml = "<results_update>";
+    $xml  = XML_DEFINITION;
+    $xml .= "<results_update>";
 
-    foreach ($this->streams as $istream => $stream)
+    foreach ($this->beams as $ibeam => $beam)
     {
       $results_socket = new spip_socket();
 
-      $host = $stream["host"];
-      $port = $stream["port"];
-      $beam_name = $stream["beam_name"];
+      $host = $beam["host"];
+      $port = $beam["port"];
+      $beam_name = $beam["beam_name"];
 
       $xml_req  = XML_DEFINITION;
       $xml_req .= "<results_request>";
@@ -304,12 +309,12 @@ class results extends spip_webpage
     {
       $host = "unknown";
       $port = "-1";
-      foreach ($this->streams as $istream => $stream)
+      foreach ($this->beams as $ibeam => $beam)
       {
-        if ($stream["beam_name"] == $get["beam"])
+        if ($beam["beam_name"] == $get["beam"])
         {
-          $host = $stream["host"];
-          $port = $stream["port"];
+          $host = $beam["host"];
+          $port = $beam["port"];
         }
       }
 
