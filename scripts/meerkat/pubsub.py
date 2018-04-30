@@ -91,12 +91,15 @@ class PubSubThread (threading.Thread):
 
     self.chatty_sensors = ["RA", "DEC", "PRECISETIME_FRACTION_POLH", "PRECISETIME_UNCERTAINTY_POLH", \
                            "PRECISETIME_FRACTION_POLV", "PRECISETIME_UNCERTAINTY_POLV", "TFR_GNSS_KTT"]
+    self.script.log(1, "PubSubThread::configure self.antennae=" + str(self.antennae))
 
     for i in range(len(self.antennae)):
-      if i % 2 == 0:
-        sensors["ANT_WEIGHT_" + i] = {"comp": "cbf", "sensor": self.polh_stream + "-input" + str(i) + "-weight"}
+      if not i % 2 == 0:
+        sensors["ANT_WEIGHT_" + str(i)] = {"comp": "cbf", "sensor": self.polh_stream + "-input" + str(i) + "-weight"}
+        self.script.log(1, "PubSubThread::configure i=" + str(i) + " stream=" + self.polh_stream)
       else:
-        sensors["ANT_WEIGHT_" + i] = {"comp": "cbf", "sensor": self.polv_stream + "-input" + str(i) + "-weight"}
+        sensors["ANT_WEIGHT_" + str(i)] = {"comp": "cbf", "sensor": self.polv_stream + "-input" + str(i) + "-weight"}
+        self.script.log(1, "PubSubThread::configure i=" + str(i) + " stream=" + self.polv_stream)
   
     self.script.log(3, "PubSubThread::configure sensors=" + str(sensors))
     for key in sensors.keys():
