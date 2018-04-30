@@ -26,6 +26,7 @@ class tests extends spip_webpage
     $this->search_config = $this->get_search_config();
     $this->continuum_config = $this->get_continuum_config();
     $this->baseband_config = $this->get_baseband_config();
+    $this->vlbi_config = $this->get_vlbi_config();
   }
   
   function build_hash ($prefix, $xml, $key, $name, $type, $value, $size, $attr="", $onchange="")
@@ -71,6 +72,7 @@ class tests extends spip_webpage
     $a = array();
     array_push($a, $this->build_hash("custom", "adaptive_filter_epsilon", "ADAPTIVE_FILTER_EPSILON", "Adaptive Filter Epsilon", "text", "0.1", "4"));
     array_push($a, $this->build_hash("custom", "adaptive_filter_nchan", "ADAPTIVE_FILTER_NCHAN", "Adaptive Filter Channels", "text", "128", "5"));
+    array_push($a, $this->build_hash("custom", "adaptive_filter_nsamp", "ADAPTIVE_FILTER_NSAMP", "Adaptive Filter Samples", "text", "1024", "5"));
     return $a;
   }
 
@@ -94,7 +96,10 @@ class tests extends spip_webpage
     array_push($a, $this->build_hash("fold", "output_nbin", "FOLD_OUTNBIN", "Number of output phase bins", "text", "1024", "8"));
     array_push($a, $this->build_hash("fold", "output_tsubint", "FOLD_OUTTSUBINT", "Output subint length [s]", "text", "10", "8"));
     array_push($a, $this->build_hash("fold", "output_npol", "FOLD_OUTNPOL", "Number of output polarisations", "text", "4", "1"));
-    array_push($a, $this->build_hash("fold", "mode", "MODE", "Observing Type", "radio", array("PSR" => "true", "CAL" => false), "8"));
+    array_push($a, $this->build_hash("fold", "mode", "MODE", "Observing Type", "radio", array("PSR" => "true", "CAL" => "false"), "8"));
+    array_push($a, $this->build_hash("fold", "sk", "FOLD_SK", "Spectral Kurtosis", "bool", "false", "8"));
+    array_push($a, $this->build_hash("fold", "sk_threshold", "FOLD_SK_THRESHOLD", "Spectral Kurtosis Threshold", "text", "3", "8"));
+    array_push($a, $this->build_hash("fold", "sk_nsamps", "FOLD_SK_NSAMPS", "Spectral Kurtosis Samples", "text", "1024", "8"));
     return $a;
   }
 
@@ -118,6 +123,18 @@ class tests extends spip_webpage
     array_push($a, $this->build_hash("continuum", "output_npol", "CONTINUUM_OUTNPOL", "Number of output polarisations", "text", "4", "1"));
     return $a;
   }
+
+  function get_vlbi_config()
+  {
+    $a = array();
+    array_push($a, $this->build_hash("vlbi", "auto_gain", "VLBI_AUTO_GAIN", "Automatic gain control", "bool", "true", "8"));
+    array_push($a, $this->build_hash("vlbi", "level_setting", "VLBI_LEVEL_SETTING", "Level setting Options", "select", array("1" => "No Level Setting", "1" => "Adaptive", "2" => "Constant"), "8"));
+    array_push($a, $this->build_hash("vlbi", "level_time_scale", "VLBI_TIME_SCALE", "Level setting timescale", "text", 1, "8"));
+    array_push($a, $this->build_hash("vlbi", "output_nbit", "OUTNBIT", "Output bits per sample", "text", "8", "2"));
+    array_push($a, $this->build_hash("vlbi", "output_bw", "OUTBW", "Output bandwidth", "select", array("16" => "16 MHz", "32" => "32 MHz", "64" => "64 MHz", "128" => "128 MHz"), "8"));
+    return $a;
+  }
+
 
   function get_baseband_config()
   {
@@ -380,7 +397,32 @@ class tests extends spip_webpage
   function renderVLBIMode ()
   {
     $this->renderProcessingModeHeader("VLBI Processing Mode Parameters", "vlbi", 0);
+    $this->renderProcessingRows($this->vlbi_config);
     $this->renderProcessingModeFooter();
+  }
+
+  function boolActive($c, $get)
+  {
+    $val = "0";
+    if (array_key_exists($c["prefix"]."_".$c["tag"], $get))
+    {
+      if ($get[$c["prefix"]."_".$c["tag"]] == "on")
+       $val ="1";
+    }
+    return $val;
+  }
+
+  function generateXMlTag($c, $get)
+  {
+    if ($c["type"] == "bool")
+    {
+      $val = $this->boolActive ($c, $get);
+    }
+    else
+    {
+      $val = $get[$c["prefix"]."_".$c["tag"]];
+    }
+    return "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
   }
 
   function printSPIPResponse($get)
@@ -391,8 +433,7 @@ class tests extends spip_webpage
     $xml .= "<beam_configuration>";
     foreach ($this->beam_config as $c)
     {
-      $val = $get[$c["prefix"]."_".$c["tag"]];
-      $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+      $xml .= $this->generateXMLTag($c, $get);
     }
     $xml .= "</beam_configuration>";
 
@@ -401,16 +442,14 @@ class tests extends spip_webpage
       $xml .= "<source_parameters>";
       foreach ($this->source_config as $c)
       {
-        $val = $get[$c["prefix"]."_".$c["tag"]];
-        $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+        $xml .= $this->generateXMLTag($c, $get);
       }
       $xml .= "</source_parameters>";
 
       $xml .= "<observation_parameters>";
       foreach ($this->obs_config as $c)
       {
-        $val = $get[$c["prefix"]."_".$c["tag"]];
-        $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+        $xml .= $this->generateXMLTag($c, $get);
       } 
       $xml .=   "<utc_start key='UTC_START'>None</utc_start>";
       $xml .=   "<utc_stop key='UTC_STOP'>None</utc_stop>";
@@ -419,8 +458,7 @@ class tests extends spip_webpage
       $xml .= "<custom_parameters>";
       foreach ($this->custom_config as $c)
       {
-        $val = $get[$c["prefix"]."_".$c["tag"]];
-        $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+        $xml .= $this->generateXMLTag($c, $get);
       }
       $xml .= "</custom_parameters>";
 
@@ -428,18 +466,8 @@ class tests extends spip_webpage
       $xml .= "<processing_modes>";
       foreach ($this->proc_modes as $c)
       {
-        $k = $c["prefix"]."_".$c["tag"];
-        if (array_key_exists($c["prefix"]."_".$c["tag"], $get))
-        {
-          if ($get[$c["prefix"]."_".$c["tag"]] == "on")
-            $val ="1";
-          else
-            $val = "0";
-        }
-        else
-          $val = "0";
-        $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
-        if ($val == "1")
+        $xml .= $this->generateXMLTag($c, $get);
+        if ($this->boolActive($c, $get) == "1")
           array_push ($modes, $c["tag"]);
       }
 
@@ -450,8 +478,7 @@ class tests extends spip_webpage
         $xml .= "<fold_processing_parameters>";
         foreach ($this->fold_config as $c)
         {
-          $val = $get[$c["prefix"]."_".$c["tag"]];
-          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+          $xml .= $this->generateXMLTag($c, $get);
         }
         $xml .= "</fold_processing_parameters>";
       }
@@ -461,8 +488,7 @@ class tests extends spip_webpage
         $xml .= "<search_processing_parameters>";
         foreach ($this->search_config as $c)
         {
-          $val = $get[$c["prefix"]."_".$c["tag"]];
-          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+          $xml .= $this->generateXMLTag($c, $get);
         }
         $xml .= "</search_processing_parameters>";
       }
@@ -472,8 +498,7 @@ class tests extends spip_webpage
         $xml .= "<continuum_processing_parameters>";
         foreach ($this->continuum_config as $c)
         {
-          $val = $get[$c["prefix"]."_".$c["tag"]];
-          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+          $xml .= $this->generateXMLTag($c, $get);
         }
         $xml .= "</continuum_processing_parameters>";
       }
@@ -483,8 +508,7 @@ class tests extends spip_webpage
         $xml .= "<spectral_line_processing_parameters>";
         foreach ($this->spectral_line_config as $c)
         {
-          $val = $get[$c["prefix"]."_".$c["tag"]];
-          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+          $xml .= $this->generateXMLTag($c, $get);
         }
         $xml .= "</spectral_line_processing_parameters>";
       }
@@ -494,8 +518,7 @@ class tests extends spip_webpage
         $xml .= "<vlbi_processing_parameters>";
         foreach ($this->vlbi_config as $c)
         {
-          $val = $get[$c["prefix"]."_".$c["tag"]];
-          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+          $xml .= $this->generateXMLTag($c, $get);
         }
         $xml .= "</vlbi_processing_parameters>";
       }
@@ -505,8 +528,7 @@ class tests extends spip_webpage
         $xml .= "<baseband_processing_parameters>";
         foreach ($this->baseband_config as $c)
         {
-          $val = $get[$c["prefix"]."_".$c["tag"]];
-          $xml .= "<".$c["tag"]." key='".$c["key"]."' ".$c["attr"].">".$val."</".$c["tag"].">";
+          $xml .= $this->generateXMLTag($c, $get);
         }
         $xml .= "</baseband_processing_parameters>";
       }
@@ -527,6 +549,20 @@ class tests extends spip_webpage
     else
     {
       echo "ERROR: command [".$get["command"]."] not reconized<br/>\n";
+      return;
+    }
+
+    // for debug of XML message only
+    $testing = 0;
+    if ($testing == 1)
+    {
+      $html = XML_DEFINITION;
+      $html .= "<obs_cmd>";
+      $html .= $xml;
+      $html .= "</obs_cmd>";
+    
+      header("Content-type: text/xml");
+      echo $html;
       return;
     }
 
@@ -606,6 +642,7 @@ class tests extends spip_webpage
     echo $html;
   }
 
+
   function renderProcessingRows($array)
   {
     foreach ($array as $c)
@@ -643,9 +680,18 @@ class tests extends spip_webpage
       {
         $checked = "";
         if ($val == "true") $checked = " checked";
-        echo "<input type='radio' name='".$name."' id='".$id."'".$checked."/>";
+        echo "<input type='radio' name='".$name."' id='".$id."' value='".$key."'".$checked."/>";
         echo "<label for='".$c["tag"]."'>".$key."</label>";
       }
+    }
+    else if ($c["type"] == "select")
+    {
+      echo "<select name='".$name."' id='".$id."'>";
+      foreach ($c["value"] as $key => $val)
+      {
+        echo "<option value='".$key."'>".$val."</option>";
+      }
+      echo "</select>\n";
     }
     else
     {
