@@ -33,6 +33,8 @@ namespace spip {
 
       void transform_TFPS_to_TFPS ();
 
+      void transform_TSPFB_to_TSPFB ();
+
     protected:
     
     private:

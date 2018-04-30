@@ -10,7 +10,7 @@
 import sys, traceback
 from time import sleep
 
-from ../spip_recvsim import RecvSimDaemon
+from spip_recvsim import RecvSimDaemon,ConfiguringThread
 from uwb_config import UWBConfig
 
 DAEMONIZE = True

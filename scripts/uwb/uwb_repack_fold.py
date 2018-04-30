@@ -192,6 +192,31 @@ class RepackFoldDaemon(Daemon):
     return 0, ""
 
   #
+  # create a remote directory for the observation
+  #
+  def create_remote_dir (self, utc, source):
+
+    in_dir = self.processing_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
+    rem_dir = self.cfg["SERVER_FOLD_DIR"] + "/processing/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
+    ctrl_file = in_dir + "/remdir.created"
+
+    # use a local control file to know if remote directory exists
+    if not os.path.exists(ctrl_file):
+      cmd = "ssh " + self.rsync_user + "@" + self.rsync_server + " 'mkdir -p " + rem_dir + "'";
+      rval, lines = self.system(cmd, 2)
+      if rval:
+        return (rval, "failed to create remote dir " + str(lines[0]))
+
+      cmd = "touch " + ctrl_file
+      rval, lines = self.system(cmd, 2)
+      if rval:
+        return (rval, "failed to create control file " + str(lines[0]))
+
+      return (0, "remote directory created")
+    else:
+      return (0, "remote directory existed")
+
+  #
   # process and file in the directory, adding file to 
   #
   def process_archive (self, utc, source, file): 
@@ -207,12 +232,10 @@ class RepackFoldDaemon(Daemon):
       if not os.path.exists(dir):
         os.makedirs(dir, 0755)
 
-    # ensure required remote directories exist
-    rem_dir = self.cfg["SERVER_FOLD_DIR"] + "/processing/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
-    cmd = "ssh " + self.rsync_user + "@" + self.rsync_server + " 'mkdir -p " + rem_dir + "'";
-    rval, lines = self.system(cmd, 2)
+    rval, message = self.create_remote_dir (utc, source)
     if rval:
-      return (rval, "failed to create remote dir " + str(lines[0])) 
+      self.log (-2, "RepackFoldDaemon::process_archive create_remote_dir failed: " + message)
+      return (rval, "failed to create remote directory: " + message)
 
     input_file = in_dir + "/" + file
     header_file = in_dir + "/obs.header"
@@ -288,6 +311,11 @@ class RepackFoldDaemon(Daemon):
     cmd = "touch " + arch_dir + "/obs.failed"
     rval, lines = self.system (cmd, 3)
 
+    self.log (3, "RepackFoldDaemon::fail_observation create_remote_dir(" + utc + ", " + source + ")")
+    (rval, message) = self.create_remote_dir (utc, source)
+    if rval:
+      return (1, "fail_observation: failed to create remote directory: " + message)
+
     # touch obs.failed file in the remote processing directory
     rem_cmd = "touch " + self.cfg["SERVER_FOLD_DIR"] + "/processing/" + self.beam + \
           "/" + utc + "/" + source + "/" + self.cfreq + "/obs.failed"
@@ -338,6 +366,11 @@ class RepackFoldDaemon(Daemon):
     rval, lines = self.system (cmd, 3)
     if rval:
       return (1, "finalise_observation: failed to create " + arch_dir + "/obs.finished")
+
+    self.log (3, "RepackFoldDaemon::finalise_observation create_remote_dir(" + utc + ", " + source + ")")
+    (rval, message) = self.create_remote_dir (utc, source)
+    if rval:
+      return (1, "finalise_observation: failed to create remote directory: " + message)
 
     # touch obs.finished file in the remote directory
     rem_cmd = "touch " + self.cfg["SERVER_FOLD_DIR"] + "/processing/" + self.beam + \

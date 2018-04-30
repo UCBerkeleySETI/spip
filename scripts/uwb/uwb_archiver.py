@@ -7,11 +7,10 @@
 # 
 ###############################################################################
 
-import logging
-import sys, os, traceback
+import logging, sys, os, traceback, socket
 from time import sleep
 
-from spip.daemons.bases import StreamBased
+from spip.daemons.bases import StreamBased,ServerBased
 from spip.daemons.daemon import Daemon
 from spip.config import Config
 
@@ -26,158 +25,116 @@ class UWBArchiverDaemon(Daemon):
     Daemon.__init__(self, name, str(id))
     self.beams = []
 
-    self.rsync_server = "caspsr-raid0.atnf.csiro.au"
-    self.rsync_module = "uwb";
-    self.rsync_username = "uwb";
-    self.rsync_password = "uwb";
+    self.rsync_server = "herschel.atnf.csiro.au"
+    self.rsync_username = "swinburne"
+    self.rsync_module = "uwl_incoming"
+    self.rsync_options =  "-a --relative --stats --no-g --no-l -chmod go-ws " + \
+                          "--password-file=/home/uwb/.ssh/herschel_pw --bwlimit=10240"
 
   def configure (self, become_daemon, dl, source, dest):
     Daemon.configure (self, become_daemon, dl, source, dest)
     return 0
 
-  def extractKey(self, dict, key):
-    if key in dict.keys():
-      return dict[key]
-    else:
-      return ""
-
-  def generateObsInfoDat (self, finished_subdir, completed_subdir):
-
-    obs_results_file = self.finished_dir + "/" + finished_subdir + "/obs.results"
-    obs_header_file = self.completed_dir + "/" + completed_subdir + "/obs.header"
-    obs_info_dat_file = self.completed_dir + "/" + completed_subdir + "/obs_info.dat"
-   
-    if not os.path.exists (obs_info_dat_file):
-
-      self.log (2, "UWBArchiverDaemon::generateObsInfoDat creating obs_info.dat")
-
-      if not os.path.exists(obs_results_file):
-        self.log (-1, "UWBArchiverDaemon::generateObsInfoDat: " + obs_results_file + " did not exist")
-        return ("fail", "obs.results file did not exist")
-      obs_results = Config.readCFGFileIntoDict(obs_results_file)
-
-      if not os.path.exists(obs_header_file):
-        self.log (-1, "UWBArchiverDaemon::generateObsInfoDat: " + obs_header_file + " did not exist")
-        return ("fail", "obs.header file did not exist")
-      obs_header = Config.readCFGFileIntoDict(obs_header_file)
-
-      obs_info_dat = {}
-  
-      obs_info_dat["observer"] = self.extractKey(obs_header ,"OBSERVER")
-      obs_info_dat["program_block_id"] = self.extractKey(obs_header, "PROGRAM_BLOCK_ID")
-      obs_info_dat["targets"] = "['" + self.extractKey(obs_header,"SOURCE") + "']"
-      obs_info_dat["mode"] = self.extractKey(obs_header,"MODE")
-      obs_info_dat["sb_id_code"] = self.extractKey(obs_header,"SCHEDULE_BLOCK_ID")
-      obs_info_dat["target_duration"] = self.extractKey(obs_results, "length")
-      obs_info_dat["target_snr"] = self.extractKey(obs_results, "snr")
-      obs_info_dat["proposal_id"] = self.extractKey(obs_header, "PROPOSAL_ID")
-      obs_info_dat["description"] = self.extractKey(obs_header, "DESCRIPTION")
-      obs_info_dat["backend_args"] = "TBD"
-      obs_info_dat["experiment_id"] = self.extractKey(obs_header,"EXPERIMENT_ID")
-
-      Config.writeDictToColonSVFile(obs_info_dat, obs_info_dat_file)
-
-    else:
-      self.log (2, "UWBArchiverDaemon::generateObsInfoDat obs_info.dat existed")
-
-    return ("ok", "")
-
   def main (self):
 
-    self.ftp_server = "hdd-pod1.kat.ac.za"
-    self.ftp_username = "kat"
-    self.ftp_password = "kat"
-    self.local_path = self.completed_dir
-    self.remote_path = "staging"
-
-    self.log (2, "main: creating AuthenticatedFtpTransfer")
-
-    try:
-      self.ftp_agent = katsdptransfer.ftp_transfer.AuthenticatedFtpTransfer (server=self.ftp_server, username=self.ftp_username, password=self.ftp_password, local_path=self.local_path,remote_path=self.remote_path, tx_md5=False)
-    except gaierror as e:
-      self.log (0, "main: katsdtransfer failed to initialize: " + str(e))
-      self.quit_event.set()
+    self.log(2, "UWBArchiverDaemon::main starting main loop")    
 
     while not self.quit_event.isSet():
 
-      # look for observations that have been completed archived / beam / utc / source
-      cmd = "find " + self.completed_dir + " -mindepth 5 -maxdepth 5 -type f -name 'obs.finished' -mmin +1 | sort"
-      rval, fin_files = self.system(cmd, 2)
-      if rval:
-        self.log (-1, "main: find command failed: " + fin_files[0])
-        sleep(1)
-      else:
+      # for each directory that has a completed dir
+      for proc_type in self.proc_types:
 
-        for path in fin_files:
+        self.log(2, "UWBArchiverDaemon::main proc_type=" + proc_type)
+
+        # for each configured beam (there is only 1 for UWB)
+        for beam in self.beams:
+
+          self.log(2, "UWBArchiverDaemon::main beam=" + beam)
 
           if self.quit_event.isSet():
             continue
- 
-          # strip dir prefix
-          subpath = path [(len(self.completed_dir)+1):] 
 
-          (beam, utc, source, cfreq, file) = subpath.split("/")
+          # the input and output directories
+          completed_dir = self.completed_dirs[proc_type] + "/" + beam
+          sent_dir      = self.sent_dirs[proc_type] + "/" + beam
 
-          finished_subdir = beam + "/" + utc + "/" + source
-          completed_subdir = beam + "/" + utc + "/" + source + "/" + cfreq
+          if not os.path.exists(completed_dir):
+            self.log(-1, "completed_dir [" + completed_dir + "] did not exist")
+            cmd = "mkdir -p " + completed_dir
+            rval, lines = self.system(cmd, 2)
+            if rval:
+              self.log(-2, "Could not create completed dir [" + completed_dir + "]")
+              return 1
 
-          # form the obs.dat file that is parsed during ingest
-          (rval, response) = self.generateObsInfoDat (finished_subdir, completed_subdir)
-          if not rval == "ok":
-            self.log (-1, "main: self.generateObsInfoDat for " + utc + " failed: " + response)
-            base_dir = self.completed_dir + "/" + completed_subdir
-            os.rename (base_dir + "/obs.finished", base_dir + "/obs.failed")
-            continue
+          if not os.path.exists(sent_dir):
+            self.log(-1, "sent_dir [" + sent_dir + "] did not exist")
+            cmd = "mkdir -p " + sent_dir
+            rval, lines = self.system(cmd, 2)
+            if rval:
+              self.log(-2, "Could not create sent dir [" + sent_dir + "]")
+              return 1
 
-          # name of the directory to transfer (flat)
-          ftp_utc = utc.replace(":","").replace("-","")
-          ftp_source = source.replace("+","p").replace("-","m")
-          ftp_dir = "PTUSE_" + beam + "_" + ftp_utc + "_" + ftp_source
-
-          self.log (2, "main: ftp_dir=" + ftp_dir)
-
-          cmd = "find " + self.completed_dir + "/" + completed_subdir + " -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | grep -v obs.finished | sort -n"
-          rval, files = self.system(cmd, 3)
+          # look for observations that have been completed and have / BEAM / utc / source / CFREQ
+          self.log(2, "UWBArchiverDaemon::main looking for obs.finished in " + completed_dir + "/UTC/SOURCE/" + self.cfreq)
+          cmd = "find " + completed_dir + " -type f -path '*/" + self.cfreq + "/obs.finished' -mmin +5 | sort"
+          rval, fin_files = self.system(cmd, 2)
           if rval:
-            self.log (-1, "main: find command failed: " + files[0])
+            self.log (-1, "UWBArchiverDaemon::main find command failed: " + fin_files[0])
             sleep(1)
-          else:
+            continue
+      
+          self.log(2, "UWBArchiverDaemon::main assessing obs.finished observations") 
+          # transfer the completed directory to herschel
+          for path in fin_files:
 
-            self.ftp_agent.remote_path = self.remote_path + "/" + ftp_dir + ".writing"
-            self.log (2, "main: ftp_agent.remote_path=" + self.ftp_agent.remote_path)
+            # strip dir prefix
+            subpath = path [(len(completed_dir)+1):] 
 
-            self.log (2, "main: creating ftp_agent.connecting to " + self.ftp_server)
-            self.ftp_agent.connect()
-          
-            self.log (2, "main: transferring " + str(len(files)) + " files")
+            # extract the the beam, utc, source and cfreq
+            (utc, source, cfreq, file) = subpath.split("/")
+            utc_source = utc + "/" + source
 
-            self.log (1, beam + "/" + utc + "/"  + source + " transferring")
+            self.log (2, "UWBArchiverDaemon::main found obs to transfer " + utc_source)
 
-            for file in files:
+            # finished and completed directories
+            finished_subdir = utc_source
+            completed_subdir = utc_source + "/" + cfreq
 
-              self.ftp_agent.local_path = self.completed_dir + "/" + completed_subdir
-              self.log (3, "main: ftp_agent.local_path=" + self.ftp_agent.local_path)
-              self.log (3, "main: ftp_agent.remote_path=" + self.ftp_agent.remote_path)
-              self.log (3, "main: ftp_agent.put(" +file +")")
+            # determine the size of the data to be transferred
+            cmd = "du -sb " + completed_dir + "/" + completed_subdir + " | awk '{print $1}'"
+            rval, size = self.system(cmd, 2)
+            if rval:
+              self.log (-1, "failed to determine size of " + completed_subdir)
+            else:
+              self.log (2, "UWBArchiverDaemon::main transferring " + (str(float(size[0])/1048576)) + " MB")
+      
+            # change to the beam directory
+            os.chdir (completed_dir)
 
-              self.ftp_agent.put (file)
+            # build the rsync command TODO handle fold/search/etc
+            cmd = "rsync ./" + completed_subdir + " " + \
+                  self.rsync_username + "@" + self.rsync_server + "::" + self.rsync_module + "/" + proc_type + "/ " + \
+                  self.rsync_options
 
-            self.log (2, "main: ftp_agent.rename remote path, removing .writing")
-            self.ftp_agent.ftp.rename (self.remote_path + "/" + ftp_dir + ".writing", self.remote_path + "/" + ftp_dir)
+            # run the rsync command
+            rval, size = self.system (cmd, 2)
+            if rval:
+              self.log (-1, "failed to transfer " + completed_subdir)
 
-            self.log (2, "main: ftp_agent.close()")
-            self.ftp_agent.close()
+            # create a parent directory in the transferred dir
+            cmd = "mkdir -p " + sent_dir + "/" + utc_source
+            rval, lines = self.system(cmd, 2)
 
             # now move this observation from completed to transferred
-            cmd = "mkdir -p " + self.transferred_dir + "/" + beam
-            rval, lines = self.system(cmd, 2)
-            cmd = "mv " + self.completed_dir + "/" + beam + "/" + utc + " " + self.transferred_dir + "/" + beam + "/"
+            cmd = "mv " + completed_dir + "/" + utc_source + "/" + cfreq + " " + sent_dir + "/" + utc_source
             rval, lines = self.system(cmd, 2)
 
-            self.log (1, beam + "/" + utc + "/"  + source + " transferred")
+            self.log (1, utc_source + " transferred")
+
+            self.quit_event.set()
 
       to_sleep = 10
-      self.log (2, "main: sleeping " + str(to_sleep) + " seconds")
+      self.log (2, "UWBArchiverDaemon::main sleeping " + str(to_sleep) + " seconds")
       while to_sleep > 0 and not self.quit_event.isSet():
         sleep(1)
         to_sleep -= 1
@@ -196,15 +153,26 @@ class UWBArchiverServerDaemon(UWBArchiverDaemon, ServerBased):
 
     UWBArchiverDaemon.configure (self, become_daemon, dl, source, dest)
 
-    self.completed_dir   = self.cfg["SERVER_FOLD_DIR"] + "/archived"
-    self.finished_dir   = self.cfg["SERVER_FOLD_DIR"] + "/finished"
-    self.transferring_dir   = self.cfg["SERVER_FOLD_DIR"] + "/send"
-    self.transferred_dir = self.cfg["SERVER_FOLD_DIR"] + "/sent"
+    self.proc_types = ["fold", "search"]
+    self.completed_dirs   = {}
+    self.finished_dirs    = {}
+    self.sent_dirs = {}
+
+    self.completed_dirs["fold"]   = self.cfg["SERVER_FOLD_DIR"] + "/archived"
+    self.completed_dirs["search"] = self.cfg["SERVER_SEARCH_DIR"] + "/archived"
+
+    self.finished_dirs["fold"]   = self.cfg["SERVER_FOLD_DIR"] + "/finished"
+    self.finished_dirs["search"] = self.cfg["SERVER_SEARCH_DIR"] + "/finished"
+
+    self.sent_dirs["fold"]   = self.cfg["SERVER_FOLD_DIR"] + "/sent"
+    self.sent_dirs["search"] = self.cfg["SERVER_SEARCH_DIR"] + "/sent"
 
     for i in range(int(self.cfg["NUM_BEAM"])):
       bid = self.cfg["BEAM_" + str(i)]
       self.beams.append(bid)
     return 0
+
+    self.cfreq = ""
 
 
 ###############################################################################
@@ -220,17 +188,29 @@ class UWBArchiverStreamDaemon (UWBArchiverDaemon, StreamBased):
     self.log(1, "UWBArchiverStreamDaemon::configure()")
     UWBArchiverDaemon.configure(self, become_daemon, dl, source, dest)
 
-    self.dirs = {}
-    self.dirs["fold"] = 
-  
+    self.proc_types = ["fold", "search"]
+    self.completed_dirs   = {}
+    self.finished_dirs    = {}
+    self.sent_dirs = {}
 
-    self.completed_dir   = self.cfg["CLIENT_FOLD_DIR"] + "/archived"
-    self.finished_dir   = self.cfg["CLIENT_FOLD_DIR"] + "/finished"
-    self.transferring_dir = self.cfg["CLIENT_FOLD_DIR"] + "/send"
-    self.transferred_dir = self.cfg["CLIENT_FOLD_DIR"] + "/sent"
+    self.completed_dirs["fold"]   = self.cfg["CLIENT_FOLD_DIR"] + "/archived"
+    self.completed_dirs["search"] = self.cfg["CLIENT_SEARCH_DIR"] + "/archived"
 
-    bid = self.cfg["BEAM_" + str(self.beam_id)]
-    self.beams.append(bid)
+    self.finished_dirs["fold"]   = self.cfg["CLIENT_FOLD_DIR"] + "/finished"
+    self.finished_dirs["search"] = self.cfg["CLIENT_SEARCH_DIR"] + "/finished"
+
+    self.sent_dirs["fold"]   = self.cfg["CLIENT_FOLD_DIR"] + "/sent"
+    self.sent_dirs["search"] = self.cfg["CLIENT_SEARCH_DIR"] + "/sent"
+
+    # determine the beam name
+    (host, beam_id, subband_id) = self.cfg["STREAM_" + self.id].split(":")
+    beam_name = self.cfg["BEAM_" + beam_id]
+    self.beams.append(beam_name)
+
+    # determine the subband config to find the centre frequency
+    (cfreq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + subband_id].split(":")
+    self.cfreq = cfreq
+
     return 0
     
 ###############################################################################
@@ -238,15 +218,17 @@ class UWBArchiverStreamDaemon (UWBArchiverDaemon, StreamBased):
 
 if __name__ == "__main__":
 
+  # logging.basicConfig(filename='example.log', filemode='w', level=logging.DEBUG)
+
   if len(sys.argv) != 2:
     print "ERROR: 1 command line argument expected"
     sys.exit(1)
 
   # this should come from command line argument
-  stream_id = sys.argv[1]
+  beam_id = sys.argv[1]
 
   script = []
-  if int(stream_id) == -1:
+  if int(beam_id) == -1:
     script = UWBArchiverServerDaemon ("uwb_archiver")
   else:
     script = UWBArchiverStreamDaemon ("uwb_archiver", beam_id)
@@ -255,7 +237,7 @@ if __name__ == "__main__":
   if state != 0:
     sys.exit(state)
 
-  script.log(2, "STARTING SCRIPT")
+  script.log(1, "STARTING SCRIPT")
 
   try:
     script.main ()
@@ -267,6 +249,6 @@ if __name__ == "__main__":
     traceback.print_exc(file=sys.stdout)
     print '-'*60
 
-  script.log(2, "STOPPING SCRIPT")
+  script.log(1, "STOPPING SCRIPT")
   script.conclude()
   sys.exit(0)

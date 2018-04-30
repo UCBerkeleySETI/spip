@@ -4,6 +4,7 @@
  *   Licensed under the Academic Free License version 2.1
  *
  ***************************************************************************/
+
 #include "config.h"
 #include "spip/Container.h"
 #include "spip/DataBlockRead.h"

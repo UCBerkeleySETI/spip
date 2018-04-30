@@ -42,6 +42,8 @@ namespace spip {
 
       virtual void transform_TFPS_to_TFPS () = 0;
 
+      virtual void transform_TSPFB_to_TSPFB () = 0;
+
     protected:
 
       unsigned nchan;
@@ -55,6 +57,8 @@ namespace spip {
       unsigned nsignal;
 
       uint64_t ndat;
+
+      uint64_t nbin;
 
       Signal::State state;
 

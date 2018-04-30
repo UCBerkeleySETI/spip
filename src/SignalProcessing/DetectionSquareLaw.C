@@ -38,6 +38,7 @@ void spip::DetectionSquareLaw::configure (spip::Ordering output_order)
   nbit  = input->get_nbit ();
   ndim  = input->get_ndim ();
   nsignal = input->get_nsignal ();
+  nbin = input->get_nbin ();
     
   if (ndim != 2)
     throw invalid_argument ("DetectionSquareLaw::configure only ndim==2 supported");
@@ -55,6 +56,8 @@ void spip::DetectionSquareLaw::configure (spip::Ordering output_order)
   if (input->get_order() == spip::Ordering::TFPS && output_order == spip::Ordering::TFPS)
     valid_transform = true;
   if (input->get_order() == spip::Ordering::TSPF && output_order == spip::Ordering::TSPF)
+    valid_transform = true;
+  if (input->get_order() == spip::Ordering::TSPFB && output_order == spip::Ordering::TSPFB)
     valid_transform = true;
   if (!valid_transform)
     throw invalid_argument ("DetectionSquareLaw::configure invalid ordering, must be SFPT->SFPT");

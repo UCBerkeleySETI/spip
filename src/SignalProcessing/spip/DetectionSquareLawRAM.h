@@ -27,11 +27,12 @@ namespace spip {
    
       void transform_SFPT_to_SFPT ();
 
-      void transform_TSPF_to_TSPF ();
-
       void transform_TFPS_to_TFPS ();
 
-      
+      void transform_TSPF_to_TSPF ();
+
+      void transform_TSPFB_to_TSPFB ();
+
     protected:
     
     private:

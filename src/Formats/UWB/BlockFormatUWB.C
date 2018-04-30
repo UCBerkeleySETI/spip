@@ -19,7 +19,7 @@ using namespace std;
 spip::BlockFormatUWB::BlockFormatUWB()
 {
   nchan = 1;
-  npol = 1;
+  npol = 2;
   ndim = 2;
   nbit = 16;
   nbin = 65536;
@@ -113,11 +113,15 @@ void spip::BlockFormatUWB::unpack_hgft (char * buffer, uint64_t nbytes)
   int16_t re, im;
   float ref, imf, power;
 
-  for (unsigned ipol=0; ipol<npol; ipol++)
+  const uint64_t pol_stride = ndim * nsamp_per_block;
+  const uint64_t block_stride = npol * pol_stride;;
+
+  // data are oranise in blocks of 2048 samples from pol0, 2048 pol1, etc
+  for (unsigned iblock=0; iblock<nblock; iblock++)
   {
-    for (unsigned iblock=0; iblock<nblock; iblock++)
+    for (unsigned ipol=0; ipol<npol; ipol++)
     {
-      idx = (iblock * nsamp_per_block * npol) + (ipol * nsamp_per_block);
+      idx = (iblock * block_stride) + (ipol * pol_stride);
       for (unsigned ibit=0; ibit<nsamp_per_block; ibit++)
       {
         re = convert_offset_binary(input[idx+0]);
@@ -153,7 +157,7 @@ void spip::BlockFormatUWB::unpack_hgft (char * buffer, uint64_t nbytes)
           // perform the FFT to generate nfft output channels in out
           fftwf_execute_dft (plan, in, out);
 
-          //
+          // re-arrange the channels
           for (ifreq=0; ifreq<nfreq_ft; ifreq++)
           {
             unsigned ofreq = (ifreq + (nfreq_ft/2)) % nfreq_ft;
@@ -174,11 +178,12 @@ void spip::BlockFormatUWB::unpack_hgft (char * buffer, uint64_t nbytes)
   }
 }
 
-
-
 void spip::BlockFormatUWB::unpack_ms(char * buffer, uint64_t nbytes)
 {
-  const unsigned nsamp = nbytes / bytes_per_sample;
+  const uint64_t nsamp = nbytes / bytes_per_sample;
+  const uint64_t nsamp_per_block = 2048;
+  const uint64_t max_nblock = 4;
+  const uint64_t nblock = std::min(nsamp / nsamp_per_block, max_nblock);
   float ndat = (float) (nsamp * nchan);
 
   for (unsigned i=0; i<npol * ndim; i++)
@@ -187,28 +192,35 @@ void spip::BlockFormatUWB::unpack_ms(char * buffer, uint64_t nbytes)
   int16_t * in = (int16_t *) buffer;
   int re, im;
   float diff;
+  uint64_t idx;
 
 #ifdef _DEBUG
-  cerr << "spip::BlockFormatUWB::unpack_ms nsamp=" << nsamp << endl;
-  //cerr << "spip::BlockFormatUWB::unpack_ms nchan_per_freq=" << nchan_per_freq << " nblock=" << nblock << endl;
+  cerr << "spip::BlockFormatUWB::unpack_ms nsamp=" << nsamp << " nblock=" << nblock << " ndat=" << ndat << endl;
 #endif
 
-  for (unsigned isamp=0; isamp<nsamp; isamp++)
+  uint64_t isamp = 0;
+
+  for (unsigned iblock=0; iblock<nblock; iblock++)
   {
     for (unsigned ipol=0; ipol<npol; ipol++)
     {
-      unsigned idx = ipol*ndim + 0;
+      for (unsigned ibit=0; ibit<nsamp_per_block; ibit++)
+      {
+        re = int(convert_offset_binary(in[isamp+0]));
+        im = int(convert_offset_binary(in[isamp+1]));
 
-      re = int(convert_offset_binary (in[isamp]));
-      diff = (float) re - means[idx];
-      variances[idx] += diff * diff;
+        // real
+        idx = ipol*ndim + 0;
+        diff = (float) re - means[idx];
+        variances[idx] += diff * diff;
 
-      idx = ipol*ndim + 1;
-      im = int(convert_offset_binary(in[isamp+1]));
-      diff = (float) im - means[idx];
-      variances[idx] += diff * diff;
+        // imag
+        idx = ipol*ndim + 1;
+        diff = (float) im - means[idx];
+        variances[idx] += diff * diff;
 
-      isamp += 2;
+        isamp += 2;
+      }
     }
   }
 
@@ -216,5 +228,8 @@ void spip::BlockFormatUWB::unpack_ms(char * buffer, uint64_t nbytes)
   {
     variances[i] /= ndat;
     stddevs[i] = sqrtf (variances[i]);
+#ifdef _DEBUG
+    cerr << "spip::BlockFormatUWB::unpack_ms ipoldim=" << i << " mean=" << means[i] << " variance=" << variances[i] << " stddev=" << stddevs[i] << endl;
+#endif
   }
 }

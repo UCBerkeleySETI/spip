@@ -5,10 +5,11 @@
  *
  ***************************************************************************/
 
-// #define _DEBUG
+//#define _DEBUG
 
 #include "spip/UDPFormatVDIF.h"
 #include "spip/Time.h"
+#include "spip/Error.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -19,6 +20,10 @@ using namespace std;
 
 spip::UDPFormatVDIF::UDPFormatVDIF(int pps)
 {
+#ifdef DEBUG
+  cerr << "spip::UDPFormatVDIF::UDPFormatVDIF(" << pps << ")" << endl;
+#endif
+
   // this assumes the use of the 32 byte VDIF Data Frame Header
   packet_header_size = VDIF_HEADER_BYTES;
   // assume the best case scenario for now
@@ -27,15 +32,12 @@ spip::UDPFormatVDIF::UDPFormatVDIF(int pps)
   // each VDIF thread only contains 1 polarisation
   npol = 1;
 
-  // Each VDIF thread contains 2 "channels", 1 masquerading as each polarisation
-  // Each thread represents 1 coarse channel, so a single VDIF data stream will have
-  // a number of coarse channels
   packets_per_second = pps;
   tsamp = 0;
   bw = 0;
   start_channel = 0;
   end_channel = 0;
-  offset = 0;
+  thread_id = 0;
 
   nsamp_per_packet = 0;
   bytes_per_second = 0;
@@ -46,11 +48,17 @@ spip::UDPFormatVDIF::UDPFormatVDIF(int pps)
 
 spip::UDPFormatVDIF::~UDPFormatVDIF()
 {
+#ifdef _DEBUG
   cerr << "spip::UDPFormatVDIF::~UDPFormatVDIF()" << endl;
+#endif
 }
 
 void spip::UDPFormatVDIF::configure (const spip::AsciiHeader& config, const char* suffix)
 {
+#ifdef _DEBUG
+  cerr << "spip::UDPFormatVDIF::configure()" << endl;
+#endif
+
   if (config.get ("NCHAN", "%u", &nchan) != 1)
     throw invalid_argument ("NCHAN did not exist in config");
   if (config.get ("NDIM", "%u", &ndim) != 1)
@@ -71,13 +79,25 @@ void spip::UDPFormatVDIF::configure (const spip::AsciiHeader& config, const char
     throw invalid_argument ("BYTES_PER_SECOND did not exist in config");
   if (config.get ("UDP_NSAMP", "%u", &udp_nsamp) != 1)
     throw invalid_argument ("UDP_NSAMP did not exist in config");
+  if (config.get ("VDIF_THREAD_ID", "%u", &thread_id) != 1)
+  {
+#ifdef _DEBUG
+    cerr << "VDIF_THREAD_ID did not exist in header, assuming 0" << endl;
+#endif
+    thread_id = 0;
+  }
   if (nchan != (end_channel - start_channel) + 1)
     throw invalid_argument ("NCHAN, START_CHANNEL and END_CHANNEL were in conflict");
 
+  // size of a udp packet payload
   packet_data_size = (udp_nsamp * npol * nchan * nbit * ndim) / 8;
 
+  // size of an output data frame
+  frame_size = packet_data_size * header_npol;
+
 #ifdef _DEBUG
-  cerr << "spip::UDPFormatVDIF::configure packet_data_size=" << packet_data_size << endl;
+  cerr << "spip::UDPFormatVDIF::configure packet_data_size=" << packet_data_size 
+       << " frame_size=" << frame_size << endl;
 #endif
 
   configured = true;
@@ -88,13 +108,20 @@ void spip::UDPFormatVDIF::prepare (spip::AsciiHeader& config, const char * suffi
 #ifdef _DEBUG
   cerr << "spip::UDPFormatVDIF::prepare" << endl;
 #endif
+
   // if the stream is to start on a supplied epoch, extract the 
   // UTC_START from the config
+#ifdef _DEBUG
+  cerr << "spip::UDPFormatVDIF::prepare self_start=" << self_start << endl;
+#endif
   if (!self_start)
   {
     char * key = (char *) malloc (128);
     if (config.get ("UTC_START", "%s", key) != 1)
       throw invalid_argument ("UTC_START did not exist in config");
+#ifdef _DEBUG
+    cerr << "spip::UDPFormatVDIF::prepare not self starting, supplied UTC_START=" << key << endl;
+#endif
     utc_start.set_time (key);
     pico_seconds = 0;
     free (key);
@@ -102,17 +129,36 @@ void spip::UDPFormatVDIF::prepare (spip::AsciiHeader& config, const char * suffi
 
   // polarisation identification
   if (strcmp(suffix, "_0") == 0)
+  {
     offset = 0;
+    if (header_npol < 1)
+      throw invalid_argument("suffix if _0 requires NPOL > 0");
+  }
   else if (strcmp(suffix, "_1") == 0)
+  {
     offset = 1;
+    if (header_npol < 2)
+      throw invalid_argument("suffix if _1 requires NPOL > 1");
+  }
   else if (strcmp(suffix, "_2") == 0)
+  {
     offset = 2;
+    if (header_npol < 3)
+      throw invalid_argument("suffix if _1 requires NPOL > 2");
+  }
   else
+  {
     offset = 0;
+  }
+
+  // offset of this data stream within the output data stream
+  frame_offset = offset * packet_data_size;
 
 #ifdef _DEBUG
+  cerr << "spip::UDPFormatVDIF::prepare suffix=" << suffix << " offset=" << offset << " frame_offset=" << frame_offset << endl;
   cerr << "spip::UDPFormatVDIF::prepare configured_stream=false" << endl;
 #endif
+
   prepared = true;
   configured_stream = false;
 }
@@ -157,20 +203,20 @@ void spip::UDPFormatVDIF::compute_header ()
   // determine largest packet size, such that there is an integer
   // number of packets_per_second
   packet_data_size = 8192;
-  int nbit_per_sample = (nbit * npol * nchan * ndim);
+  uint64_t nbit_per_sample = uint64_t(nbit * npol * nchan * ndim);
   uint64_t match = bytes_per_second % packet_data_size;
-  cerr << "start: packet_data_size=" << packet_data_size << " nbit_per_sample=" << nbit_per_sample << " bytes_per_second=" << bytes_per_second << " match=" << match << endl;
-  while (packet_data_size * 8 > nbit_per_sample && match != 0)
+  //cerr << "start: packet_data_size=" << packet_data_size << " nbit_per_sample=" << nbit_per_sample << " bytes_per_second=" << bytes_per_second << " match=" << match << endl;
+  while ((packet_data_size * 8) > nbit_per_sample && match != 0)
   {
     match = bytes_per_second % packet_data_size;
     packet_data_size -= 8;
-    cerr << "find: packet_data_size=" << packet_data_size << " nbit_per_sample=" << nbit_per_sample << endl;
+    //cerr << "find: packet_data_size=" << packet_data_size << " nbit_per_sample=" << nbit_per_sample << endl;
   }
 
   if (match != 0)
     throw invalid_argument ("No packet size matched VDIF1.1 criteria");
 
-  cerr << "end: packet_data_size=" << packet_data_size << endl;
+  //cerr << "end: packet_data_size=" << packet_data_size << endl;
   packets_per_second = bytes_per_second / packet_data_size;
 
   header.nbits = (nbit - 1);
@@ -180,11 +226,11 @@ void spip::UDPFormatVDIF::compute_header ()
   setVDIFFrameBytes (&header, frame_length);
 
 #ifdef _DEBUG
-  cerr << "spip::UDPFormatVDIF::prepare UTC_START=" << utc_start.get_gmtime() << endl;
-  cerr << "spip::UDPFormatVDIF::prepare EPOCH=" << epoch.get_gmtime() << endl;
-  cerr << "spip::UDPFormatVDIF::prepare start_second=" << start_second << endl;
-  cerr << "spip::UDPFormatVDIF::prepare packet_data_size=" << packet_data_size
-       << " packets_per_second=" << packets_per_second << endl;
+  //cerr << "spip::UDPFormatVDIF::prepare UTC_START=" << utc_start.get_gmtime() << endl;
+  //cerr << "spip::UDPFormatVDIF::prepare EPOCH=" << epoch.get_gmtime() << endl;
+  //cerr << "spip::UDPFormatVDIF::prepare start_second=" << start_second << endl;
+  //cerr << "spip::UDPFormatVDIF::prepare packet_data_size=" << packet_data_size << endl;
+  //cerr << " packets_per_second=" << packets_per_second << endl;
 #endif
 }
 
@@ -194,23 +240,32 @@ void spip::UDPFormatVDIF::conclude ()
 
 uint64_t spip::UDPFormatVDIF::get_resolution ()
 {
+#ifdef _DEBUG
+  cerr << "spip::UDPFormatVDIF::get_resolution() " << packet_data_size << endl;
+#endif
   return packet_data_size;
 }
 
 uint64_t spip::UDPFormatVDIF::get_samples_for_bytes (uint64_t nbytes)
 {
-  cerr << "spip::UDPFormatVDIF::get_samples_for_bytes npol=" << npol 
-       << " ndim=" << ndim << " nchan=" << nchan << endl;
-  uint64_t nsamps = nbytes / (npol * ndim * nchan);
-
+  uint64_t nsamps = nbytes / (header_npol * ndim * nchan);
+#ifdef _DEBUG
+  cerr << "spip::UDPFormatVDIF::get_samples_for_bytes nbytes=" << nbytes 
+       << " nsamps=" << nsamps << endl;
+#endif
   return nsamps;
 }
 
-
 inline void spip::UDPFormatVDIF::encode_header_seq (char * buf, uint64_t seq)
 {
-  header.frame = seq % packets_per_second;
-  header.seconds = seq / packets_per_second;
+  vdif_header * header_ptr = (vdif_header *) buf;
+
+  uint64_t frame_number = seq % packets_per_second;
+  uint64_t frame_second = seq / packets_per_second;
+
+  setVDIFFrameNumber (header_ptr, frame_number);
+  setVDIFFrameSecond (header_ptr, frame_second);
+
   encode_header (buf);
 }
 
@@ -229,116 +284,15 @@ inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_si
   // header is stored in the front of the packet
   vdif_header * header_ptr = (vdif_header *) buf;
 
-  // this UDP format assumes 1 thread, for either pol 0 or 1
-  int thread_id = getVDIFThreadID (header_ptr);
-
-  //if (thread_id != 0 && thread_id != 1)
-  //  throw invalid_argument ("VDIF thread ID must be 0 or 1");
-
-  if (header_npol == 1)
-  {
-    thread_id = 0;
-    offset = 0;
-  }
-
   // configure the stream on the first packet
   if (!configured_stream)
   {
-    // decode the header parameters
-    decode_header (buf);
-
-#ifdef _DEBUG
-    printVDIFHeader ((const struct vdif_header *) &header, VDIFHeaderPrintLevelLong);
-#endif
-
-    int vdif_epoch = getVDIFEpoch (&header);
-    
-    // handle older header versions
-    if ((int) (header.legacymode) == 1)
-      packet_header_size = 16;
-    else
-      packet_header_size = 32;
-
-    if (ndim != (int) (header.iscomplex) + 1)
-    {
-      cerr << "NDIM mismatch CONFIG=" << ndim << ", VDIF header=" << (header.iscomplex + 1) << endl;
-      throw invalid_argument ("NDIM mismtach between config and VDIF header");
-    }
-
-    if (nbit != getVDIFBitsPerSample (&header))
-      throw invalid_argument ("NBIT mismtach between config and VDIF header");
-
-    if  (nchan * npol != getVDIFNumChannels (&header))
-      throw invalid_argument ("NCHAN/NPOL mismtach between config and VDIF header");
-
-    int threadid = getVDIFThreadID (&header);
-     
-    packet_data_size = getVDIFFrameBytes (&header) - packet_header_size;
-    int nsamp = (8 * packet_data_size) / (npol * nbit * ndim);
-
-    int offset_second = getVDIFFrameEpochSecOffset (&header);
-    int frame_number  = getVDIFFrameNumber (&header);
-
-    // this code will not work past 2030 something
-    int gm_year = 2000 + (vdif_epoch / 2);
-    int gm_month = (vdif_epoch % 2) * 6 + 1;
-
-#ifdef _DEBUG
-    cerr << "spip::UDPFormatVDIF::decode_packet gm_year=" << gm_year << endl;
-    cerr << "spip::UDPFormatVDIF::decode_packet gm_month=" << gm_month << endl;
-#endif
-
-    // get the time string of the epoch
-    char * key = (char *) malloc (32);
-    sprintf (key, "%04d-%02d-01-00:00:00", gm_year, gm_month);
-    if (self_start)
-    {
-      utc_start.set_time (key);
-      cerr << "spip::UDPFormatVDIF::decode_packet key=" << key << endl;
-      std::string utc_str = utc_start.get_gmtime();
-      cerr << "spip::UDPFormatVDIF::decode_packet self_start 1 UTC_START=" << utc_str << endl;
-      utc_start.add_seconds (offset_second);
-      std::string localtime_str = utc_start.get_localtime();
-      utc_str = utc_start.get_gmtime();
-      cerr << "spip::UDPFormatVDIF::decode_packet self_start 2 UTC_START=" << utc_str << endl;
-      cerr << "spip::UDPFormatVDIF::decode_packet self_start LOCAL_START=" << localtime_str << endl;
-
-      // set start second to be the next whole integer second
-      start_second = offset_second;
-      if (frame_number > 0)
-        start_second++;
-      pico_seconds = 0;
-    }
-    else
-    // determine start_seconds of this VDIF data relative to UTC_START
-    {
-      cerr << "spip::UDPFormatVDIF::decode_packet self_start == false" << endl;
-      // add the delay here...
-      Time vdif_epoch (key);
-      cerr << "spip::UDPFormatVDIF::decode_packet vdif_epoch=" << key << endl;
-      cerr << "spip::UDPFormatVDIF::decode_packet utc_start="  << utc_start.get_gmtime()<< endl;
-      start_second = utc_start.get_time() - vdif_epoch.get_time();
-      cerr << "spip::UDPFormatVDIF::decode_packet start_second=" << start_second << endl;
-      cerr << "spip::UDPFormatVDIF::decode_packet inserting 37 second hack for VDIF/BAT error" << endl;
-      start_second += 37;
-      cerr << "spip::UDPFormatVDIF::decode_packet start_second=" << start_second << endl;
-      pico_seconds = 0;
-    }
-
-#ifdef _DEBUG
-    cerr << "spip::UDPFormatVDIF::decode_packet thread_id=" << thread_id << " offset=" << offset << endl;
-    cerr << "spip::UDPFormatVDIF::decode_packet packet_data_size=" << packet_data_size << endl;
-    cerr << "spip::UDPFormatVDIF::decode_packet packet_header_size=" << packet_header_size << endl;
-    cerr << "spip::UDPFormatVDIF::decode_packet bit=" << nbit << " npol=" << npol
-         << " ndim=" << ndim << " nsamp=" <<  nsamp << endl;
-    cerr << "spip::UDPFormatVDIF::decode_packet vdif_epoch=" << vdif_epoch << endl;
-    cerr << "spip::UDPFormatVDIF::decode_packet offset_second=" << offset_second << endl;
-    cerr << "spip::UDPFormatVDIF::decode_packet frame_number=" << frame_number << endl;
-#endif
-
-    configured_stream = true;
-    free (key);
+    configure_stream (buf);
   }
+
+  // only accept packets from the specified VDIF thread
+  if (getVDIFThreadID (header_ptr) != thread_id)
+    return -1;
 
   *pkt_size = packet_data_size;
 
@@ -349,12 +303,101 @@ inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_si
   const int frame_number  = getVDIFFrameNumber (header_ptr);
 
   // calculate the byte offset for this frame within the data stream
-  int64_t byte_offset = offset_second * bytes_per_second + (frame_number * packet_data_size * header_npol);
-
-  //  cerr << "offset=" << offset << " offset_second=" << offset_second << " frame_number=" << frame_number 
-  //       << " byte_offset=" << byte_offset << endl;
+  int64_t byte_offset = (bytes_per_second * offset_second) + (frame_number * frame_size);
 
   return (int64_t) byte_offset;
+}
+
+// configure the VDIF data stream, computing the start_second
+void spip::UDPFormatVDIF::configure_stream (char * buf)
+{
+#ifdef _DEBUG
+  cerr << "spip::UDPFormatVDIF::configure_stream" << endl;
+#endif
+
+  // decode the header parameters
+  decode_header (buf);
+
+#ifdef _DEBUG
+  printVDIFHeader ((const struct vdif_header *) &header, VDIFHeaderPrintLevelLong);
+#endif
+
+  int vdif_epoch = getVDIFEpoch (&header);
+    
+  // handle older header versions
+  if ((int) (header.legacymode) == 1)
+    packet_header_size = 16;
+  else
+    packet_header_size = 32;
+
+  if (ndim != unsigned(int(header.iscomplex) + 1))
+    throw Error (InvalidState, "spip::UDPFormatVDIF::configure_stream",
+                 "NDIM mismatch between CONFIG [%d] and VDIF [%d]", ndim, (header.iscomplex + 1));
+
+  if (nbit != unsigned(getVDIFBitsPerSample (&header)))
+    throw Error (InvalidState, "spip::UDPFormatVDIF::configure_stream",
+                 "NBIT mismtach between CONFIG [%d] and VDIF header [%d]", nbit, int(getVDIFBitsPerSample (&header)));
+
+  if  (nchan * npol != unsigned(getVDIFNumChannels (&header)))
+    throw Error (InvalidState, "spip::UDPFormatVDIF::configure_stream",
+                 "NCHAN/NPOL mismtach between config and VDIF header");
+
+  packet_data_size = getVDIFFrameBytes (&header) - packet_header_size;
+
+  int offset_second = getVDIFFrameEpochSecOffset (&header);
+  int frame_number  = getVDIFFrameNumber (&header);
+
+  // this code will not work past 2030 something
+  int gm_year = 2000 + (vdif_epoch / 2);
+  int gm_month = (vdif_epoch % 2) * 6 + 1;
+
+#ifdef _DEBUG
+  cerr << "spip::UDPFormatVDIF::configure_stream decode_packet gm_year=" << gm_year << endl;
+  cerr << "spip::UDPFormatVDIF::configure_stream gm_month=" << gm_month << endl;
+#endif
+
+  // get the time string of the epoch
+  char * key = (char *) malloc (32);
+  sprintf (key, "%04d-%02d-01-00:00:00", gm_year, gm_month);
+  if (self_start)
+  {
+    utc_start.set_time (key);
+    std::string utc_str = utc_start.get_gmtime();
+    utc_start.add_seconds (offset_second);
+    utc_start.add_seconds (2);
+    std::string localtime_str = utc_start.get_localtime();
+    utc_str = utc_start.get_gmtime();
+
+#ifdef _DEBUG
+    cerr << "spip::UDPFormatVDIF::configure_stream self starting UTC_START=" << utc_str << endl;
+#endif
+
+    // set start second to be the next whole integer second
+    start_second = offset_second;
+    if (frame_number > 0)
+      start_second++;
+    pico_seconds = 0;
+  }
+  // determine start_seconds of this VDIF data relative to UTC_START
+  else
+  {
+    // add the delay here...
+    Time vdif_epoch (key);
+    start_second = utc_start.get_time() - vdif_epoch.get_time();
+    pico_seconds = 0;
+  }
+
+#ifdef _DEBUG
+  cerr << "spip::UDPFormatVDIF::configure_stream packet_data_size=" << packet_data_size
+       << " packet_header_size=" << packet_header_size << endl;
+  cerr << "spip::UDPFormatVDIF::configure_stream bit=" << nbit << " npol=" << npol
+       << " ndim=" << ndim << endl;
+  cerr << "spip::UDPFormatVDIF::configure_stream vdif_epoch=" << vdif_epoch << " offset_second=" << offset_second
+      << " frame_number=" << frame_number << endl;
+#endif
+
+  configured_stream = true;
+  free (key);
 }
 
 inline int spip::UDPFormatVDIF::insert_last_packet (char * buffer)
@@ -370,16 +413,8 @@ inline void spip::UDPFormatVDIF::gen_packet (char * buf, size_t bufsz)
   // write the new header
   encode_header (buf);
 
-  // increment our "channel number"
-  header.threadid++;
-
-  if (header.threadid > end_channel)
-  {
-    header.threadid = start_channel;
-
-    // generate the next VDIF header 
-    nextVDIFHeader (&header, packets_per_second);
-  }
+  // generate the next VDIF header 
+  nextVDIFHeader (&header, packets_per_second);
 }
 
 void spip::UDPFormatVDIF::print_packet_header()

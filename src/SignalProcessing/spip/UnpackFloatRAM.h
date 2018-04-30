@@ -51,10 +51,10 @@ namespace spip {
           T raw = in[ival]; 
 
           // first convert Endian if required
-          if (endianness != spip::Endian::Little)
+          if (endianness != spip::Little)
             raw = swap_endian(raw);
 
-          if (encoding != spip::Encoding::TwosComplement)
+          if (encoding != spip::TwosComplement)
             raw = convert_twos(raw);
 
           out[ival] = (float(raw) + offset) * scale;
@@ -81,7 +81,7 @@ namespace spip {
               for (unsigned isig=0; isig<nsignal; isig++)
               { 
                 const uint64_t signal_offset = pol_offset + isig * signal_stride;
-                if (endianness != spip::Endian::Little)
+                if (endianness != spip::Little)
                 {
                   out[signal_offset] = (float(swap_endian(*in)) + offset) * scale;
                 }

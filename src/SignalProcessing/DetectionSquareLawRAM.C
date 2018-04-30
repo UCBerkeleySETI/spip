@@ -138,9 +138,11 @@ void spip::DetectionSquareLawRAM::transform_TSPF_to_TSPF ()
             else
               *out += (re * re) + (im * im);
 
+/*
             if (ichan == 0)
               printf ("idat=%lu idx=%lu (%f, %f) odx=%lu sum=%f\n", idat, uint64_t(in-(float *) input->get_buffer()), re, im, 
                      uint64_t(out-(float *) output->get_buffer()), *out);
+*/
 
             in += 2;
             out++;
@@ -151,6 +153,80 @@ void spip::DetectionSquareLawRAM::transform_TSPF_to_TSPF ()
   }
 }
 
+
+void spip::DetectionSquareLawRAM::transform_TSPFB_to_TSPFB ()
+{
+  if (verbose)
+    cerr << "spip::DetectionSquareLawRAM::transform_TSPFB_to_TSPFB()" << endl;
+
+  float * in  = (float *) input->get_buffer();
+  float * out = (float *) output->get_buffer();
+
+  if (state == spip::Signal::PPQQ)
+  {
+    for (uint64_t idat=0; idat<ndat; idat++)
+    {
+      for (unsigned isig=0; isig<nsignal; isig++)
+      {
+        for (unsigned ipol=0; ipol<npol; ipol++)
+        {
+          for (unsigned ichan=0; ichan<nchan; ichan++)
+          {
+            for (unsigned ibin=0; ibin<nbin; ibin++)
+            {
+              const float re = in[0];
+              const float im = in[1];
+
+              *out = (re * re) + (im * im);
+
+              in += 2;
+              out++;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (state == spip::Signal::Intensity)
+  {
+    if (verbose)
+      cerr << "spip::DetectionSquareLawRAM::transform_TSPFB_to_TSPFB ndat=" << ndat 
+           << " nsignal=" << nsignal << " npol=" << npol << endl;
+    for (uint64_t idat=0; idat<ndat; idat++)
+    {
+      for (unsigned isig=0; isig<nsignal; isig++)
+      {
+        for (unsigned ipol=0; ipol<npol; ipol++)
+        {
+          if (ipol == 1)
+            out -= nchan;
+          for (unsigned ichan=0; ichan<nchan; ichan++)
+          {
+            for (unsigned ibin=0; ibin<nbin; ibin++)
+            {
+              const float re = in[0];
+              const float im = in[1];
+
+              if (ipol == 0)
+                *out = (re * re) + (im * im);
+              else
+                *out += (re * re) + (im * im);
+
+/*
+              if (ichan == 0)
+                printf ("idat=%lu idx=%lu (%f, %f) odx=%lu sum=%f\n", idat, uint64_t(in-(float *) input->get_buffer()), re, im, uint64_t(out-(float *) output->get_buffer()), *out);
+*/
+
+              in += 2;
+              out++;
+            }
+          }
+        }
+      }
+    }
+  }
+}
 
 void spip::DetectionSquareLawRAM::transform_TFPS_to_TFPS ()
 {

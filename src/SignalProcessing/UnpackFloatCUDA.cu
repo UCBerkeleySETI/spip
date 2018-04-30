@@ -151,16 +151,16 @@ void spip::UnpackFloatCUDA::transform_SFPT_to_SFPT ()
   else if  (nbit == 16)
   {
     int nblock = ndim * ndat / (nthread * 2);
-    if (big_endian)
+    if (endianness == spip::Big)
     {
-      if (twos_complement)
+      if (encoding == spip::TwosComplement)
         unpack_int16_bigendian_twoscomplement<<<nblock, nthread, 0, stream>>> (in, out, offset, scale);
       else
         unpack_int16_bigendian_offsetbinary<<<nblock, nthread, 0, stream>>> (in, out, offset, scale);
     }
     else
     {
-      if (twos_complement)
+      if (encoding == spip::TwosComplement)
         unpack_int16_littleendian_twoscomplement<<<nblock, nthread, 0, stream>>> (in, out, offset, scale);
       else
         unpack_int16_littleendian_offsetbinary<<<nblock, nthread, 0, stream>>> (in, out, offset, scale);
@@ -169,7 +169,7 @@ void spip::UnpackFloatCUDA::transform_SFPT_to_SFPT ()
   else if (nbit == 32)
   {
     int nblock = ndim * ndat / nthread;
-    if (big_endian)
+    if (endianness == spip::Big)
       unpack_int32_bigendian<<<nblock, nthread, 0, stream>>> (in, out, offset, scale);
     else
       cudaMemcpyAsync ((void *) out, (void *) in, nbytes, cudaMemcpyDeviceToDevice, stream);

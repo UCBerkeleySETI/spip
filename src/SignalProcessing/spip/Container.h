@@ -18,7 +18,7 @@
 namespace spip {
 
   //! All Data Containers have a sample ordering 
-  typedef enum { SFPT, TFPS, TSPF, Custom } Ordering;
+  typedef enum { SFPT, TFPS, TSPF, TSPFB, Custom } Ordering;
 
   //! Data may be packed in big or little endian
   typedef enum { Little, Big } Endian;
@@ -53,6 +53,10 @@ namespace spip {
       unsigned get_npol() { return npol; }
       unsigned get_npol() const { return npol; }
 
+      void set_nbin (unsigned n) { nbin = n; }
+      unsigned get_nbin() { return nbin; }
+      unsigned get_nbin() const { return nbin; }
+
       void set_nbit (unsigned n) { nbit = n; }
       unsigned get_nbit() { return nbit; }
       unsigned get_nbit() const { return nbit; }
@@ -77,12 +81,29 @@ namespace spip {
       int64_t get_file_size () { return file_size; } 
       int64_t get_file_size () const { return file_size; } 
 
-      unsigned calculate_nbits_per_sample () { return unsigned (nsignal * nchan * nbit * npol * ndim); };
+      unsigned calculate_nbits_per_sample () { return unsigned (nsignal * nchan * nbit * npol * nbin * ndim); };
       uint64_t calculate_bytes_per_second ();
 
       size_t get_size () { return size; };
-      size_t calculate_buffer_size () { return size_t (ndat * nchan * nsignal * ndim * npol * nbit) / 8; }
-      size_t calculate_buffer_size () const { return size_t (ndat * nchan * nsignal * ndim * npol * nbit) / 8; }
+      size_t calculate_buffer_size () { return size_t (ndat * nchan * nsignal * ndim * npol * nbin * nbit) / 8; }
+      size_t calculate_buffer_size () const { return size_t (ndat * nchan * nsignal * ndim * npol * nbin * nbit) / 8; }
+
+      void calculate_strides ();
+
+      inline uint64_t get_pol_stride () { return pol_stride; };
+      inline uint64_t get_pol_stride () const { return pol_stride; };
+
+      inline uint64_t get_chan_stride () { return chan_stride; };
+      inline uint64_t get_chan_stride () const { return chan_stride; };
+
+      inline uint64_t get_sig_stride () { return sig_stride; };
+      inline uint64_t get_sig_stride () const { return sig_stride; };
+
+      inline uint64_t get_bin_stride () { return bin_stride; };
+      inline uint64_t get_bin_stride () const { return bin_stride; };
+
+      inline uint64_t get_dat_stride () { return dat_stride; };
+      inline uint64_t get_dat_stride () const { return dat_stride; };
 
       void recalculate ();
 
@@ -94,7 +115,7 @@ namespace spip {
       Endian get_endianness() { return endianness; };
       Endian get_endianness() const { return endianness; };
 
-      void set_endcoding (Encoding e) { encoding = e; };
+      void set_encoding (Encoding e) { encoding = e; };
       Encoding get_encoding() { return encoding; };
       Encoding get_encoding() const { return encoding; };
 
@@ -149,7 +170,7 @@ namespace spip {
       //! Number of frequnecy channels
       unsigned nchan;
 
-      //! Number of indepdent signals (e.g. antenna, beams)
+      //! Number of independent signals (e.g. antenna, beams)
       unsigned nsignal;
 
       //! Number of polarisations
@@ -157,6 +178,9 @@ namespace spip {
 
       //! Number of dimensions to each datum
       unsigned ndim;
+
+      //! Number of bins of phase per time sample
+      unsigned nbin;
 
       //! Number of bits per value
       unsigned nbit;
@@ -196,7 +220,22 @@ namespace spip {
 
       //! Number of seconds of data corresponding to each "file"
       double seconds_per_file;
+
+      //! Number of datum between bins
+      uint64_t bin_stride;
       
+      //! Number of datum between dats
+      uint64_t dat_stride;
+
+      //! Number of datum between pols
+      uint64_t pol_stride;
+
+      //! Number of datum between chans
+      uint64_t chan_stride;
+
+      //! Number of datum between sigs
+      uint64_t sig_stride;
+
     private:
 
       bool compute_file_size;

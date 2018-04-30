@@ -165,6 +165,71 @@ void spip::DetectionPolarimetryRAM::transform_TSPF_to_TSPF ()
   }
 }
 
+void spip::DetectionPolarimetryRAM::transform_TSPFB_to_TSPFB ()
+{
+  if (verbose)
+    cerr << "spip::DetectionPolarimetryRAM::transform_TSPFB_to_TSPFB()" << endl;
+
+  float * in_p  = (float *) input->get_buffer();
+  float * in_q  = in_p + (ndim * nchan);
+
+  float * out_a = (float *) output->get_buffer();
+  float * out_b = out_a + nchan;
+  float * out_c = out_b + nchan;
+  float * out_d = out_c + nchan;
+
+  const unsigned nstokes = 4;
+  uint64_t in_pol_stride = nchan - (npol - 1);
+  uint64_t out_pol_stride = nchan * (nstokes - 1);
+
+  uint64_t idx = 0;
+  uint64_t odx = 0;
+
+  if (state == spip::Signal::Coherence)
+  {
+    for (uint64_t idat=0; idat<ndat; idat++)
+    {
+      for (unsigned isig=0; isig<nsignal; isig++)
+      {
+        for (unsigned ichan=0; ichan<nchan; ichan++)
+        {
+          for (unsigned ibin=0; ibin<nbin; ibin++)
+          {
+            cross_detect (in_p[idx], in_p[idx+1], in_q[idx], in_q[idx+1],
+                          out_a + odx, out_b + odx, out_c + odx, out_d + odx);
+            idx += 2;
+            odx++;
+          }
+        }
+        idx += in_pol_stride;
+        odx += out_pol_stride;
+      }
+    }
+  }
+
+  if (state == spip::Signal::Stokes)
+  {
+    for (uint64_t idat=0; idat<ndat; idat++)
+    {
+      for (unsigned isig=0; isig<nsignal; isig++)
+      {
+        for (unsigned ichan=0; ichan<nchan; ichan++)
+        {
+          for (unsigned ibin=0; ibin<nbin; ibin++)
+          {
+            stokes_detect (in_p[idx], in_p[idx+1], in_q[idx], in_q[idx+1],
+                        out_a + odx, out_b + odx, out_c + odx, out_d + odx);
+            idx += 2;
+            odx++;
+          }
+        }
+        idx += in_pol_stride;
+        odx += out_pol_stride;
+      }
+    }
+  }
+}
+
 
 void spip::DetectionPolarimetryRAM::transform_TFPS_to_TFPS ()
 {

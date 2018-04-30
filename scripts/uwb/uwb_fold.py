@@ -75,27 +75,33 @@ class UWBFoldDaemon (UWBProcDaemon):
     sk = False
     sk_threshold = -1
     sk_nsamps = -1
+    mode = "PSR"
 
     try:
-      outnstokes = int(self.header["OUTNSTOKES"])
+      outnstokes = int(self.header["FOLD_OUTNSTOKES"])
     except:
       outnstokes = 4
 
     try:
-      outtsub = int(self.header["OUTTSUBINT"])
+      outtsub = int(self.header["FOLD_OUTTSUBINT"])
     except:
       outtsub = 10
 
     try:
-      outnbin = int(self.header["OUTNBIN"])
+      outnbin = int(self.header["FOLD_OUTNBIN"])
     except:
       outnbin = 1024
 
     try:
-      outnchan = int(self.header["OUTNCHAN"])
+      outnchan = int(self.header["FOLD_OUTNCHAN"])
     except:
       outnchan = 0
       innchan = 0
+
+    try:
+      mode = self.header["MODE"]
+    except:
+      mode = "PSR"
 
     try:
       dm = float(self.header["DM"])
@@ -117,6 +123,7 @@ class UWBFoldDaemon (UWBProcDaemon):
     except:
       sk_nsamps = 1024
 
+
     # configure the command to be run
     self.cmd = "dspsr -Q " + db_key_filename + " -minram 2048 -cuda " + self.gpu_id + " -no_dyn"
 
@@ -133,7 +140,10 @@ class UWBFoldDaemon (UWBProcDaemon):
     # handle channelisation
     if outnchan > innchan:
       if outnchan % innchan == 0:
-        self.cmd = self.cmd + " -F " + str(outnchan) + ":D"
+        if mode == "PSR":
+          self.cmd = self.cmd + " -F " + str(outnchan) + ":D"
+        else:
+          self.cmd = self.cmd + " -F " + str(outnchan) + ":" + str(outnchan*4)
       else:
         self.log(-1, "output channelisation was not a multiple of input channelisation")
     else:
@@ -150,18 +160,22 @@ class UWBFoldDaemon (UWBProcDaemon):
     if mintsub > 0:
       self.cmd = self.cmd + " -Lmin " + str(mintsub)
 
-    # handle a custom DM
-    if dm >= 0:
-      self.cmd = self.cmd + " -D " + str(dm)
+    # if observing a puslar 
+    if mode == "PSR":
 
-    if sk:
-      self.cmd = self.cmd + " -skz"
+      # handle a custom DM
+      if dm >= 0:
+        self.cmd = self.cmd + " -D " + str(dm)
 
-      if sk_threshold != -1:
-        self.cmd = self.cmd + " -skzs " + str(sk_threshold)
+      # if the SK options are active
+      if sk:
+        self.cmd = self.cmd + " -overlap -skz "
 
-      if sk_nsamps != -1:
-        self.cmd = self.cmd + " -skzm " + str(sk_nsamps)
+        if sk_threshold != -1:
+          self.cmd = self.cmd + " -skzs " + str(sk_threshold)
+
+        if sk_nsamps != -1:
+          self.cmd = self.cmd + " -skzm " + str(sk_nsamps)
 
     # set the optimal filterbank kernel length
     self.cmd = self.cmd + " -fft-bench"

@@ -28,9 +28,11 @@ namespace spip {
       //! Required data transformations
       virtual void transform_SFPT_to_SFPT () = 0;
 
+      virtual void transform_TFPS_to_TFPS () = 0;
+
       virtual void transform_TSPF_to_TSPF () = 0;
 
-      virtual void transform_TFPS_to_TFPS () = 0;
+      virtual void transform_TSPFB_to_TSPFB () = 0;
 
     protected:
 

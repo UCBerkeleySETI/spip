@@ -1,9 +1,9 @@
 
 noinst_LTLIBRARIES = libvdif.la
 
-libvdif_headers = spip/UDPFormatVDIF.h spip/vheader.h spip/mk5blib.h
+libvdif_headers = spip/UDPFormatVDIF.h spip/UDPFormatDualVDIF.h spip/vheader.h spip/mk5blib.h
 
-libvdif_la_SOURCES = UDPFormatVDIF.C vheader.c mk5blib.c
+libvdif_la_SOURCES = UDPFormatVDIF.C UDPFormatDualVDIF.C vheader.c mk5blib.c
 
 bin_PROGRAMS = vdif_udprecv vdif_udpgen vlbi_fake
 
