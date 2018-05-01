@@ -211,13 +211,13 @@ void spip::BlockFormatUWB::unpack_ms(char * buffer, uint64_t nbytes)
 
         // real
         idx = ipol*ndim + 0;
-        diff = (float) re - means[idx];
-        variances[idx] += diff * diff;
+        diff = float(re) - means[idx];
+        variances[idx] += (diff * diff);
 
         // imag
         idx = ipol*ndim + 1;
-        diff = (float) im - means[idx];
-        variances[idx] += diff * diff;
+        diff = float(im) - means[idx];
+        variances[idx] += (diff * diff);
 
         isamp += 2;
       }
@@ -226,7 +226,7 @@ void spip::BlockFormatUWB::unpack_ms(char * buffer, uint64_t nbytes)
 
   for (unsigned i=0; i<npol * ndim; i++)
   {
-    variances[i] /= ndat;
+    variances[i] /= (nblock * nsamp_per_block);
     stddevs[i] = sqrtf (variances[i]);
 #ifdef _DEBUG
     cerr << "spip::BlockFormatUWB::unpack_ms ipoldim=" << i << " mean=" << means[i] << " variance=" << variances[i] << " stddev=" << stddevs[i] << endl;
