@@ -38,6 +38,9 @@ namespace spip {
       //! Data transformation
       virtual void transform_SFPT_to_SFPT () = 0 ;
 
+      //! Required data transformation
+      virtual void transform_custom_to_SFPT () = 0 ;
+
     protected:
 
       Endian endianness;

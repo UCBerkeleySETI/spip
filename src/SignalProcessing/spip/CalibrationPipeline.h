@@ -5,18 +5,15 @@
  *
  ***************************************************************************/
 
-#ifndef __ContinuumPipeline_h
-#define __ContinuumPipeline_h
+#ifndef __CalibrationPipeline_h
+#define __CalibrationPipeline_h
 
 #include "spip/AsciiHeader.h"
 #include "spip/Time.h"
 #include "spip/DataBlockRead.h"
 #include "spip/DataBlockWrite.h"
 #include "spip/UnpackFloatRAM.h"
-#include "spip/ForwardFFTFFTW.h"
-#include "spip/DetectionPolarimetryRAM.h"
-#include "spip/DetectionSquareLawRAM.h"
-#include "spip/IntegrationRAM.h"
+#include "spip/SampleFoldRAM.h"
 #include "spip/ContainerRingRead.h"
 #include "spip/ContainerBufferedRingWrite.h"
 #include "spip/ContainerRAM.h"
@@ -26,10 +23,7 @@
 #ifdef HAVE_CUDA
 #include "spip/ContainerCUDA.h"
 #include "spip/UnpackFloatCUDA.h"
-#include "spip/ForwardFFTCUDA.h"
-#include "spip/DetectionPolarimetryCUDA.h"
-#include "spip/DetectionSquareLawCUDA.h"
-#include "spip/IntegrationCUDA.h"
+#include "spip/SampleFoldCUDA.h"
 #include "spip/RAMtoCUDATransfer.h"
 #include "spip/CUDAtoRAMTransfer.h"
 #endif
@@ -38,28 +32,24 @@
 
 namespace spip {
 
-  class ContinuumPipeline {
+  class CalibrationPipeline {
 
     public:
 
-      ContinuumPipeline (const char * in_key_string, const char * out_key_string);
+      CalibrationPipeline (const char * in_key_string, const char * out_key_string);
 
-      ~ContinuumPipeline ();
+      ~CalibrationPipeline ();
 
-      void set_channelisation (int);
-
-      void set_channel_oversampling (int);
-
-      void set_decimation (int);
+      void set_periodicity (unsigned, uint64_t);
 
       void set_output_state (Signal::State);
 
-      void configure ();
+      void configure (UnpackFloat *);
 
 #ifdef HAVE_CUDA
       void set_device (int _device);
 
-      void configure_cuda();
+      void configure_cuda (UnpackFloat *);
 #endif
 
       void open ();
@@ -82,35 +72,21 @@ namespace spip {
 
       UnpackFloat * unpack_float;
 
-      ForwardFFT * fwd_fft;
-
-      Detection * detector;
-
-      Integration * integrator;
+      SampleFold * sample_fold;
 
       ContainerRingRead * input;
 
       Container * unpacked;
 
-      Container * channelised;
-
-      Container * detected;
-
-      Container * integrated;
-
       ContainerBufferedRingWrite * output;
 
       Signal::State output_state;
 
-      int nfft;
+      unsigned nbin;
 
-      int nchan_out;
+      uint64_t dat_offset;
 
-      int channel_oversampling;
-
-      int tdec;
-
-      int fdec;
+      uint64_t dat_dec;
 
       bool verbose;
 

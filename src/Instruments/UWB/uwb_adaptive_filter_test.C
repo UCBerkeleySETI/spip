@@ -9,6 +9,11 @@
 
 #include "spip/AdaptiveFilterTest.h"
 #include "spip/HardwareAffinity.h"
+#include "spip/UnpackFloatRAMUWB.h"
+
+#if HAVE_CUDA
+#include "spip/UnpackFloatCUDAUWB.h"
+#endif
 
 #include <signal.h>
 
@@ -105,9 +110,15 @@ int main(int argc, char *argv[]) try
 
 #ifdef HAVE_CUDA
   if (device >= 0)
+  {
     dp->set_device (device);
+    dp->configure_cuda (new spip::UnpackFloatCUDAUWB(), new spip::UnpackFloatRAMUWB());
+  }
+  else
 #endif
-  dp->configure ();
+  {
+    dp->configure (new spip::UnpackFloatRAMUWB(), new spip::UnpackFloatRAMUWB());
+  }
   dp->open ();
   dp->process ();
   dp->close ();

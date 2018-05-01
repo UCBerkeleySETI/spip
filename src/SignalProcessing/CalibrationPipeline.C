@@ -65,13 +65,13 @@ void spip::CalibrationPipeline::set_output_state (spip::Signal::State _state)
 }
 
 //! build the pipeline containers and transforms
-void spip::CalibrationPipeline::configure ()
+void spip::CalibrationPipeline::configure (spip::UnpackFloat * unpacker)
 {
   if (verbose)
     cerr << "spip::CalibrationPipeline::configure ()" << endl;
 #ifdef HAVE_CUDA
   if (device >= 0)
-    return configure_cuda();
+    return configure_cuda(unpacker);
 #endif
   
   if (verbose)
@@ -86,7 +86,7 @@ void spip::CalibrationPipeline::configure ()
   if (verbose)
     cerr << "spip::CalibrationPipeline::configure allocating UnpackFloat" << endl;
   // unpack to float operation
-  unpack_float = new spip::UnpackFloatRAM();
+  unpack_float = unpacker;
   unpack_float->set_input (input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
@@ -130,7 +130,7 @@ void spip::CalibrationPipeline::set_device (int _device)
 }
   
 //! build the pipeline containers and transforms
-void spip::CalibrationPipeline::configure_cuda ()
+void spip::CalibrationPipeline::configure_cuda (spip::UnpackFloat * unpacker)
 {
   if (verbose)
     cerr << "spip::CalibrationPipeline::configure_cuda creating input" << endl;
@@ -158,10 +158,12 @@ void spip::CalibrationPipeline::configure_cuda ()
   // unpack to float operation
   if (verbose)
     cerr << "spip::CalibrationPipeline::configure_cuda allocating UnpackFloat" << endl;
-  unpack_float = new spip::UnpackFloatCUDA(stream);
+  unpack_float = unpacker;
   unpack_float->set_input (d_input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
+  UnpackFloatCUDA * tmp = dynamic_cast<UnpackFloatCUDA *>(unpacker);
+  tmp->set_stream (stream);
 
   // output of sample fold
   if (verbose)

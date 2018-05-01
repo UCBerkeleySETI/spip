@@ -62,13 +62,13 @@ void spip::AdaptiveFilterPipeline::set_channelisation (int freq_res)
 }
 
 //! build the pipeline containers and transforms
-void spip::AdaptiveFilterPipeline::configure ()
+void spip::AdaptiveFilterPipeline::configure (spip::UnpackFloat * unpacker, spip::UnpackFloat * unpacker_ref)
 {
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure ()" << endl;
 #ifdef HAVE_CUDA
   if (device >= 0)
-    return configure_cuda();
+    return configure_cuda(unpacker, unpacker_ref);
 #endif
   
   if (verbose)
@@ -86,12 +86,12 @@ void spip::AdaptiveFilterPipeline::configure ()
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure allocating UnpackFloat" << endl;
   // unpack to float operation
-  unpack_float = new spip::UnpackFloatRAM();
+  unpack_float = unpacker;
   unpack_float->set_input (input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
 
-  unpack_float_ref = new spip::UnpackFloatRAM();
+  unpack_float_ref = unpacker_ref;
   unpack_float_ref->set_input (input_ref);
   unpack_float_ref->set_output (unpacked_ref);
   unpack_float_ref->set_verbose (verbose);
@@ -166,7 +166,7 @@ void spip::AdaptiveFilterPipeline::set_device (int _device)
 }
   
 //! build the pipeline containers and transforms
-void spip::AdaptiveFilterPipeline::configure_cuda ()
+void spip::AdaptiveFilterPipeline::configure_cuda (spip::UnpackFloat * unpacker, spip::UnpackFloat * unpacker_ref)
 {
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure_cuda creating input" << endl;
@@ -202,15 +202,25 @@ void spip::AdaptiveFilterPipeline::configure_cuda ()
     cerr << "spip::AdaptiveFilterPipeline::configure_cuda allocating UnpackFloat" << endl;
 
   // unpack to float operation
-  unpack_float = new spip::UnpackFloatCUDA(stream);
+  unpack_float = unpacker;
   unpack_float->set_input (d_input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
+  UnpackFloatCUDA * tmp = dynamic_cast<UnpackFloatCUDA *>(unpacker);
+  if (tmp)
+    tmp->set_stream (stream);
+  else
+    throw Error (InvalidState, "spip::AdaptiveFilterPipeline::configure_cuda", "unpacker must be a UnpackFloatCUDA");
 
-  unpack_float_ref = new spip::UnpackFloatCUDA(stream);
+  unpack_float_ref = unpacker_ref;
   unpack_float_ref->set_input (d_input_ref);
   unpack_float_ref->set_output (unpacked_ref);
   unpack_float_ref->set_verbose (verbose);
+  tmp = dynamic_cast<UnpackFloatCUDA *>(unpacker_ref);
+  if (tmp)
+    tmp->set_stream (stream);
+  else
+    throw Error (InvalidState, "spip::AdaptiveFilterPipeline::configure_cuda", "unpacker must be a UnpackFloatCUDA");
 
   // fine channels
   if (verbose)

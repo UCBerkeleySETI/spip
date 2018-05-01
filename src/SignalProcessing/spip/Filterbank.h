@@ -44,12 +44,12 @@ namespace spip {
 
       void set_channelisation (int freq_res, int nchan_out);
 
-      void configure ();
+      void configure (UnpackFloat *);
 
 #ifdef HAVE_CUDA
       void set_device (int _device);
 
-      void configure_cuda();
+      void configure_cuda(UnpackFloat *);
 #endif
 
       void open ();

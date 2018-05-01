@@ -9,6 +9,11 @@
 
 #include "spip/Filterbank.h"
 #include "spip/HardwareAffinity.h"
+#include "spip/UnpackFloatRAMUWB.h"
+
+#if HAVE_CUDA
+#include "spip/UnpackFloatCUDAUWB.h"
+#endif
 
 #include <signal.h>
 
@@ -113,9 +118,16 @@ int main(int argc, char *argv[]) try
 
   dp->set_channelisation (nfft, nchan_out);
 #ifdef HAVE_CUDA
-  dp->set_device (device);
+  if (device >= 0)
+  {
+    dp->set_device (device);
+    dp->configure_cuda (new spip::UnpackFloatCUDAUWB());
+  }
+  else
 #endif
-  dp->configure ();
+  {
+    dp->configure (new spip::UnpackFloatRAMUWB());
+  }
   dp->open ();
   dp->process ();
   dp->close ();
@@ -136,7 +148,7 @@ catch (std::exception& exc)
 
 void usage()
 {
-  cout << "filterbank_pipeline [options] inkey outkey" << endl;
+  cout << "uwb_filterbank_pipeline [options] inkey outkey" << endl;
   cout << " -c nchan  form nchan output channels" << endl;
 #ifdef HAVE_CUDA
   cout << " -d gpu    use GPU" << endl;

@@ -80,13 +80,13 @@ void spip::ContinuumPipeline::set_output_state (spip::Signal::State _state)
 }
 
 //! build the pipeline containers and transforms
-void spip::ContinuumPipeline::configure ()
+void spip::ContinuumPipeline::configure (spip::UnpackFloat * unpacker)
 {
   if (verbose)
     cerr << "spip::ContinuumPipeline::configure ()" << endl;
 #ifdef HAVE_CUDA
   if (device >= 0)
-    return configure_cuda();
+    return configure_cuda (unpacker);
 #endif
   
   if (verbose)
@@ -102,7 +102,7 @@ void spip::ContinuumPipeline::configure ()
   if (verbose)
     cerr << "spip::ContinuumPipeline::configure allocating UnpackFloat" << endl;
   // unpack to float operation
-  unpack_float = new spip::UnpackFloatRAM();
+  unpack_float = unpacker;
   unpack_float->set_input (input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
@@ -173,7 +173,7 @@ void spip::ContinuumPipeline::set_device (int _device)
 }
   
 //! build the pipeline containers and transforms
-void spip::ContinuumPipeline::configure_cuda ()
+void spip::ContinuumPipeline::configure_cuda (spip::UnpackFloat * unpacker)
 {
   if (verbose)
     cerr << "spip::ContinuumPipeline::configure_cuda creating input" << endl;
@@ -199,11 +199,15 @@ void spip::ContinuumPipeline::configure_cuda ()
     cerr << "spip::ContinuumPipeline::configure_cuda allocating UnpackFloat" << endl;
 
   // unpack to float operation
-  unpack_float = new spip::UnpackFloatCUDA(stream);
+  unpack_float = unpacker;
   unpack_float->set_input (d_input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
 
+  // ensure the cuda Stream is set
+  spip::UnpackFloatCUDA * tmp = dynamic_cast<spip::UnpackFloatCUDA *>(unpacker);
+  tmp->set_stream (stream);
+  
   // fine channels
   if (verbose)
     cerr << "spip::ContinuumPipeline::configure_cuda allocating channelised container" << endl;

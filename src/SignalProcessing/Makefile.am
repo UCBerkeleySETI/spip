@@ -1,7 +1,10 @@
 
 noinst_LTLIBRARIES = libspipdsp.la
 
-libspipdsp_headers = spip/Container.h \
+libspipdsp_headers = \
+  spip/CalibrationPipeline.h \
+  spip/ContinuumPipeline.h \
+  spip/Container.h \
 	spip/ContainerRAM.h \
 	spip/ContainerRing.h spip/ContainerRingRead.h spip/ContainerRingWrite.h \
 	spip/ContainerBufferedRing.h spip/ContainerBufferedRingWrite.h \
@@ -14,7 +17,10 @@ libspipdsp_headers = spip/Container.h \
   spip/SampleFold.h spip/SampleFoldRAM.h\
 	spip/Transformation.h
 
-libspipdsp_la_SOURCES = Container.C \
+libspipdsp_la_SOURCES = \
+  CalibrationPipeline.C \
+  ContinuumPipeline.C \
+  Container.C \
 	ContainerRAM.C \
 	ContainerRing.C ContainerRingRead.C ContainerRingWrite.C \
 	ContainerBufferedRing.C ContainerBufferedRingWrite.C \
@@ -33,12 +39,6 @@ libspipdsp_la_SOURCES = Container.C \
   BackwardFFT.C \
   SampleFold.C SampleFoldRAM.C \
   UnpackFloat.C UnpackFloatRAM.C
-
-bin_PROGRAMS = filterbank_pipeline adaptive_filter_pipeline adaptive_filter_test
-
-filterbank_pipeline_SOURCES = filterbank_pipeline.C
-adaptive_filter_pipeline_SOURCES = adaptive_filter_pipeline.C
-adaptive_filter_test_SOURCES = adaptive_filter_test.C
 
 AM_CXXFLAGS = @PSRDADA_CFLAGS@ \
 	-I$(top_builddir)/src/Affinity\

@@ -22,10 +22,12 @@ namespace spip {
   {
     public:
     
-      UnpackFloatCUDA (cudaStream_t);
+      UnpackFloatCUDA ();
       
       ~UnpackFloatCUDA ();
  
+      void set_stream (cudaStream_t);
+
       void prepare ();
       
       void reserve ();
@@ -34,9 +36,9 @@ namespace spip {
       
     protected:
     
-    private:
-
       cudaStream_t stream;
+
+    private:
 
   };
 }

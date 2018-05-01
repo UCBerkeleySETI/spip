@@ -8,7 +8,12 @@
 #include "config.h"
 
 #include "spip/CalibrationPipeline.h"
+#include "spip/UnpackFloatRAMUWB.h"
 #include "spip/HardwareAffinity.h"
+
+#if HAVE_CUDA
+#include "spip/UnpackFloatCUDAUWB.h"
+#endif
 
 #include <signal.h>
 #include <math.h>
@@ -158,10 +163,16 @@ int main(int argc, char *argv[]) try
 
 #ifdef HAVE_CUDA
   if (device >= 0)
+  {
     cp->set_device (device);
+    cp->configure (new spip::UnpackFloatCUDAUWB());
+  }
+  else
 #endif
-
-  cp->configure ();
+  {
+    cp->configure (new spip::UnpackFloatRAMUWB());
+  }
+  
   cp->open ();
   cp->process ();
   cp->close ();

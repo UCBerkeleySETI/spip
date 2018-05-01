@@ -76,7 +76,11 @@ src/Formats/VDIF/vlbi_fake
 src/Formats/VDIF/vdif_udpgen
 src/Formats/VDIF/vdif_udprecv
 src/Instruments/MeerKAT/meerkat_polsubxpose
+src/Instruments/UWB/uwb_adaptive_filter_pipeline
+src/Instruments/UWB/uwb_adaptive_filter_test
+src/Instruments/UWB/uwb_calibration_pipeline
 src/Instruments/UWB/uwb_continuum_pipeline
+src/Instruments/UWB/uwb_filterbank_pipeline
 src/SignalProcessing/delay_pipeline
 src/SignalProcessing/filterbank_pipeline
 src/SignalProcessing/adaptive_filter_pipeline

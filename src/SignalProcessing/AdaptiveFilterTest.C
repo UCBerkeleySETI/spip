@@ -54,13 +54,13 @@ spip::AdaptiveFilterTest::~AdaptiveFilterTest()
 }
 
 //! build the pipeline containers and transforms
-void spip::AdaptiveFilterTest::configure ()
+void spip::AdaptiveFilterTest::configure (spip::UnpackFloat * unpacker, spip::UnpackFloat * unpacker_ref)
 {
   if (verbose)
     cerr << "spip::AdaptiveFilterTest::configure ()" << endl;
 #ifdef HAVE_CUDA
   if (device >= 0)
-    return configure_cuda();
+    return configure_cuda(unpacker, unpacker_ref);
 #endif
   
   if (verbose)
@@ -78,12 +78,12 @@ void spip::AdaptiveFilterTest::configure ()
   if (verbose)
     cerr << "spip::AdaptiveFilterTest::configure allocating UnpackFloat" << endl;
   // unpack to float operation
-  unpack_float = new spip::UnpackFloatRAM();
+  unpack_float = unpacker;
   unpack_float->set_input (input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
 
-  unpack_float_ref = new spip::UnpackFloatRAM();
+  unpack_float_ref = unpacker_ref;
   unpack_float_ref->set_input (input_ref);
   unpack_float_ref->set_output (unpacked_ref);
   unpack_float_ref->set_verbose (verbose);
@@ -125,7 +125,7 @@ void spip::AdaptiveFilterTest::set_device (int _device)
 }
   
 //! build the pipeline containers and transforms
-void spip::AdaptiveFilterTest::configure_cuda ()
+void spip::AdaptiveFilterTest::configure_cuda (spip::UnpackFloat * unpacker, spip::UnpackFloat * unpacker_ref)
 {
   if (verbose)
     cerr << "spip::AdaptiveFilterTest::configure_cuda creating input" << endl;
@@ -161,15 +161,25 @@ void spip::AdaptiveFilterTest::configure_cuda ()
     cerr << "spip::AdaptiveFilterTest::configure_cuda allocating UnpackFloat" << endl;
 
   // unpack to float operation
-  unpack_float = new spip::UnpackFloatCUDA(stream);
+  unpack_float = unpacker;
   unpack_float->set_input (d_input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
+  UnpackFloatCUDA * tmp = dynamic_cast<UnpackFloatCUDA *>(unpacker);
+  if (tmp)
+    tmp->set_stream (stream);
+  else
+    throw Error (InvalidState, "spip::AdaptiveFilterTest::configure_cuda", "unpacker must be a UnpackFloatCUDA");
 
-  unpack_float_ref = new spip::UnpackFloatCUDA(stream);
+  unpack_float_ref = unpacker_ref;
   unpack_float_ref->set_input (d_input_ref);
   unpack_float_ref->set_output (unpacked_ref);
   unpack_float_ref->set_verbose (verbose);
+  tmp = dynamic_cast<UnpackFloatCUDA *>(unpacker);
+  if (tmp)
+    tmp->set_stream (stream);
+  else
+    throw Error (InvalidState, "spip::AdaptiveFilterTest::configure_cuda", "unpacker must be a UnpackFloatCUDA");
 
   // cleaned data
   d_output = new spip::ContainerCUDADevice ();
