@@ -432,11 +432,27 @@ class RepackDaemon(Daemon):
     new["obs:observer"] = header["OBSERVER"] 
     new["obs:projid"]   = header["PID"]
 
-    new["be:nrcvr"]     = header["NPOL"]
 
-    # need to know what these mean
-    new["be:phase"]     = header["BACKEND_PHASE"] # Phase convention of backend
-    new["be:tcycle"]    = header["FOLD_OUTTSUBINT"]    # Correlator cycle time
+    new["be:nrcvr"]     = header["NPOL"]
+    
+    try:
+      val               = header["RCVR_HAND"]
+      new["rcvr:hand"]  = val
+    except KeyError as e:
+      self.log(2, "patch_psrfits_header: RCVR_HAND not set in header")
+
+    try:
+      val               = header["BACKEND_PHASE"] # Phase convention of backend
+      new["be:phase"]   = val
+    except KeyError as e:
+      self.log(2, "patch_psrfits_header: BACKEND_PHASE not set in header")
+
+    try:
+      val               = header["FOLD_OUTTSUBINT"] # Correlator cycle time
+      new["be:tcycle"]  = val
+    except KeyError as e:
+      self.log(2, "patch_psrfits_header: FOLD_OUTTSUBINT not set in header")
+
     new["be:dcc"]       = "0"     # Downconversion conjugation corrected
     new["sub:nsblk"]    = "1"     # Samples/row (SEARCH mode, else 1)
   
@@ -457,8 +473,22 @@ class RepackDaemon(Daemon):
     new["ext:stt_date"] = header["UTC_START"][0:10]
     new["ext:stt_time"] = header["UTC_START"][11:19]
 
+    # build psredit command, in-place modification 
+    cmd = "psredit -m"
+
+    try:
+      itrf = header["ITRF"]
+      (x, y, z) = itrf.split(",")
+      new["itrf:ant_x"] = x
+      new["itrf:ant_y"] = y
+      new["itrf:ant_z"] = z
+      cmd = cmd + " -a itrf"
+
+    except KeyError as e:
+      self.log(2, "patch_psrfits_header: ITRF not set in header")
+
     # create the psredit command necessary to apply "new"
-    cmd = "psredit -m -c " + ",".join(['%s=%s' % (key, value) for (key, value) in new.items()]) + " " + input_file
+    cmd = cmd + " -c " + ",".join(['%s=%s' % (key, value) for (key, value) in new.items()]) + " " + input_file
     rval, lines = self.system(cmd, 2)
     if rval:
       return rval, lines[0]
@@ -683,8 +713,8 @@ class RepackDaemon(Daemon):
     npol = int(lines[0])
 
     # plot the bandpass
-    basecmd = "psrplot -pb -x "
-    if npol == 2:
+    basecmd = "psrplot -p b -x "
+    if npol >= 2:
       basecmd = basecmd + "-lpol=0,1 -O -c log=1 "
   
     cmd = basecmd + band_file + lo_res + opts

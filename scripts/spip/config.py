@@ -149,6 +149,7 @@ class Config(object):
     cfg["TELESCOPE"]     = self.site["TELESCOPE"]
     cfg["DSB"]           = self.site["DSB"]
     cfg["BACKEND_PHASE"] = self.site["BACKEND_PHASE"]
+    cfg["RCVR_HAND"]     = self.site["RCVR_HAND"]
 
     cfg["RECEIVER"]   = self.config["RECEIVER"]
     cfg["INSTRUMENT"] = self.config["INSTRUMENT"]
