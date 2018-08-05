@@ -477,7 +477,8 @@ void spip::UDPReceiveMerge2DB::send_terminal_packets()
 #ifdef HAVE_VMA
   pthread_t id = pthread_self();
   struct vma_api_t * vma_api = vma_get_api();
-  vma_api->thread_offload (0, id);
+  if (vma_api)
+    vma_api->thread_offload (0, id);
 #endif
 
   // create and open a UDP sending socket
@@ -520,6 +521,7 @@ void spip::UDPReceiveMerge2DB::start_threads (int c1, int c2)
 
   pthread_create (&datablock_thread_id, NULL, datablock_thread_wrapper, this);
   pthread_create (&recv_thread1_id, NULL, recv_thread1_wrapper, this);
+  sleep(2);
   pthread_create (&recv_thread2_id, NULL, recv_thread2_wrapper, this);
   pthread_create (&stats_thread_id, NULL, stats_thread_wrapper, this);
 }
@@ -535,6 +537,9 @@ void spip::UDPReceiveMerge2DB::join_threads ()
 
 bool spip::UDPReceiveMerge2DB::datablock_thread ()
 {
+#ifdef _DEBUG
+  cerr << "spip::UDPReceiveMerge2DB::datablock_thread starting" << endl;
+#endif
   pthread_mutex_lock (&mutex_db);
   pthread_mutex_lock (&(mutex_recvs[0]));
   pthread_mutex_lock (&(mutex_recvs[1]));
@@ -542,9 +547,17 @@ bool spip::UDPReceiveMerge2DB::datablock_thread ()
   uint64_t ibuf = 0;
   int64_t overflow_lastbyte;
 
+#ifdef _DEBUG
+  cerr << "spip::UDPReceiveMerge2DB::datablock_thread locked mutexes" << endl;
+#endif
+
   // wait for the starting command from the control_thread
   while (control_cmd == None)
     pthread_cond_wait (&cond_db, &mutex_db);
+
+#ifdef _DEBUG
+    cerr << "spip::UDPReceiveMerge2DB::datablock control_cmd  != None" << endl;
+#endif
 
   // if we have a start command then we can continue
   if (control_cmd == Start)
@@ -672,6 +685,9 @@ bool spip::UDPReceiveMerge2DB::datablock_thread ()
 
 bool spip::UDPReceiveMerge2DB::receive_thread (int p)
 {
+#ifdef _DEBUG
+  cerr << "spip::UDPReceiveMerge2DB::receive_thread[" << p << "] starting" << endl;
+#endif
 #ifdef HAVE_HWLOC
   spip::HardwareAffinity hw_affinity;
   hw_affinity.bind_thread_to_cpu_core (cores[p]);
@@ -682,6 +698,9 @@ bool spip::UDPReceiveMerge2DB::receive_thread (int p)
   UDPFormat * format = formats[p];
   UDPStats * stat = stats[p];
 
+#ifdef _DEBUG
+  cerr << "spip::UDPReceiveMerge2DB::receive_thread[" << p << "] creating sockets" << endl;
+#endif
   // open socket within the context of this thread 
 #ifdef HAVE_VMA
   UDPSocketReceiveVMA * sock = new UDPSocketReceiveVMA;
@@ -693,6 +712,9 @@ bool spip::UDPReceiveMerge2DB::receive_thread (int p)
   else
     sock->open (data_hosts[p], data_ports[p]);
 
+#ifdef _DEBUG
+  cerr << "spip::UDPReceiveMerge2DB::receive_thread[" << p << "] resizing socket buffers " << endl;
+#endif
   size_t sock_bufsz = format->get_header_size() + format->get_data_size();
   sock->resize (sock_bufsz);
   sock->resize_kernel_buffer (64*1024*1024);
@@ -723,6 +745,9 @@ bool spip::UDPReceiveMerge2DB::receive_thread (int p)
   uint64_t nsleeps;
   uint64_t ibuf = 0;
 
+#ifdef _DEBUG
+  cerr << "spip::UDPReceiveMerge2DB::receive_thread[" << p << "] trying to lock mutex" << endl;
+#endif
   // wait for datablock thread to change state to Active
   pthread_mutex_lock (mutex_recv);
 
@@ -864,7 +889,7 @@ bool spip::UDPReceiveMerge2DB::receive_thread (int p)
                    << " data_bufsz=" << data_bufsz 
                    << " overflow_lastbytes[" << p << "][0]=" << overflow_lastbytes[p][0]
                    << " overflow_lastbytes[" << p << "][1]=" << overflow_lastbytes[p][1]
-                   << " filled_this_buffer=" << filled_this_buffer endl;
+                   << " filled_this_buffer=" << filled_this_buffer << endl;
 #endif
             stat->dropped_bytes (data_bufsz - pol_bytes_this_buf);
             filled_this_buffer = true;
