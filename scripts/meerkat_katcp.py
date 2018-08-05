@@ -50,6 +50,11 @@ class KATCPDaemon(Daemon):
     if not (self.cfg["INDEPENDENT_BEAMS"] == "true"):
       raise Exception ("KATCPDaemon incompatible with INDEPENDENT_BEAMS != true")
 
+    self.input_nchan = 0
+    for i in range(int(self.cfg["NUM_STREAM"])):
+      (cfreq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + str(i)].split(":")
+      self.input_nchan = self.input_nchan + int(nchan)
+
     self.reset_cam_config()
 
     # get a list of all LMCs
@@ -140,7 +145,7 @@ class KATCPDaemon(Daemon):
     self.beam_config["DESCRIPTION"] = "None"
     self.beam_config["POOL_RESOURCES"] = "None"
     self.beam_config["DM"] = "-1"
-    self.beam_config["OUTNCHAN"] = "4096"
+    self.beam_config["OUTNCHAN"] = str(self.input_nchan)
     self.beam_config["OUTNBIN"] = "1024"
     self.beam_config["OUTTSUBINT"] = "8"
     self.beam_config["OUTNPOL"] = "4"
@@ -308,6 +313,7 @@ class KATCPDaemon(Daemon):
     xml +=     "<proposal_id key='PROPOSAL_ID'>" + self.beam_config["PROPOSAL_ID"] + "</proposal_id>"
     xml +=     "<program_block_id key='PROGRAM_BLOCK_ID'>" + "TBD" + "</program_block_id>"
     xml +=     "<description key='DESCRIPTION'>" + self.beam_config["DESCRIPTION"] + "</description>"
+    xml +=     "<itrf key='ITRF'>" + self.beam_config["ITRF"] + "</itrf>"
     xml +=     "<precisetime_fraction_polv key='PRECISETIME_FRACTION_POLV'>" + self.beam_config["PRECISETIME_FRACTION_POLV"] + "</precisetime_fraction_polv>"
     xml +=     "<precisetime_fraction_polh key='PRECISETIME_FRACTION_POLH'>" + self.beam_config["PRECISETIME_FRACTION_POLH"] + "</precisetime_fraction_polh>"
     xml +=     "<precisetime_uncertainty_polv key='PRECISETIME_UNCERTAINTY_POLV'>" + self.beam_config["PRECISETIME_UNCERTAINTY_POLV"] + "</precisetime_uncertainty_polv>"
@@ -336,7 +342,7 @@ class KATCPDaemon(Daemon):
     xml +=     "<output_nchannels key='SEARCH_OUTNCHAN'>" + self.beam_config["OUTNCHAN"] + "</output_nchannels>"
     xml +=     "<dm key='SEARCH_DM'>" + self.beam_config["DM"] + "</dm>"
     xml +=     "<output_tdec key='SEARCH_OUTTDEC'>" + self.beam_config["OUTTDEC"] + "</output_tdec>"
-    xml +=     "<output_npol key='OUTNPOL'>" + self.beam_config["OUTNPOL"] + "</output_npol>"
+    xml +=     "<output_npol key='SEARCH_OUTNPOL'>" + self.beam_config["OUTNPOL"] + "</output_npol>"
     xml +=   "</search_processing_parameters>"
 
     xml += "</obs_cmd>"

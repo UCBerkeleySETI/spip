@@ -405,6 +405,7 @@ class KATCPServer (DeviceServer):
     self.script.beam_config["PRECISETIME_UNCERTAINTY_POLH"] = self.script.cam_config["PRECISETIME_UNCERTAINTY_POLH"]
     self.script.beam_config["TFR_KTT_GNSS"] = self.script.cam_config["TFR_KTT_GNSS"]
 
+    self.script.beam_config["ITRF"] = self.script.cam_config["ITRF"]
     self.script.beam_config["OBSERVER"] = self.script.cam_config["OBSERVER"]
     self.script.beam_config["ANTENNAE"] = self.script.cam_config["ANTENNAE"]
     self.script.beam_config["SCHEDULE_BLOCK_ID"] = self.script.cam_config["SCHEDULE_BLOCK_ID"]
@@ -622,15 +623,19 @@ class KATCPServer (DeviceServer):
         if 'cam.http' in streams.keys() and 'camdata' in streams['cam.http'].keys():
           cam_server = streams['cam.http']['camdata']
           self.script.log (2,"configure: cam_server="+str(cam_server))
+
         if 'cbf.antenna_channelised_voltage' in streams.keys():
           stream_name = streams['cbf.antenna_channelised_voltage'].keys()[0]
           fengine_stream = stream_name.split(".")[0]
           self.script.log (2,"configure: fengine_stream="+str(fengine_stream))
-        if 'cbf.tied_array_channelised_voltage' in streams.keys() and \
-          len(streams['cbf.tied_array_channelised_voltage'].keys()) == 2:
-          polh_stream = streams['cbf.tied_array_channelised_voltage'].keys()[0]
-          polv_stream = streams['cbf.tied_array_channelised_voltage'].keys()[1]
-          self.script.log (2,"configure: polh_stream="+str(polh_stream))
+
+        if 'cbf.tied_array_channelised_voltage' in streams.keys():
+          for s in streams['cbf.tied_array_channelised_voltage'].keys():
+            if s.endswith('y'):
+              polv_stream = s
+            if s.endswith('x'):
+              polh_stream = s
+          self.script.log (2,"configure: polh_stream="+str(polh_stream) + " polv_stream=" + str(polv_stream))
 
         if cam_server != "None" and fengine_stream != "None" and polh_stream != "None":
           self.script.pubsub.update_cam (cam_server, fengine_stream, polh_stream, polv_stream)
@@ -890,7 +895,7 @@ class KATCPServer (DeviceServer):
       self.script.log (-1, "request_output_tdec: " + str(outtdec) + " not in range [16..131072]")
       return ("fail", "output tdec must be between 16 and 131072")
     self.script.beam_config["lock"].acquire()
-    self.script.beam_config["OUTTDEC"] = str(outnbit)
+    self.script.beam_config["OUTTDEC"] = str(outtdec)
     self.script.beam_config["lock"].release()
     return ("ok", "")
 
