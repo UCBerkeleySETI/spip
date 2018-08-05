@@ -27,6 +27,8 @@ namespace spip {
       // open the socket
       virtual void open (std::string, int);
 
+      void bind (int);
+
       // open the socket and bind to a multicast group
       virtual void open_multicast (std::string, std::string, int port);
 
