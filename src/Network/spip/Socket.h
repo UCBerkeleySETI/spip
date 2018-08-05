@@ -28,6 +28,8 @@ namespace spip {
       // resize the socket buffer
       virtual void resize (size_t new_bufsz);
 
+      void reset_buffer ();
+
       int set_nonblock();
 
       int set_block();
