@@ -5,9 +5,11 @@
 #include "config.h"
 
 #include "spip/AsciiHeader.h"
+#include "spip/UDPSocketReceiveVMA.h"
 #include "spip/UDPSocketReceive.h"
 #include "spip/UDPFormat.h"
 #include "spip/UDPStats.h"
+#include "spip/UDPOverflow.h"
 #include "spip/DataBlockWrite.h"
 
 #include <iostream>
@@ -20,8 +22,8 @@
 
 namespace spip {
 
-  enum ControlCmd   { None, Start, Stop, Quit };
-  enum ControlState { Idle, Active, Stopping };
+  enum ControlCmd   { None, Record, Monitor, Stop, Quit };
+  enum ControlState { Idle, Recording, Monitoring, Stopping };
 
   class UDPReceiveDB {
 
@@ -30,6 +32,8 @@ namespace spip {
       UDPReceiveDB (const char * key_string);
 
       ~UDPReceiveDB ();
+
+      void set_verbosity (int v) { verbose = v; };
 
       int configure (const char * config);
 
@@ -64,9 +68,11 @@ namespace spip {
 
       bool receive (int core);
 
-      void start_capture () { control_cmd = Start; };
+      void receive_block (UDPFormat * fmt);
 
-      void stop_capture () { control_cmd = Stop; };
+      void start_capture () { set_control_cmd (Record); };
+
+      void stop_capture () { set_control_cmd (Stop); };
 
       static void * stats_thread_wrapper (void * obj)
       {
@@ -80,7 +86,7 @@ namespace spip {
 
       void stats_thread ();
 
-      UDPStats * get_stats () { return stats; };
+      UDPStats * get_stats () { return udp_stats; };
 
       uint64_t get_data_bufsz () { return db->get_data_bufsz(); };
 
@@ -94,11 +100,17 @@ namespace spip {
 
       int data_port;
 
-      UDPSocketReceive * sock;
+#ifdef HAVE_VMA
+      UDPSocketReceiveVMA * sock = new UDPSocketReceiveVMA;
+#else
+      UDPSocketReceive * sock = new UDPSocketReceive;
+#endif
 
       UDPFormat * format;
 
-      UDPStats * stats;
+      UDPStats * udp_stats;
+
+      UDPOverflow * overflow;
 
       pthread_t stats_thread_id;
 
@@ -124,8 +136,9 @@ namespace spip {
       char vma_api;
 #endif
 
-      bool keep_receiving;
+      uint64_t resolution;
 
+/*
       unsigned nchan;
 
       unsigned ndim;
@@ -136,37 +149,29 @@ namespace spip {
 
       float bw;
 
-      float channel_bw;
-
       float tsamp;
-
-      unsigned bits_per_second;
-
-      unsigned bytes_per_second;
-
-      uint64_t b_recv_curr;
-      uint64_t b_drop_curr;
-      uint64_t s_curr;
-      uint64_t b_recv_total;
-      uint64_t b_drop_total;
-      uint64_t s_total;
-
-      double bytes_recv_ps;
-      double bytes_drop_ps;
-      double sleeps_ps;
-
-      struct timeval curr;
-      struct timeval prev;
-
+*/
       char verbose;
 
-    private:
+      int64_t curr_byte_offset;
 
-      int core;
+      int64_t next_byte_offset;
+
+      int64_t overflow_maxbyte;
+
+      uint64_t data_block_bufsz;
+
+      char * block;
+
+      char * overflow_block;
 
       pthread_cond_t cond;
 
       pthread_mutex_t mutex;
+
+    private:
+
+      int core;
 
   };
 

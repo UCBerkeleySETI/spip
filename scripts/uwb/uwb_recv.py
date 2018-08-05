@@ -39,10 +39,18 @@ class UWBRecvDaemon(RecvDaemon):
     return env
 
   def getCommand (self, config_file):
+
+    # get the beam name for the stream
+    (host, self.beam_id, self.subband_id) = self.cfg["STREAM_" + self.id].split(":")
+    beam = self.cfg["BEAM_" + str(self.beam_id)]
+
     cmd = self.cfg["STREAM_BINARY"] + " -k " + self.db_key \
             + " -b " + self.cpu_core \
             + " -c " + self.ctrl_port \
-            + " " + config_file 
+            + " -D " + self.cfg["CLIENT_STATS_DIR"] + "/" + beam \
+            + " -s " + str(self.id) \
+            + " -f dualvdif" \
+            + " " + config_file
     return cmd
 
 ###############################################################################
@@ -58,6 +66,9 @@ if __name__ == "__main__":
   stream_id = sys.argv[1]
 
   script = UWBRecvDaemon ("uwb_recv", stream_id)
+
+  # ensure the recv daemons can bind as they see fit
+  script.cpu_list = "-1"
   state = script.configure (DAEMONIZE, DL, "recv", "recv")
   if state != 0:
     sys.exit(state)

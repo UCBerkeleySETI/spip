@@ -1,11 +1,14 @@
 
 noinst_LTLIBRARIES = libinstuwb.la
 
-libinstuwb_headers = spip/ContinuumPipeline.h
+libinstuwb_headers = spip/CalibrationPipeline.h \
+  spip/ContinuumPipeline.h
 
-libinstuwb_la_SOURCES = ContinuumPipeline.C
+libinstuwb_la_SOURCES = CalibrationPipeline.C \
+  ContinuumPipeline.C
 
-bin_PROGRAMS = uwb_continuum_pipeline
+bin_PROGRAMS = uwb_calibration_pipeline \
+ uwb_continuum_pipeline
 
 AM_CXXFLAGS = -I .\
   -I$(top_builddir)/src/Affinity \
@@ -24,6 +27,7 @@ AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @FFTW_CFLAGS@
 LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @FFTW_LIBS@
 
 uwb_continuum_pipeline_SOURCES = uwb_continuum_pipeline.C
+uwb_calibration_pipeline_SOURCES = uwb_calibration_pipeline.C
 
 if HAVE_CUDA
 

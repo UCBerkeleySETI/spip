@@ -43,6 +43,7 @@ class PubSubThread (threading.Thread):
     self.sub_array = -1
     self.mappings = {}
     self.chatty_sensors = []
+    self.antennae = []
     self.io_loop = []
     self.policy = "event-rate 5.0 300.0"
     self.title  = "ptuse_unconfigured"
@@ -90,7 +91,16 @@ class PubSubThread (threading.Thread):
 
     self.chatty_sensors = ["RA", "DEC", "PRECISETIME_FRACTION_POLH", "PRECISETIME_UNCERTAINTY_POLH", \
                            "PRECISETIME_FRACTION_POLV", "PRECISETIME_UNCERTAINTY_POLV", "TFR_KTT_GNSS"]
-    
+    self.script.log(1, "PubSubThread::configure self.antennae=" + str(self.antennae))
+
+    for i in range(len(self.antennae)):
+      if not i % 2 == 0:
+        sensors["ANT_WEIGHT_" + str(i)] = {"comp": "cbf", "sensor": self.polh_stream + "-input" + str(i) + "-weight"}
+        self.script.log(1, "PubSubThread::configure i=" + str(i) + " stream=" + self.polh_stream)
+      else:
+        sensors["ANT_WEIGHT_" + str(i)] = {"comp": "cbf", "sensor": self.polv_stream + "-input" + str(i) + "-weight"}
+        self.script.log(1, "PubSubThread::configure i=" + str(i) + " stream=" + self.polv_stream)
+  
     self.script.log(3, "PubSubThread::configure sensors=" + str(sensors))
     for key in sensors.keys():
 
@@ -130,7 +140,7 @@ class PubSubThread (threading.Thread):
     self.script.log(2, "PubSubThread::configure added sensors")
 
   # configure a new metadata server 
-  def update_cam (self, server, fengine_stream, polh_stream, polv_stream):
+  def update_cam (self, server, fengine_stream, polh_stream, polv_stream, antennae):
 
     self.script.log(2, "PubSubThread::update_cam("+server+","+fengine_stream+","+polh_stream+","+polv_stream+")")
     # server name is configured with the following schema
@@ -141,6 +151,7 @@ class PubSubThread (threading.Thread):
     self.polh_stream = polh_stream
     self.polv_stream = polv_stream
     self.sub_array = server.split('/')[-1]
+    self.antennae = antennae.split(',')
 
   # configure the pub/sub instance to 
   def set_beam_name (self, beam):

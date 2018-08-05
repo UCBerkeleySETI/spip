@@ -27,12 +27,15 @@ spip::ContainerRAM::~ContainerRAM ()
 
 void spip::ContainerRAM::resize ()
 {
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerRAM::resize()" << endl;
+
   uint64_t required_size = calculate_buffer_size ();
   if (required_size > size)
   {
     if (spip::Container::verbose)
-    cerr << "spip::ContainerRAM::resize resizing from " << size 
-         << " to " << required_size << " bytes" << endl;
+      cerr << "spip::ContainerRAM::resize resizing from " << size 
+           << " to " << required_size << " bytes" << endl;
     if (buffer)
       free (buffer);
     buffer = (unsigned char *) malloc (required_size);
@@ -41,6 +44,11 @@ void spip::ContainerRAM::resize ()
 
     size = required_size;
   }
+
+  // ensure strides are correctly calculated
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerRAM::resize calculate_strides" << endl;
+  calculate_strides ();
 }
 
 void spip::ContainerRAM::zero ()

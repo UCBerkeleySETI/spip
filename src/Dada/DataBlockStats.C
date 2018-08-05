@@ -110,17 +110,13 @@ void spip::DataBlockStats::prepare ()
     cerr << "spip::DataBlockStats::prepare db->read_header()" << endl; 
   db->read_header();
 
-  if (ascii_header_get (db->get_header(), "UTC_START", "%s", utc_start) != 1)
-    throw runtime_error ("could not read UTC_START from header");
-
   uint64_t resolution;
   if (ascii_header_get(db->get_header(), "RESOLUTION", "%lu", &resolution) != 1)
     throw runtime_error ("could not read RESOLUTION from header");
   block_format->set_resolution (resolution);
 
   if (verbose)
-    cerr << "spip::DataBlockStats::prepare UTC_START=" << utc_start
-         << " RESOLUTION=" << resolution << endl;
+    cerr << "spip::DataBlockStats::prepare RESOLUTION=" << resolution << endl;
 }
 
 void spip::DataBlockStats::set_block_format (BlockFormat * fmt)
@@ -258,12 +254,11 @@ bool spip::DataBlockStats::monitor (std::string stats_dir, unsigned stream_id)
 
   db->read (buffer, bufsz);
 
+  stringstream ss;
   char local_time[32];
   char command[128];
 
-  stringstream ss;
-  ss << stats_dir << utc_start;
-  sprintf (command, "mkdir -p %s", ss.str().c_str());
+  sprintf (command, "mkdir -p %s", stats_dir.c_str());
   if (verbose)
     cerr << "spip::DataBlockStats::monitor " << command << endl;
   int rval = system (command);
@@ -313,23 +308,23 @@ bool spip::DataBlockStats::monitor (std::string stats_dir, unsigned stream_id)
 
       if (verbose)
         cerr << "spip::DataBlockStats::monitor generating output" << endl;
-      ss.str("");
 
-      ss << stats_dir << utc_start << "/" << local_time << "." << stream_id << ".hg.stats";
+      ss.str("");
+      ss << stats_dir << "/" << local_time << "." << stream_id << ".hg.stats";
       if (verbose)
         cerr << "spip::DataBlockStats::monitor creating HG stats file " << ss.str() << endl;
 
       block_format->write_histograms (ss.str());
       
       ss.str("");
-      ss << stats_dir << utc_start << "/" << local_time << "." 
+      ss << stats_dir << "/" << local_time << "." 
          << stream_id << ".ft.stats";
       if (verbose)
         cerr << "spip::DataBlockStats::monitor creating FT stats file " << ss.str() << endl;
       block_format->write_freq_times (ss.str());
 
       ss.str("");
-      ss << stats_dir << utc_start << "/" << local_time << "." 
+      ss << stats_dir << "/" << local_time << "." 
          << stream_id << ".ms.stats";
       if (verbose)
         cerr << "spip::DataBlockStats::monitor creating MS stats file " << ss.str() << endl;

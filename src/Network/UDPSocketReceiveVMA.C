@@ -41,8 +41,11 @@ void spip::UDPSocketReceiveVMA::open (string ip_address, int port)
   // open the socket FD
   spip::UDPSocketReceive::open (ip_address, port);
 
-  // VMA sockets are non blocking
-  set_block ();
+  // VMA sockets are blocking
+  if (vma_api)
+    set_block ();
+  else
+    set_nonblock ();
 }
 
 void spip::UDPSocketReceiveVMA::open_multicast (string ip_address, string group, int port)

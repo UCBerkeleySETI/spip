@@ -16,7 +16,7 @@ namespace spip {
 
       BlockFormat();
 
-      ~BlockFormat();
+      virtual ~BlockFormat();
 
       void prepare (unsigned _nbin, unsigned _ntime, unsigned _nfreq, double freq, double bw, double tsamp);
 
@@ -83,6 +83,8 @@ namespace spip {
       std::vector <std::vector <std::vector <float> > > freq_time;
 
     private:
+
+      char * temp_file;
 
   };
 

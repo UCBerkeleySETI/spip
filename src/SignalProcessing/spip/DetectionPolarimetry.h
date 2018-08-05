@@ -32,6 +32,8 @@ namespace spip {
 
       virtual void transform_TFPS_to_TFPS () = 0;
 
+      virtual void transform_TSPFB_to_TSPFB () = 0;
+
     protected:
 
     private:

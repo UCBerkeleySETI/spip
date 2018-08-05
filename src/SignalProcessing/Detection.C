@@ -48,6 +48,8 @@ void spip::Detection::transformation ()
     transform_TFPS_to_TFPS ();
   else if ((input->get_order() == spip::Ordering::TSPF) && (output->get_order() == spip::Ordering::TSPF))
     transform_TSPF_to_TSPF();
+  else if ((input->get_order() == spip::Ordering::TSPFB) && (output->get_order() == spip::Ordering::TSPFB))
+    transform_TSPFB_to_TSPFB();
   else
     throw invalid_argument ("Detection::transformation invalid ordering, must be");
 }

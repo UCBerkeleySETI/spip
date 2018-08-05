@@ -81,12 +81,6 @@ void spip::Integration::configure (spip::Ordering output_order)
   output->set_nchan (nchan / chan_dec);
   output->set_nsignal (nsignal / signal_dec);
   
-  uint64_t output_ndat = ndat / dat_dec;
-
-  // update the calculated parameters
-  if (output_ndat == 0)
-    output_ndat = 1;
-
   // the output file size should be a single sample
   unsigned bits_per_sample = output->calculate_nbits_per_sample();
 

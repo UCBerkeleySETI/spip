@@ -6,10 +6,13 @@
  ***************************************************************************/
 
 #include "spip/BlockFormat.h"
+#include "spip/Error.h"
 
 #include <iostream>
 #include <fstream>
 #include <cstring>
+#include <cstdio>
+#include <unistd.h>
 #include <math.h>
 
 #ifdef __cplusplus
@@ -30,10 +33,15 @@ spip::BlockFormat::BlockFormat()
   nbit = 8;
   freq = 0;
   bw = 0;
+
+  temp_file = (char *) malloc(FILENAME_MAX);
 }
 
 spip::BlockFormat::~BlockFormat()
 {
+  if (temp_file)
+    free (temp_file);
+  temp_file = NULL;
 }
 
 void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime,
@@ -138,7 +146,12 @@ void spip::BlockFormat::reset()
 
 void spip::BlockFormat::write_histograms(string hg_filename)
 {
-  ofstream hg_file (hg_filename.c_str(), ofstream::binary);
+  // create a temporary filename tempplate  in the specified directory
+  sprintf (temp_file, "%sXXXXXX", hg_filename.c_str());
+  int fd = mkstemp (temp_file);
+  close (fd);
+
+  ofstream hg_file (temp_file, ofstream::binary);
 
   hg_file.write (reinterpret_cast<const char *>(&npol), sizeof(npol));
   hg_file.write (reinterpret_cast<const char *>(&nfreq_hg), sizeof(nfreq_hg));
@@ -156,12 +169,22 @@ void spip::BlockFormat::write_histograms(string hg_filename)
     }
   }
   hg_file.close();
+
+  if (rename(temp_file, hg_filename.c_str()) != 0)
+  {
+    throw Error (InvalidState, "spip::BlockFormat::write_histograms",
+                 "failed to reame temporary file to actual");
+  }
 }
 
 void spip::BlockFormat::write_freq_times(string ft_filename)
 {
-  ofstream ft_file (ft_filename.c_str(), ofstream::binary);
+  // create a temporary filename tempplate  in the specified directory
+  sprintf (temp_file, "%sXXXXXX", ft_filename.c_str());
+  int fd = mkstemp (temp_file);
+  close (fd);
 
+  ofstream ft_file (temp_file, ofstream::binary);
   ft_file.write (reinterpret_cast<const char *>(&npol), sizeof(npol));
   ft_file.write (reinterpret_cast<const char *>(&nfreq_ft), sizeof(nfreq_ft));
   ft_file.write (reinterpret_cast<const char *>(&ntime), sizeof(ntime));
@@ -177,11 +200,23 @@ void spip::BlockFormat::write_freq_times(string ft_filename)
     }
   }
   ft_file.close();
+
+  if (rename(temp_file, ft_filename.c_str()) != 0)
+  {
+    throw Error (InvalidState, "spip::BlockFormat::write_freq_times",
+                 "failed to reame temporary file to actual");
+  }
 }
 
 void spip::BlockFormat::write_mean_stddevs(string ms_filename)
 {
-  ofstream ms_file (ms_filename.c_str(), ofstream::binary);
+  // create a temporary filename tempplate  in the specified directory
+  sprintf (temp_file, "%sXXXXXX", ms_filename.c_str());
+  int fd = mkstemp (temp_file);
+  close (fd);
+  
+  ofstream ms_file (temp_file, ofstream::binary);
+
   ms_file.write (reinterpret_cast<const char *>(&npol), sizeof(npol));
   ms_file.write (reinterpret_cast<const char *>(&ndim), sizeof(ndim));
   {
@@ -192,4 +227,10 @@ void spip::BlockFormat::write_mean_stddevs(string ms_filename)
     ms_file.write (buffer, stddevs.size() * sizeof(float));
   }
   ms_file.close();
+  if (rename(temp_file, ms_filename.c_str()) != 0)
+  {
+    throw Error (InvalidState, "spip::BlockFormat::write_mean_stddevs",
+                 "failed to reame temporary file to actual");
+  }
+
 }

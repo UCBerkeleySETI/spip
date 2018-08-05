@@ -8,8 +8,10 @@ libspipdsp_headers = spip/Container.h \
 	spip/Detection.h spip/DetectionPolarimetry.h spip/DetectionPolarimetryRAM.h \
 	spip/DetectionSquareLaw.h spip/DetectionSquareLawRAM.h \
 	spip/FractionalDelay.h \
+  spip/FoldTime.h \
 	spip/IntegerDelayRAM.h \
 	spip/Integration.h spip/IntegrationRAM.h \
+  spip/SampleFold.h spip/SampleFoldRAM.h\
 	spip/Transformation.h
 
 libspipdsp_la_SOURCES = Container.C \
@@ -18,8 +20,9 @@ libspipdsp_la_SOURCES = Container.C \
 	ContainerBufferedRing.C ContainerBufferedRingWrite.C \
 	Detection.C DetectionPolarimetry.C DetectionPolarimetryRAM.C \
 	DetectionSquareLaw.C DetectionSquareLawRAM.C \
-	FractionalDelay.C \
 	Filterbank.C \
+	FractionalDelay.C \
+  FoldTime.C \
 	Integration.C IntegrationRAM.C \
 	AdaptiveFilter.C \
 	AdaptiveFilterRAM.C \
@@ -28,6 +31,7 @@ libspipdsp_la_SOURCES = Container.C \
   BatchedBackwardFFT.C \
   ForwardFFT.C \
   BackwardFFT.C \
+  SampleFold.C SampleFoldRAM.C \
   UnpackFloat.C UnpackFloatRAM.C
 
 bin_PROGRAMS = filterbank_pipeline adaptive_filter_pipeline adaptive_filter_test
@@ -78,7 +82,7 @@ endif
 if HAVE_CUDA
 
 libspipdsp_headers += spip/DetectionPolarimetryCUDA.h \
-  DetectionSquareLawCUDA.cu
+  DetectionSquareLawCUDA.h
 
 libspipdsp_la_SOURCES += CUDAtoRAMTransfer.C \
   RAMtoCUDATransfer.C \
@@ -86,6 +90,7 @@ libspipdsp_la_SOURCES += CUDAtoRAMTransfer.C \
   DetectionPolarimetryCUDA.cu \
   DetectionSquareLawCUDA.cu \
   IntegrationCUDA.cu \
+  SampleFoldCUDA.cu \
   UnpackFloatCUDA.cu \
 	AdaptiveFilterCUDA.cu
 

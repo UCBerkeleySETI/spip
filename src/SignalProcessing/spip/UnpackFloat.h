@@ -30,6 +30,8 @@ namespace spip {
 
       void reserve ();
 
+      void set_scale (float);
+
       //! Perform a forward FFT on input block
       void transformation ();
 
@@ -41,11 +43,6 @@ namespace spip {
       Endian endianness;
 
       Encoding encoding;
-
-      // hacks to accomodate nvcc and enums
-      bool big_endian;
-
-      bool twos_complement;
 
       unsigned nchan;
 

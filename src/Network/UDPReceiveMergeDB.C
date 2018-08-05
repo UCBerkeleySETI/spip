@@ -21,9 +21,12 @@
 #include "spip/Time.h"
 
 #include <cstring>
+#include <iostream>
 #include <stdexcept>
 #include <new>
 #include <signal.h>
+
+//#define _DEBUG
 
 using namespace std;
 
@@ -144,7 +147,8 @@ int spip::UDPReceiveMergeDB::configure (const char * config_str)
   if (db->get_data_bufsz() % chunk_size != 0)
     throw invalid_argument ("Data block buffer size must be multiple of RESOLUTION");
 
-  overflow = (char *) malloc (chunk_size);
+  overflow_chunks = 2;
+  overflow = (char *) malloc (chunk_size * overflow_chunks);
 
   for (unsigned i=0; i<2; i++)
   {
@@ -185,13 +189,6 @@ void spip::UDPReceiveMergeDB::set_control_cmd (spip::ControlCmd cmd)
     spip::UDPSocketReceive::keep_receiving = false;
   pthread_cond_signal (&cond_db);
   pthread_mutex_unlock (&mutex_db);
-
-  // send a SIGINT in case the threads are blocked on a system call to recvfrom
-  if ((cmd == Stop) || (cmd == Quit))
-  {
-    pthread_kill (recv_thread1_id, SIGINT);
-    pthread_kill (recv_thread2_id, SIGINT);
-  }
 }
 
 void spip::UDPReceiveMergeDB::send_terminal_packets()
@@ -586,7 +583,7 @@ bool spip::UDPReceiveMergeDB::receive_thread (int p)
   int64_t next_byte_offset = 0;
 
   // overflow buffer
-  const int64_t overflow_bufsz = chunk_size * 2;
+  const int64_t overflow_bufsz = chunk_size * overflow_chunks;
   int64_t overflow_maxbyte = 0;
   int64_t overflowed_bytes = 0;
 
@@ -703,6 +700,7 @@ bool spip::UDPReceiveMergeDB::receive_thread (int p)
               format->insert_last_packet (overflow + (byte_offset - next_byte_offset));
 
               overflow_lastbytes[p] = std::max((byte_offset - next_byte_offset) + bytes_received, overflow_lastbytes[p]);
+
               overflowed_bytes += bytes_received;
               sock->consume_packet();
             }

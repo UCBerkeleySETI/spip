@@ -60,6 +60,13 @@ void spip::DetectionPolarimetryCUDA::transform_TSPF_to_TSPF ()
   throw invalid_argument ("spip::DetectionPolarimetryCUDA::transform_TSPF_to_TSPF not implemented (yet)");
 }
 
+void spip::DetectionPolarimetryCUDA::transform_TSPFB_to_TSPFB ()
+{
+  if (verbose)
+    cerr << "spip::DetectionPolarimetryCUDA::transform_TSPFB_to_TSPFB()" << endl;
+  throw invalid_argument ("spip::DetectionPolarimetryCUDA::transform_TSPFB_to_TSPFB not implemented (yet)");
+}
+
 
 void spip::DetectionPolarimetryCUDA::transform_TFPS_to_TFPS ()
 {

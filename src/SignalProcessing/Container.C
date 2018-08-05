@@ -6,6 +6,7 @@
  ***************************************************************************/
 
 #include "spip/Container.h"
+#include "spip/Error.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -23,6 +24,7 @@ spip::Container::Container ()
   nsignal = 1;
   ndim = 1;
   npol = 1;
+  nbin = 1;
   nbit = 8;
   size = 0;
 
@@ -39,7 +41,11 @@ spip::Container::~Container ()
 void spip::Container::read_header()
 {
   if (header.get ("NANT", "%u", &nsignal) != 1)
-    throw invalid_argument ("NSIGNAL did not exist in header");
+  {
+    if (spip::Container::verbose)
+      cerr << "spip::Container::read_header NANT did not exist in header, assuming 1" << endl;
+    nsignal = 1;
+  }
 
   if (header.get ("NCHAN", "%u", &nchan) != 1)
     throw invalid_argument ("NCHAN did not exist in header");
@@ -49,6 +55,13 @@ void spip::Container::read_header()
 
   if (header.get ("NPOL", "%u", &npol) != 1)
     throw invalid_argument ("NPOL did not exist in header");
+
+  if (header.get ("NBIN", "%u", &nbin) != 1)
+  {
+    if (spip::Container::verbose)
+      cerr << "spip::Container::read_header NBIN did not exist in header, assuming 1" << endl;
+    nbin = 1;
+  }
 
   if (header.get ("NDIM", "%u", &ndim) != 1)
     throw invalid_argument ("NDIM did not exist in header");
@@ -70,7 +83,11 @@ void spip::Container::read_header()
   utc_start = new spip::Time(tmp_buf);
 
   if (header.get ("PICOSECONDS", "%lu", &utc_start_pico) != 1)
-    throw invalid_argument ("PICOSECONDS did not exist in header");
+  {
+    if (spip::Container::verbose)
+      cerr << "spip::Container::read_header PICOSECONDS did not exist in header, assuming 0" << endl;
+    utc_start_pico = 0;
+  }
 
   if (header.get ("OBS_OFFSET", "%lu", &obs_offset) != 1)
     throw invalid_argument ("OBS_OFFSET did not exist in header");
@@ -108,7 +125,8 @@ void spip::Container::read_header()
   }
   else
   {
-    cerr << "spip::Container::read_header did not find ENDIAN keyword in header" << endl;
+    if (spip::Container::verbose)
+      cerr << "spip::Container::read_header did not find ENDIAN keyword in header, assuming Little" << endl;
     endianness = spip::Endian::Little;
   }
 
@@ -125,7 +143,8 @@ void spip::Container::read_header()
   }
   else
   {
-    cerr << "spip::Container::read_header did not find ENCODING keyword in header" << endl;
+    if (spip::Container::verbose)
+      cerr << "spip::Container::read_header did not find ENCODING keyword in header, assuming Twos Complement" << endl;
     encoding = spip::Encoding::TwosComplement;
   }
 
@@ -148,6 +167,9 @@ void spip::Container::write_header ()
   if (header.set ("NPOL", "%u", npol) < 0)
     throw invalid_argument ("Could not write NPOL to header");
 
+  if (header.set ("NBIN", "%u", nbin) < 0)
+    throw invalid_argument ("Could not write NBIN to header");
+
   if (header.set ("NDIM", "%u", ndim) < 0)
     throw invalid_argument ("Could not write NDIM to header");
 
@@ -165,7 +187,7 @@ void spip::Container::write_header ()
     throw invalid_argument ("Could not write UTC_START to header");
 
   if (header.set ("PICOSECONDS", "%lu", utc_start_pico) < 0)
-    throw invalid_argument ("Could not write PICOSECONDS to header");
+    throw invalid_argument ("Could not write PICOSECONDS to (header");
 
   if (header.set ("OBS_OFFSET", "%lu", obs_offset) < 0)
     throw invalid_argument ("Could not write OBS_OFFSET to header");
@@ -212,6 +234,8 @@ std::string spip::Container::get_order_string (spip::Ordering o)
 {
   if (o == spip::Ordering::SFPT)
     return std::string("SFPT");
+  if (o == spip::Ordering::TSPFB)
+    return std::string("TSPFB");
   if (o == spip::Ordering::TFPS)
     return std::string("TFPS");
   if (o == spip::Ordering::TSPF)
@@ -241,7 +265,7 @@ void spip::Container::recalculate ()
   bytes_per_second = calculate_bytes_per_second ();
 
   // determine the resolution, based on the ordering
-  if ((order == spip::Ordering::TFPS) || (order == spip::Ordering::TSPF))
+  if ((order == spip::Ordering::TFPS) || (order == spip::Ordering::TSPF) || (order == spip::Ordering::TSPFB))
     resolution = bits_per_sample / 8;
   else
     resolution = size;
@@ -254,4 +278,56 @@ void spip::Container::recalculate ()
            << " seconds_per_file=" << seconds_per_file 
            << " bytes_per_second=" << bytes_per_second << endl;
   }
+}
+
+void spip::Container::calculate_strides()
+{
+  if (spip::Container::verbose)
+    cerr << "spip::Container::calculate_strides" << endl;
+
+  if (order == spip::Ordering::SFPT)
+  {
+    bin_stride  = 0;
+    dat_stride  = ndim;
+    pol_stride  = ndat * dat_stride;
+    chan_stride = npol * pol_stride;
+    sig_stride  = nchan * chan_stride;
+  }
+  else if (order == spip::Ordering::TFPS)
+  {
+    bin_stride  = 0;
+    sig_stride  = ndim;
+    pol_stride  = nsignal * sig_stride;
+    chan_stride = npol * pol_stride;
+    dat_stride  = nchan * chan_stride;
+  }
+  else if (order == spip::Ordering::TSPF)
+  {
+    bin_stride  = 0;
+    chan_stride = ndim;
+    pol_stride  = nchan * chan_stride;
+    sig_stride  = npol * pol_stride;
+    dat_stride  = nsignal * sig_stride;
+  }
+  else if (order == spip::Ordering::TSPFB)
+  {
+    bin_stride  = ndim;
+    chan_stride = nbin * bin_stride;
+    pol_stride  = nchan * chan_stride;
+    sig_stride  = npol * pol_stride;
+    dat_stride  = nsignal * sig_stride; 
+  }
+  else if (order == spip::Ordering::Custom)
+  {
+    bin_stride  = 0;
+    chan_stride = 0; 
+    pol_stride  = 0;
+    sig_stride  = 0;
+    dat_stride  = 0;
+  }
+  else
+    throw Error (InvalidState, "spip::Container::calculate_strides", "Unrecognized order: %s", get_order_string(order).c_str());
+
+  if (spip::Container::verbose)
+    cerr << "spip::Container::calculate_strides order=" << get_order_string(order) << " bin=" << bin_stride << " chan=" << chan_stride << " pol=" << pol_stride << " sig=" << sig_stride << " dat=" << dat_stride << endl;
 }

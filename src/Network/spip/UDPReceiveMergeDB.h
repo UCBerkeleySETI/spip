@@ -176,6 +176,8 @@ namespace spip {
 
       char * overflow;
 
+      unsigned overflow_chunks;
+
       int64_t overflow_lastbytes[2];
 
       unsigned chunk_size;

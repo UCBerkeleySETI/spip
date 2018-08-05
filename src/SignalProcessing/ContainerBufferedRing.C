@@ -35,7 +35,8 @@ void spip::ContainerBufferedRing::resize ()
 {
   if (spip::Container::verbose)
     cerr << "spip::ContainerBufferedRing::resize ndat=" << ndat << " nchan=" << nchan 
-         << " nsignal=" << nsignal << " ndim=" << ndim << " npol=" << npol << " nbit=" << nbit << endl;
+         << " nsignal=" << nsignal << " ndim=" << ndim << " npol=" << npol 
+         << " nbin=" << nbin << " nbit=" << nbit << endl;
 
   uint64_t required_size = calculate_buffer_size ();
   if (spip::Container::verbose)
@@ -49,6 +50,11 @@ void spip::ContainerBufferedRing::resize ()
       throw Error(InvalidState, "spip::ContainerBufferedRing::resize", "malloc failed");
     size = required_size;
   }
+
+  // ensure strides are correctly calculated
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerBufferedRing::resize calculate_strides" << endl;
+  calculate_strides ();
 }
 
 void spip::ContainerBufferedRing::zero ()

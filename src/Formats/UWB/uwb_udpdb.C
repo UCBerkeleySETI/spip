@@ -7,6 +7,8 @@
 
 #include "spip/UDPReceiveDB.h"
 #include "spip/UDPFormatVDIF.h"
+#include "spip/UDPFormatDualVDIF.h"
+#include "spip/UDPFormatUWB.h"
 
 #include <unistd.h>
 #include <signal.h>
@@ -29,6 +31,8 @@ int main(int argc, char *argv[]) try
 {
   string key = "dada";
 
+  string * format_name = new string("vdif");
+
   spip::AsciiHeader config;
 
   // tcp control port to receive configuration
@@ -41,7 +45,7 @@ int main(int argc, char *argv[]) try
 
   int core = -1;
 
-  while ((c = getopt(argc, argv, "b:c:hk:v")) != EOF) 
+  while ((c = getopt(argc, argv, "b:c:f:hk:v")) != EOF) 
   {
     switch(c) 
     {
@@ -51,6 +55,10 @@ int main(int argc, char *argv[]) try
 
       case 'c':
         control_port = atoi(optarg);
+        break;
+
+      case 'f':
+        format_name = new string(optarg);
         break;
 
       case 'k':
@@ -78,10 +86,23 @@ int main(int argc, char *argv[]) try
   // create a UDP recevier that writes to a data block
   udpdb = new spip::UDPReceiveDB (key.c_str());
 
-  spip::UDPFormatVDIF * format = new spip::UDPFormatVDIF(0);
+  // configure the UDP format as VDIF or UWB
+  spip::UDPFormatVDIF * format;
+  if (format_name->compare("uwb") == 0)
+    format = new spip::UDPFormatUWB();
+  else if (format_name->compare("vdif") == 0)
+    format = new spip::UDPFormatVDIF();
+  else if (format_name->compare("dualvdif") == 0)
+    format = new spip::UDPFormatDualVDIF();
+  else
+  {
+    cerr << "ERROR: unrecognized UDP format [" << format << "]" << endl;
+    delete udpdb;
+    return (EXIT_FAILURE);
+  }
   format->set_self_start (control_port == -1);
-  udpdb->set_format(format);
- 
+  udpdb->set_format (format);
+
   // Check arguments
   if ((argc - optind) != 1) 
   {
@@ -164,6 +185,7 @@ void usage()
     "  config      ascii file containing fixed configuration\n"
     "  -b core     bind computation to specified CPU core\n"
     "  -c port     control port for dynamic configuration\n"
+    "  -f format   UDP format to use: vdif or dualvdif [default vdif]\n"
     "  -h          print this help text\n"
     "  -k key      PSRDada shared memory key to write to [default " << std::hex << DADA_DEFAULT_BLOCK_KEY << "]\n"
     "  -v          verbose output\n"

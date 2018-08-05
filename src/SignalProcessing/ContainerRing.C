@@ -25,6 +25,8 @@ spip::ContainerRing::~ContainerRing ()
 
 void spip::ContainerRing::resize ()
 {
+  cerr << "spip::ContainerRing::resize()" << endl;
+
   if (spip::Container::verbose)
     cerr << "spip::ContainerRing::resize ndat=" << ndat << " nchan=" << nchan << " nsignal=" << nsignal << " ndim=" << ndim << " npol=" << npol << " nbit=" << nbit << endl;
 

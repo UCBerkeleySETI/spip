@@ -18,8 +18,6 @@ spip::UnpackFloat::UnpackFloat () : Transformation<Container,Container>("UnpackF
   scale = 1;
   endianness = spip::Little;
   encoding  = spip::TwosComplement;
-  big_endian = false;
-  twos_complement = false;
 }
 
 spip::UnpackFloat::~UnpackFloat ()
@@ -38,17 +36,13 @@ void spip::UnpackFloat::configure (spip::Ordering output_order)
   endianness = input->get_endianness();
   encoding = input->get_encoding ();
 
-  // hack to deal with nvcc not liking enums
-  big_endian = (endianness == spip::Endian::Big);
-  twos_complement = (encoding == spip::Encoding::TwosComplement);
-
   if (verbose)
   {
-    if (big_endian)
+    if (endianness == spip::Big)
       cerr << "spip::UnpackFloat::configure input is Big Endian" << endl;
     else
       cerr << "spip::UnpackFloat::configure input is Little Endian" << endl;
-    if (twos_complement)
+    if (encoding == spip::TwosComplement)
       cerr << "spip::UnpackFloat::configure input is Twos Complement" << endl;
     else
       cerr << "spip::UnpackFloat::configure input is Offset Binary" << endl;
@@ -76,7 +70,8 @@ void spip::UnpackFloat::configure (spip::Ordering output_order)
   // update the parameters that this transformation will affect
   output->set_nbit (32);
   //output->set_instrument ("DSPSR");
-  output->set_endianness (spip::Endian::Little);
+  output->set_endianness (spip::Little);
+  output->set_encoding (spip::TwosComplement);
   output->set_order (spip::Ordering::SFPT);
 
   // update the output header parameters with the new details
@@ -84,6 +79,11 @@ void spip::UnpackFloat::configure (spip::Ordering output_order)
   
   // resize the output container
   prepare_output();
+}
+
+void spip::UnpackFloat::set_scale (float _scale)
+{
+  scale = _scale;
 }
 
 void spip::UnpackFloat::prepare ()

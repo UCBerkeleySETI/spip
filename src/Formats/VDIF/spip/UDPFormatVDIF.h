@@ -28,6 +28,7 @@ namespace spip {
 
       void prepare (AsciiHeader& header, const char* suffix);
 
+      void configure_stream (char * buf);
 
       void conclude ();
 
@@ -41,15 +42,15 @@ namespace spip {
 
       void set_channel_range (unsigned start, unsigned end);
 
-      inline void encode_header_seq (char * buf, uint64_t packet_number);
-      inline void encode_header (char * buf);
+      void encode_header_seq (char * buf, uint64_t packet_number);
+      void encode_header (char * buf);
 
       inline int64_t decode_packet (char * buf, unsigned * payload_size);
 
       inline uint64_t decode_header_seq (char * buf);
       inline void decode_header (char * buf);
 
-      inline int insert_last_packet (char * buf);
+      int insert_last_packet (char * buf);
 
       void print_packet_header ();
 
@@ -60,7 +61,7 @@ namespace spip {
 
       inline int64_t get_subband (int64_t byte_offset, int nsubband) { return 0; };
 
-    private:
+    protected:
 
       vdif_header header;
 
@@ -68,26 +69,37 @@ namespace spip {
 
       uint64_t nsamp_offset;
 
-      unsigned nsamp_per_packet;
-
       unsigned packets_per_second;
-
-      unsigned udp_nsamp;
 
       unsigned header_npol;
 
+      uint64_t bytes_per_second;
+
+      //! second (since VDIF epoch) that the observation began
+      int start_second;
+
       unsigned offset;
 
-      uint64_t bytes_per_second;
+      //! size of a single output data frame
+      uint64_t frame_size;
+
+      //! offset of this VDIF frame within the output data stream
+      uint64_t frame_offset;
+
+      bool configured_stream;
+
+    private:
+
+      unsigned nsamp_per_packet;
+
+      unsigned udp_nsamp;
 
       double bw;
 
       double tsamp;
 
-      //! second (since VDIF epoch) that the observation began
-      int start_second;
+      int thread_id;
 
-      bool configured_stream;
   };
 
 }

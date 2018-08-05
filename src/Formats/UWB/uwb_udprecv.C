@@ -10,6 +10,8 @@
 #include "spip/AsciiHeader.h"
 #include "spip/UDPReceiver.h"
 #include "spip/UDPFormatVDIF.h"
+#include "spip/UDPFormatDualVDIF.h"
+#include "spip/UDPFormatUWB.h"
 
 #ifdef HAVE_HWLOC
 #include "spip/HardwareAffinity.h"
@@ -41,6 +43,8 @@ int main(int argc, char *argv[])
   spip::HardwareAffinity hw_affinity;
 #endif
 
+  string * format_name = new string("vdif");
+
   int core = -1;
 
   char verbose = 0;
@@ -48,7 +52,7 @@ int main(int argc, char *argv[])
   opterr = 0;
   int c;
 
-  while ((c = getopt(argc, argv, "b:hv")) != EOF) 
+  while ((c = getopt(argc, argv, "b:f:hv")) != EOF) 
   {
     switch(c) 
     {
@@ -58,6 +62,10 @@ int main(int argc, char *argv[])
         hw_affinity.bind_process_to_cpu_core (core);
         hw_affinity.bind_to_memory (core);
 #endif
+        break;
+
+      case 'f':
+        format_name = new string(optarg);
         break;
 
       case 'h':
@@ -93,8 +101,21 @@ int main(int argc, char *argv[])
     // create a UDP Receiver
     udprecv = new spip::UDPReceiver();
     udprecv->verbose = verbose;
-    spip::UDPFormatVDIF * format = new spip::UDPFormatVDIF();
-    format->set_self_start (true); 
+
+    spip::UDPFormatVDIF * format;
+    if (format_name->compare("uwb") == 0)
+      format = new spip::UDPFormatUWB();
+    else if (format_name->compare("vdif") == 0)
+      format = new spip::UDPFormatVDIF(); 
+    else if (format_name->compare("dualvdif") == 0)
+      format = new spip::UDPFormatDualVDIF(); 
+    else
+    {
+      cerr << "ERROR: unrecognized UDP format [" << format << "]" << endl;
+      delete udprecv;
+      return (EXIT_FAILURE);
+    } 
+    format->set_self_start (true);
     udprecv->set_format (format);
 
     if (verbose)
@@ -148,6 +169,7 @@ void usage()
   cout << "uwb_udprecv [options] config\n"
     "  header      ascii file contain config and header\n"
     "  -b core     bind computation to specified CPU core\n"
+    "  -f format   UDP format to use: vdif, dualvdif or uwb [default vdif]\n"
     "  -h          print this help text\n"
     "  -v          verbose output\n"
     << endl;

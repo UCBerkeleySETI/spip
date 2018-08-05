@@ -32,24 +32,17 @@ int main(int argc, char *argv[])
 
   spip::AsciiHeader config;
 
-  char * config_file = 0;
-
   // core on which to bind thread operations
   string cores = "-1,-1";
 
   int control_port = -1;
-
-  int nsecs = -1;
-
-  // control socket for the control port
-  spip::TCPSocketServer * ctrl_sock = 0;
 
   int verbose = 0;
 
   opterr = 0;
   int c;
 
-  while ((c = getopt(argc, argv, "b:c:hk:t:v")) != EOF) 
+  while ((c = getopt(argc, argv, "b:c:hk:v")) != EOF) 
   {
     switch(c) 
     {
@@ -69,10 +62,6 @@ int main(int argc, char *argv[])
 
       case 'k':
         key = optarg;
-        break;
-
-      case 't':
-        nsecs = atoi(optarg);
         break;
 
       case 'v':
@@ -122,6 +111,7 @@ int main(int argc, char *argv[])
     {
       // open a listening socket for observation parameters
       cerr << "uwb_udpmergedb: start_control_thread (" << control_port << ")" << endl;
+
       udpmergedb->start_control_thread (control_port);
 
       while (!quit_threads)

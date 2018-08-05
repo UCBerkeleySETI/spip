@@ -216,25 +216,25 @@ class TCSDaemon(Daemon):
               message = raw.strip()
 
               if len(message) > 0:
-                self.log(2, "commandThread: message='" + message+"'")
+                self.log(2, "TCSDaemon::commandThread message='" + message+"'")
                 xml = xmltodict.parse(message)
                 self.log(3, "<- " + str(xml))
 
                 # Parse XML for correctness
                 (valid, command, error) = self.parse_obs_cmd (xml, id)
 
-                self.log(1, "commandThread: valid=" + str(valid) \
+                self.log(1, "TCSDaemon::commandThread valid=" + str(valid) \
                          + " command=" + command + " error=" + str(error))
 
                 if valid :
                   if command == "start":
-                    self.log(1, "commandThread: issue_start_cmd message="+message)
+                    self.log(1, "TCSDaemon::commandThread issue_start_cmd message="+message)
                     self.issue_start_cmd (xml)
                   elif command == "stop":
-                    self.log(1, "commandThread: issue_stop_cmd message="+message)
+                    self.log(1, "TCSDaemon::commandThread issue_stop_cmd message="+message)
                     self.issue_stop_cmd (xml)
                   elif command == "configure":
-                    self.log(1, "commandThread: no action for configure command")
+                    self.log(1, "TCSDaemon::commandThread no action for configure command")
                   else:
                     self.log(-1, "Unrecognized command [" + command + "]")
            
@@ -248,7 +248,7 @@ class TCSDaemon(Daemon):
                 handle.send (xml_response + "\r\n")
 
               else:
-                self.log(1, "commandThread: closing socket on 0 byte message")
+                self.log(1, "TCSDaemon::commandThread closing socket on 0 byte message")
                 handle.close()
                 for i, x in enumerate(can_read):
                   if (x == handle):
@@ -256,7 +256,7 @@ class TCSDaemon(Daemon):
       
             except socket.error as e:
               if e.errno == errno.ECONNRESET:
-                self.log(1, "commandThread: closing connection")
+                self.log(1, "TCSDaemon::commandThread closing connection")
                 handle.close()
                 for i, x in enumerate(can_read):
                   if (x == handle):
@@ -277,8 +277,8 @@ class TCSDaemon(Daemon):
 
       # determine which beams this command corresponds to
       for ibeam in range(int(xml['obs_cmd']['beam_configuration']['nbeam']['#text'])):
-        if xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['#text'] == "on":
-
+        state = xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['#text']
+        if state == "on" or state == "1":
           b = xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['@name']
 
           # if the beam in the XML command is one of the beams managed by
@@ -287,10 +287,10 @@ class TCSDaemon(Daemon):
 
             if command == "configure":
 
-              self.log(2, "parse_obs_cmd: received configuration for beam " + b)
+              self.log(2, "TCSDaemon::parse_obs_cmd received configuration for beam " + b)
               self.beam_states[b]["lock"].acquire()
               self.beam_states[b]["config"] = copy.deepcopy(xml['obs_cmd'])
-              self.log (3, "parse_obs_cmd: config=" + str(self.beam_states[b]["config"]))
+              self.log (2, "TCSDaemon::parse_obs_cmd command==configure UTC_START=" + self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"])
               self.beam_states[b]["state"]     = "Configured"
               self.beam_states[b]["lock"].release()
 
@@ -298,8 +298,10 @@ class TCSDaemon(Daemon):
 
               self.beam_states[b]["lock"].acquire()
               self.beam_states[b]["state"] = "Starting"
+              self.log (2, "TCSDaemon::parse_obs_cmd command==start config UTC_START=" + self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"])
               utc_start = xml['obs_cmd']['observation_parameters']['utc_start']['#text']
               self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"] = utc_start
+              self.log (2, "TCSDaemon::parse_obs_cmd command==start config UTC_START=" + self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"])
               self.beam_states[b]["lock"].release()
 
             elif command == "stop":
@@ -311,10 +313,10 @@ class TCSDaemon(Daemon):
               self.beam_states[b]["lock"].release()
 
             else:
-              self.log(-1, "parse_obs_cmd: unrecognized command " + command)
+              self.log(-1, "TCSDaemon::parse_obs_cmd unrecognized command " + command)
 
     except KeyError as e:
-      self.log (0, "parse_obs_cmd: KeyError exception: " + str(e))
+      self.log (0, "TCSDaemon::parse_obs_cmd KeyError exception: " + str(e))
       return (False, "none", "Could not find key " + str(e))
 
     return (True, command, "")
@@ -323,15 +325,21 @@ class TCSDaemon(Daemon):
   # issue_start_cmd
   def issue_start_cmd (self, xml):
 
+    self.log(2, "TCSDaemon::issue_start_cmd nbeam=" + xml['obs_cmd']['beam_configuration']['nbeam']['#text'])
+
     # determine which beams this command corresponds to
     for ibeam in range(int(xml['obs_cmd']['beam_configuration']['nbeam']['#text'])):
-      if xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['#text'] == "on":
+      state = xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['#text']
+      self.log(2, "TCSDaemon::issue_start_cmd beam state=" + state)
+      if state == "1" or state == "on":
         b = xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['@name']
+        self.log(2, "TCSDaemon::issue_start_cmd beam name=" + b)
         if b in self.beam_states.keys():
           obs = {}
 
           self.beam_states[b]["lock"].acquire()
 
+          # add sour parameters from XML to header
           s = self.beam_states[b]["config"]["source_parameters"]
           for k in s.keys():
             key = s[k]["@key"]
@@ -342,10 +350,27 @@ class TCSDaemon(Daemon):
           # inject the observation parameters         
           o = self.beam_states[b]["config"]["observation_parameters"]
 
+          self.log(1, "TCSDaemon::issue_start_cmd o=" + str(o))
+          self.log(1, "TCSDaemon::issue_start_cmd checking value of supplied UTC start: [" + o["utc_start"]["#text"] + "]" )
+
           # if no UTC_START has been specified, set it to +5 seconds
           if o["utc_start"]["#text"] == "None":
-            o["utc_start"]["#text"] = times.getUTCTime(5)
-            self.log(1, "issue_start_cmd: utc_start=" + o["utc_start"]["#text"])
+            local_current = times.getCurrentTime()
+            utc_current = times.getUTCTime()
+
+            local_offset = times.getCurrentTime(5)
+            utc_offset = times.getUTCTime(5)
+
+            self.log(1, "TCSDaemon::issue_start_cmd local_current=" + local_current)
+            self.log(1, "TCSDaemon::issue_start_cmd   utc_current=" +   utc_current)
+            self.log(1, "TCSDaemon::issue_start_cmd  local_offset=" + local_offset)
+            self.log(1, "TCSDaemon::issue_start_cmd    utc_offset=" +   utc_offset)
+
+            o["utc_start"]["#text"] = utc_offset
+            self.log(1, "TCSDaemon::issue_start_cmd utc_start=" + o["utc_start"]["#text"])
+
+          else:
+            self.log(1, "TCSDaemon::issue_start_cmd utc_start already set to =" + o["utc_start"]["#text"])
 
           for k in o.keys():
             key = o[k]["@key"]
@@ -376,7 +401,7 @@ class TCSDaemon(Daemon):
             
             # inject processing parameters into header
             if val == "true" or val == "1":
-              self.log (1, "issue_start_cmd: mode=" + k)
+              self.log (1, "TCSDaemon::issue_start_cmd mode=" + k)
               p = self.beam_states[b]["config"][k + "_processing_parameters"]
               for l in p.keys():
                 pkey = p[l]["@key"]
@@ -400,7 +425,7 @@ class TCSDaemon(Daemon):
           for istream in range(int(self.cfg["NUM_STREAM"])):
             (host, beam_idx, subband) = self.cfg["STREAM_"+str(istream)].split(":")
             beam = self.cfg["BEAM_" + beam_idx]
-            self.log(2, "issue_start_cmd: host="+host+" beam="+beam+" subband="+subband)
+            self.log(2, "TCSDaemon::issue_start_cmd host="+host+" beam="+beam+" subband="+subband)
 
             # connect to streams for this beam only
             if beam == b:
@@ -408,17 +433,19 @@ class TCSDaemon(Daemon):
               # control port the this recv stream 
               ctrl_port = int(self.cfg["STREAM_CTRL_PORT"]) + istream
 
+              self.log(1, host + ":"  + str(ctrl_port) + " <- start")
+
               # connect to recv agent and provide observation configuration
-              self.log(2, "issue_start_cmd: openSocket("+host+","+str(ctrl_port)+")")
+              self.log(2, "TCSDaemon::issue_start_cmd openSocket("+host+","+str(ctrl_port)+")")
               recv_sock = sockets.openSocket (DL, host, ctrl_port, 5)
               if recv_sock:
-                self.log(3, "issue_start_cmd: sending obs_header length=" + str(len(obs_header)))
+                self.log(3, "TCSDaemon::issue_start_cmd sending obs_header length=" + str(len(obs_header)))
                 recv_sock.send(obs_header)
-                self.log(3, "issue_start_cmd: header sent")
+                self.log(3, "TCSDaemon::issue_start_cmd header sent")
                 recv_sock.close()
-                self.log(3, "issue_start_cmd: socket closed")
+                self.log(3, "TCSDaemon::issue_start_cmd socket closed")
               else:
-                self.log(-2, "issue_start_cmd: failed to connect to "+host+":"+str(ctrl_port))
+                self.log(-2, "TCSDaemon::issue_start_cmd failed to connect to "+host+":"+str(ctrl_port))
 
               # connect to spip_gen and issue start command for UTC
               # assumes gen host is the same as the recv host!
@@ -441,7 +468,8 @@ class TCSDaemon(Daemon):
 
     # determine which beams this command corresponds to
     for ibeam in range(int(xml['obs_cmd']['beam_configuration']['nbeam']['#text'])):
-      if xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['#text'] == "on":
+      state = xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['#text']
+      if state == "1" or state == "on":
         b = xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['@name']
         if b in self.beam_states.keys():
 

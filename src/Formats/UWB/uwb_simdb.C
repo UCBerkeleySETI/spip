@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
   unsigned resolution = 16384;
   if (config.set("RESOLUTION", "%u", resolution) < 0)
   {
-    fprintf (stderr, "ERROR: could not write RESOLUTION=%lu to config\n", resolution);
+    fprintf (stderr, "ERROR: could not write RESOLUTION=%u to config\n", resolution);
     return (EXIT_FAILURE);
   }
 
