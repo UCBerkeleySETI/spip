@@ -296,7 +296,7 @@ bool spip::DataBlockStats::monitor (std::string stats_dir, unsigned stream_id)
       block_format->reset();
 
       if (verbose)
-        cerr << "spip::DataBlockStats::monitor reading " << bufsz << "bytes into buffer" << endl;
+        cerr << "spip::DataBlockStats::monitor reading " << bufsz << " bytes into buffer" << endl;
       db->read (buffer, bufsz);
 
       if (verbose)

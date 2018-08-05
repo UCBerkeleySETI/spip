@@ -53,6 +53,8 @@ int main(int argc, char *argv[]) try
 
   int stream = 0;
 
+  int nchan = 2048;
+
   opterr = 0;
   int c;
 
@@ -82,6 +84,10 @@ int main(int argc, char *argv[]) try
         exit(EXIT_SUCCESS);
         break;
 
+      case 'n':
+        nchan = atoi(optarg);
+        break;
+
       case 's':
         stream = atoi(optarg);
         break;
@@ -108,7 +114,7 @@ int main(int argc, char *argv[]) try
   dbstats = new spip::DataBlockStats (key.c_str());
 
   dbstats->set_verbosity(verbose > 0);
-  dbstats->set_block_format (new spip::BlockFormatMeerKAT());
+  dbstats->set_block_format (new spip::BlockFormatMeerKAT(nchan));
 
   // Check arguments
   if ((argc - optind) != 1) 
@@ -193,6 +199,7 @@ void usage()
     "  -D dir      dump HG and FT files to dir [default cwd]\n"
     "  -h          print this help text\n"
     "  -k key      PSRDada shared memory key to read from [default " << std::hex << DADA_DEFAULT_BLOCK_KEY << "]\n"
+    "  -n nchan    number of channels [default 2048]\n"
     "  -s stream   dump HG and FT files with this stream id [default 0]\n"
     "  -v          verbose output\n"
     << endl;
