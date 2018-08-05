@@ -213,3 +213,4 @@ class MEERKATProcDaemon (Daemon, StreamBased):
           time.sleep(10)
 
       self.log (1, "MEERKATProcDaemon::main processing completed")
+      time.sleep (1)
