@@ -211,8 +211,8 @@ void spip::UDPReceiver::receive ()
     // received a bad packet, brutal exit
     if (got != packet_size)
     {
+      sock->consume_packet();
       cerr << "Received UDP packet of " << got << " bytes, expected " << packet_size << endl;
-      spip::UDPSocketReceive::keep_receiving = false;
     }
     else
     {
