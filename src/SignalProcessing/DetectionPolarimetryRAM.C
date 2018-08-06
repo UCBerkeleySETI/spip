@@ -111,6 +111,7 @@ void spip::DetectionPolarimetryRAM::transform_TSPF_to_TSPF ()
   if (verbose)
     cerr << "spip::DetectionPolarimetryRAM::transform_TSPF_to_TSPF()" << endl;
 
+  // input pointers for the 2 polarisations
   float * in_p  = (float *) input->get_buffer();
   float * in_q  = in_p + (ndim * nchan);
 
@@ -120,14 +121,18 @@ void spip::DetectionPolarimetryRAM::transform_TSPF_to_TSPF ()
   float * out_d = out_c + nchan;
 
   const unsigned nstokes = 4;
-  uint64_t in_pol_stride = nchan - (npol - 1);
-  uint64_t out_pol_stride = nchan * (nstokes - 1);
+  const uint64_t in_pol_stride  = (nchan * (npol - 1)) * ndim;
+  const uint64_t out_pol_stride = nchan * (nstokes - 1);
 
   uint64_t idx = 0;
   uint64_t odx = 0;
 
+  // cross detect is corret
+  // output indexing is correct
   if (state == spip::Signal::Coherence)
   {
+    //cerr << "spip::DetectionPolarimetryRAM::transform_TSPF_to_TSPF Coherence nchan=" << nchan << " ndat=" << ndat 
+    //     << " out_pol_stride=" << out_pol_stride << endl;
     for (uint64_t idat=0; idat<ndat; idat++)
     {
       for (unsigned isig=0; isig<nsignal; isig++)
