@@ -21,13 +21,26 @@ namespace spip {
 
       ~ContainerRAM();
 
+      //! free the buffer, if allocated
+      void free_buffer();
+
       //! resize the buffer to match the input dimensions
       void resize ();
 
       //! zero the buffer 
       void zero ();
 
+      //! register the buffer as Pinned host memory for CUDA operations
+      void register_buffer ();
+
+      //! unregister the buffer as Pinned host memory for CUDA operations
+      void unregister_buffer ();
+
     protected:
+
+      bool buffer_registered;
+
+      bool buffer_should_register;
 
     private:
 

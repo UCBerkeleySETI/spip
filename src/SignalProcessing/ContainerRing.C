@@ -5,12 +5,12 @@
  *
  ***************************************************************************/
 
+#include "spip/Error.h"
 #include "spip/ContainerRing.h"
 #include "spip/AsciiHeader.h"
 
 #include <iostream>
 #include <cstring>
-#include <stdexcept>
 
 using namespace std;
 
@@ -25,8 +25,6 @@ spip::ContainerRing::~ContainerRing ()
 
 void spip::ContainerRing::resize ()
 {
-  cerr << "spip::ContainerRing::resize()" << endl;
-
   if (spip::Container::verbose)
     cerr << "spip::ContainerRing::resize ndat=" << ndat << " nchan=" << nchan << " nsignal=" << nsignal << " ndim=" << ndim << " npol=" << npol << " nbit=" << nbit << endl;
 
@@ -35,7 +33,9 @@ void spip::ContainerRing::resize ()
     cerr << "spip::ContainerRing::resize size=" << size << " required_size=" << required_size << endl;
   if (required_size > size)
   {
-    throw runtime_error ("required size for container not equal to ring buffer size");
+    throw Error (InvalidState, "spip::ContainerRing::resize",
+                 "required size for container [%lu] not equal to data block buffer size [%lu]\n",
+                 required_size, size);
   }
 }
 
@@ -44,7 +44,7 @@ void spip::ContainerRing::zero ()
   if (buffer_valid)
     bzero (buffer, size);
   else
-    throw runtime_error ("cannot zero an invalid buffer");
+    throw Error (InvalidState, "spip::ContainerRing::zero", "cannot zero an invalid buffer");
 }
 
 void spip::ContainerRing::set_buffer (unsigned char * buf)
@@ -58,3 +58,4 @@ void spip::ContainerRing::unset_buffer ()
   buffer = NULL;
   buffer_valid = false;
 }
+

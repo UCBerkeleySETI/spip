@@ -11,6 +11,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <limits> 
+#include <cmath> 
 
 using namespace std;
 
@@ -71,11 +72,20 @@ void spip::Container::read_header()
 
   if (header.get ("BW", "%lf", &bandwidth) != 1)
     throw invalid_argument ("BW did not exist in header");
+  sideband = bandwidth < 0 ? Signal::Sideband::Lower : Signal::Sideband::Upper;
+
+  if (header.get("DSB", "%d", &dual_sideband) != 1)
+    throw invalid_argument ("DSB did not exist in header");
 
   if (header.get ("FREQ", "%lf", &centre_freq) != 1)
     throw invalid_argument ("FREQ did not exist in header");
 
   char tmp_buf[128];
+  if (header.get ("ORDER", "%s", tmp_buf) == -1)
+    set_order (spip::Ordering::Custom);
+  else
+    set_order (get_order_type(string(tmp_buf)));
+
   if (header.get ("UTC_START", "%s", tmp_buf) == -1)
     throw invalid_argument ("failed to read UTC_START from header");
 
@@ -98,14 +108,14 @@ void spip::Container::read_header()
   if (header.get ("OSAMP_DENOMINATOR", "%u", &(oversampling_ratio[1])) != 1)
     oversampling_ratio[1] = 1;
   
-  if (header.get ("BYTES_PER_SECOND", "%lu", &bytes_per_second) != 1)
+  if (header.get ("BYTES_PER_SECOND", "%lf", &bytes_per_second) != 1)
     throw invalid_argument ("BYTES_PER_SECOND did not exist in header");
 
   if (header.get ("FILE_SIZE", "%ld", &file_size) != 1)
     file_size = -1;
   else
   {
-    seconds_per_file = double(file_size) / double(bytes_per_second);
+    seconds_per_file = double(file_size) / bytes_per_second;
     compute_file_size = true;
   }
 
@@ -179,6 +189,16 @@ void spip::Container::write_header ()
   if (header.set ("BW", "%lf", bandwidth) < 0)
     throw invalid_argument ("Could not write BW to header");
 
+  if ((bandwidth > 0) && (sideband == Signal::Sideband::Lower))
+    throw Error (InvalidState, "spip::Container::write_header", 
+                 "Bandwidth=%lf MHz and sideband == Lower", bandwidth);
+  if ((bandwidth < 0) && (sideband == Signal::Sideband::Upper))
+    throw Error (InvalidState, "spip::Container::write_header", 
+                 "Bandwidth=%lf MHz and sideband=Upper", bandwidth);
+
+  if (header.set ("DSB", "%d", dual_sideband) < 0)
+    throw invalid_argument ("Could not write DSB to header");
+
   if (header.set ("FREQ", "%lf", centre_freq) < 0)
     throw invalid_argument ("Could not write FREQ to header");
 
@@ -209,10 +229,22 @@ void spip::Container::write_header ()
       throw invalid_argument ("Could not write ENDIAN to header");
   }
 
+  if (encoding == spip::Encoding::TwosComplement)
+  {
+    if (header.set ("ENCODING", "%s", "TWOSCOMPLEMENT") < 0)
+      throw invalid_argument ("Could not write ENCODINGto header");
+  }
+  else
+  {
+    if (header.set ("ENCODING", "%s", "OFFSETBINARY") < 0)
+      throw invalid_argument ("Could not write ENCODINGto header");
+  }
+
+
   // update the calculated parameters of the Container
   recalculate ();
 
-  if (header.set ("BYTES_PER_SECOND", "%lu", bytes_per_second) < 0)
+  if (header.set ("BYTES_PER_SECOND", "%lf", bytes_per_second) < 0)
     throw invalid_argument ("Could not write BYTES_PER_SECOND to header");
 
   if (file_size != -1)
@@ -223,6 +255,9 @@ void spip::Container::write_header ()
 
   if (header.set ("RESOLUTION", "%lu", resolution) < 0)
     throw invalid_argument ("Could not write RESOLUTION to header");
+
+  if (header.set ("ORDER", "%s", get_order_string(order).c_str()) < 0)
+    throw invalid_argument ("Could not write ORDER to header");
 }
 
 void spip::Container::clone_header (const spip::AsciiHeader &obj)
@@ -245,15 +280,37 @@ std::string spip::Container::get_order_string (spip::Ordering o)
   return std::string("Unknown");
 }
 
-uint64_t spip::Container::calculate_bytes_per_second ()
+spip::Ordering spip::Container::get_order_type (string o)
 {
+  if (o == std::string("SFPT"))
+    return spip::Ordering::SFPT;
+  if (o == std::string("TSPFB"))
+    return spip::Ordering::TSPFB;
+  if (o == std::string("TFPS"))
+    return spip::Ordering::TFPS;
+  if (o == std::string("TSPF"))
+    return spip::Ordering::TSPF;
+  if (o == std::string("Custom"))
+    return spip::Ordering::Custom;
+
+  return spip::Ordering::Custom;
+}
+
+double spip::Container::calculate_bytes_per_second ()
+{
+  typedef std::numeric_limits< double > dbl;
+  cerr.precision(dbl::max_digits10);
   double nbit_per_samp = double(calculate_nbits_per_sample());
-  //cerr << "spip::Container::calculate_bytes_per_second nbit_per_samp=" << nbit_per_samp << endl;
   double nsamp_per_second = double(1000000) / tsamp;
-  //cerr << "spip::Container::calculate_bytes_per_second tsamp=" << tsamp << " nsamp_per_second=" << nsamp_per_second << endl;
   double nbit_per_second = nbit_per_samp * nsamp_per_second;
-  //cerr << "spip::Container::calculate_bytes_per_second nbit_per_second=" << nbit_per_second<< endl;
-  return uint64_t(nbit_per_second) / 8;
+  double bytes_ps = nbit_per_second / 8.0;
+#ifdef _DEBUG
+  cerr << "spip::Container::calculate_bytes_per_second nbit_per_samp=" << nbit_per_samp << endl;
+  cerr << "spip::Container::calculate_bytes_per_second tsamp=" << tsamp << "us nsamp_per_second=" << nsamp_per_second << endl;
+  cerr << "spip::Container::calculate_bytes_per_second nbit_per_second=" << nbit_per_second<< endl;
+  cerr << "spip::Container::calculate_bytes_per_second bytes_per_second= " << bytes_ps << endl;
+#endif
+  return bytes_ps;
 }
 
 void spip::Container::recalculate ()
@@ -264,6 +321,11 @@ void spip::Container::recalculate ()
   // compute the new bytes per second
   bytes_per_second = calculate_bytes_per_second ();
 
+#ifdef _DEBUG
+  cerr << "spip::Container::recalculate bits_per_sample=" << bits_per_sample << endl;
+  cerr << "spip::Container::recalculate bytes_per_second=" << bytes_per_second << endl;
+#endif
+
   // determine the resolution, based on the ordering
   if ((order == spip::Ordering::TFPS) || (order == spip::Ordering::TSPF) || (order == spip::Ordering::TSPFB))
     resolution = bits_per_sample / 8;
@@ -272,7 +334,7 @@ void spip::Container::recalculate ()
 
   if (compute_file_size)
   {
-    file_size = int64_t (seconds_per_file * bytes_per_second);
+    file_size = int64_t (rint(seconds_per_file * bytes_per_second));
     if (verbose)
       cerr << "spip::Container::recalculate computed FILE_SIZE=" << file_size
            << " seconds_per_file=" << seconds_per_file 
@@ -282,9 +344,6 @@ void spip::Container::recalculate ()
 
 void spip::Container::calculate_strides()
 {
-  if (spip::Container::verbose)
-    cerr << "spip::Container::calculate_strides" << endl;
-
   if (order == spip::Ordering::SFPT)
   {
     bin_stride  = 0;
@@ -326,7 +385,7 @@ void spip::Container::calculate_strides()
     dat_stride  = 0;
   }
   else
-    throw Error (InvalidState, "spip::Container::calculate_strides", "Unrecognized order: %s", get_order_string(order).c_str());
+    throw Error (InvalidState, "spip::Container::calculate_strides", "Unrecognized order: %d %s", int(order), get_order_string(order).c_str());
 
   if (spip::Container::verbose)
     cerr << "spip::Container::calculate_strides order=" << get_order_string(order) << " bin=" << bin_stride << " chan=" << chan_stride << " pol=" << pol_stride << " sig=" << sig_stride << " dat=" << dat_stride << endl;

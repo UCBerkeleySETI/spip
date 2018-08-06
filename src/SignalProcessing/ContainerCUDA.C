@@ -27,8 +27,6 @@ spip::ContainerCUDADevice::~ContainerCUDADevice ()
 
 void spip::ContainerCUDADevice::resize ()
 {
-  cerr << "spip::ContainerCUDADevice::resize()" << endl;
-
   uint64_t required_size = calculate_buffer_size ();
   if (required_size > size)
   {

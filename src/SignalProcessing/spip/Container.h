@@ -10,6 +10,7 @@
 
 #include <inttypes.h>
 #include <cstdlib>
+#include <iostream>
 
 #include "spip/AsciiHeader.h"
 #include "spip/Time.h"
@@ -69,6 +70,14 @@ namespace spip {
       double get_tsamp () { return tsamp; }
       double get_tsamp () const { return tsamp; }
 
+      void set_sideband (Signal::Sideband sb) { sideband = sb; }
+      Signal::Sideband get_sideband () { return sideband; }
+      Signal::Sideband get_sideband () const { return sideband; }
+
+      void set_dual_sideband (int dsb) { dual_sideband = dsb; }
+      int get_dual_sideband () { return dual_sideband; }
+      int get_dual_sideband () const { return dual_sideband; }
+
       void set_centre_freq (double n) { centre_freq = n; }
       double get_centre_freq () { return centre_freq; }
       double get_centre_freq () const { return centre_freq; }
@@ -82,9 +91,14 @@ namespace spip {
       int64_t get_file_size () const { return file_size; } 
 
       unsigned calculate_nbits_per_sample () { return unsigned (nsignal * nchan * nbit * npol * nbin * ndim); };
-      uint64_t calculate_bytes_per_second ();
+      double calculate_bytes_per_second ();
 
       size_t get_size () { return size; };
+      size_t get_size () const { return size; };
+
+      Time * get_utc_start () { return utc_start; };
+      Time * get_utc_start () const { return utc_start; };
+
       size_t calculate_buffer_size () { return size_t (ndat * nchan * nsignal * ndim * npol * nbin * nbit) / 8; }
       size_t calculate_buffer_size () const { return size_t (ndat * nchan * nsignal * ndim * npol * nbin * nbit) / 8; }
 
@@ -141,8 +155,22 @@ namespace spip {
       //! return const header
       AsciiHeader get_header () const { return header; } 
 
+      void describe () const {
+        std::cerr << "spip::Container::describe nbit=" << nbit << std::endl;
+        std::cerr << "spip::Container::describe ndim=" << ndim << std::endl;
+        std::cerr << "spip::Container::describe nsignal=" << nsignal << std::endl;
+        std::cerr << "spip::Container::describe npol=" << npol << std::endl;
+        std::cerr << "spip::Container::describe nchan=" << nchan << std::endl;
+        std::cerr << "spip::Container::describe nbin=" << nbin << std::endl;
+        std::cerr << "spip::Container::describe tsamp=" << tsamp << std::endl;
+        std::cerr << "spip::Container::describe bw=" << bandwidth << std::endl;
+      }
+
+
       //! return a descriptive string regarding the ordering
       static std::string get_order_string (Ordering o);
+
+      static Ordering get_order_type (std::string o);
 
     protected:
 
@@ -210,7 +238,7 @@ namespace spip {
       unsigned bits_per_sample;
 
       //! Number of bytes per second
-      uint64_t bytes_per_second;
+      double bytes_per_second;
 
       //! Minimum data size
       uint64_t resolution;
@@ -235,6 +263,12 @@ namespace spip {
 
       //! Number of datum between sigs
       uint64_t sig_stride;
+
+      //! Positive or Negative frequnecy ordering
+      Signal::Sideband sideband;
+
+      //! Dual [1] or Single [0] Sideband
+      int dual_sideband;
 
     private:
 
