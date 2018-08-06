@@ -85,17 +85,86 @@ void spip::DetectionSquareLawRAM::transform_SFPT_to_SFPT ()
   }
 }
 
+void spip::DetectionSquareLawRAM::transform_SFPT_to_TSPF ()
+{
+  if (verbose)
+    cerr << "spip::DetectionSquareLawRAM::transform_SFPT_to_TSPF" << endl;
+
+  // read complex input data from one or two polarisations and form
+  // detected products of each polarisation indepdently
+
+  float * in  = (float *) input->get_buffer();
+  float * out = (float *) output->get_buffer();
+
+  const uint64_t sig_stride = output->get_sig_stride();
+  const uint64_t chan_stride = output->get_chan_stride();
+  const uint64_t pol_stride = output->get_pol_stride();
+  const uint64_t dat_stride = output->get_dat_stride();
+
+  if (state == spip::Signal::PPQQ)
+  {
+    for (unsigned isig=0; isig<nsignal; isig++)
+    {
+      const uint64_t sig_offset = isig * sig_stride;
+      for (unsigned ichan=0; ichan<nchan; ichan++)
+      {
+        const uint64_t chan_offset = sig_offset + ichan * chan_stride;
+        for (unsigned ipol=0; ipol<npol; ipol++)
+        {
+          uint64_t pol_offset = chan_offset + ipol * pol_stride;
+          for (uint64_t idat=0; idat<ndat; idat++)
+          {
+            const float re = in[0];
+            const float im = in[1];
+
+            out[pol_offset + (idat * dat_stride)] = (re * re) + (im * im);
+            in += 2;
+          }
+        }
+      }
+    }
+  }
+
+  if (state == spip::Signal::Intensity)
+  {
+    for (unsigned isig=0; isig<nsignal; isig++)
+    {
+      const uint64_t sig_offset = isig * sig_stride;
+      for (unsigned ichan=0; ichan<nchan; ichan++)
+      {
+        const uint64_t chan_offset = sig_offset + ichan * chan_stride;
+        for (unsigned ipol=0; ipol<npol; ipol++)
+        {
+          uint64_t pol_offset = chan_offset + ipol * pol_stride;
+          for (uint64_t idat=0; idat<ndat; idat++)
+          {
+            const float re = in[0];
+            const float im = in[1];
+
+            if (ipol == 0)
+              out[pol_offset + (idat * dat_stride)] = (re * re) + (im * im);
+            else
+              out[pol_offset + (idat * dat_stride)] += (re * re) + (im * im);
+
+            in += 2;
+          }
+        }
+      }
+    }
+  }
+}
+
 
 void spip::DetectionSquareLawRAM::transform_TSPF_to_TSPF ()
 {
-  if (verbose)
-    cerr << "spip::DetectionSquareLawRAM::transform_TSPF_to_TSPF()" << endl;
 
   float * in  = (float *) input->get_buffer();
   float * out = (float *) output->get_buffer();
 
   if (state == spip::Signal::PPQQ)
   {
+    if (verbose)
+      cerr << "spip::DetectionSquareLawRAM::transform_TSPF_to_TSPF output_state=PPQQ" << endl;
     for (uint64_t idat=0; idat<ndat; idat++)
     {
       for (unsigned isig=0; isig<nsignal; isig++)
@@ -119,7 +188,8 @@ void spip::DetectionSquareLawRAM::transform_TSPF_to_TSPF ()
 
   if (state == spip::Signal::Intensity)
   {
-    cerr << "spip::DetectionSquareLawRAM::transform_TSPF_to_TSPF ndat=" << ndat << " nsignal=" << nsignal << " npol=" << npol << endl;
+    if (verbose)
+      cerr << "spip::DetectionSquareLawRAM::transform_TSPF_to_TSPF output_state=Intensity" << endl;
     for (uint64_t idat=0; idat<ndat; idat++)
     {
       for (unsigned isig=0; isig<nsignal; isig++)
