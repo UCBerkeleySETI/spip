@@ -17,8 +17,10 @@
 #include "spip/DetectionPolarimetryRAM.h"
 #include "spip/DetectionSquareLawRAM.h"
 #include "spip/IntegrationRAM.h"
+#include "spip/RAMtoRAMTransfer.h"
+#include "spip/ReverseFrequencyRAM.h"
 #include "spip/ContainerRingRead.h"
-#include "spip/ContainerBufferedRingWrite.h"
+#include "spip/ContainerFileWrite.h"
 #include "spip/ContainerRAM.h"
 
 #include "config.h"
@@ -30,6 +32,7 @@
 #include "spip/DetectionPolarimetryCUDA.h"
 #include "spip/DetectionSquareLawCUDA.h"
 #include "spip/IntegrationCUDA.h"
+#include "spip/ReverseFrequencyCUDA.h"
 #include "spip/RAMtoCUDATransfer.h"
 #include "spip/CUDAtoRAMTransfer.h"
 #endif
@@ -42,7 +45,7 @@ namespace spip {
 
     public:
 
-      ContinuumPipeline (const char * in_key_string, const char * out_key_string);
+      ContinuumPipeline (const char *, const char *);
 
       ~ContinuumPipeline ();
 
@@ -51,6 +54,8 @@ namespace spip {
       void set_channel_oversampling (int);
 
       void set_decimation (int);
+
+      void set_tsubint (float);
 
       void set_output_state (Signal::State);
 
@@ -78,8 +83,6 @@ namespace spip {
 
       DataBlockRead * in_db;
 
-      DataBlockWrite * out_db;
-
       UnpackFloat * unpack_float;
 
       ForwardFFT * fwd_fft;
@@ -88,9 +91,13 @@ namespace spip {
 
       Integration * integrator;
 
+      ReverseFrequency * reverser;
+
       ContainerRingRead * input;
 
       Container * unpacked;
+
+      Container * reblocked;
 
       Container * channelised;
 
@@ -98,9 +105,11 @@ namespace spip {
 
       Container * integrated;
 
-      ContainerBufferedRingWrite * output;
+      ContainerFileWrite * output;
 
       Signal::State output_state;
+
+      std::string out_dir;
 
       int nfft;
 
@@ -112,6 +121,8 @@ namespace spip {
 
       int fdec;
 
+      float tsubint;
+
       bool verbose;
 
 #ifdef HAVE_CUDA
@@ -121,12 +132,14 @@ namespace spip {
 
       RAMtoCUDATransfer * ram_to_cuda; 
 
-      ContainerCUDADevice * d_input;
-
       ContainerCUDADevice * d_output; 
 
       CUDAtoRAMTransfer * cuda_to_ram; 
 #endif
+
+      RAMtoRAMTransfer * ram_to_ram; 
+
+      unsigned reblock_factor;
   };
 
 }
