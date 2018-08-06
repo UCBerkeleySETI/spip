@@ -63,8 +63,6 @@ void spip::BackwardFFT::configure (spip::Ordering output_order)
   nsignal = input->get_nsignal ();
   tsamp = input->get_tsamp();
 
-  cerr << "spip::BackwardFFT::configure ndat=" << ndat << " nfft=" << nfft << endl;
-
   if (ndim != 2)
     throw invalid_argument ("BackwardFFT::configure input ndim != 2");
 
