@@ -21,6 +21,10 @@
 
 using namespace std;
 
+inline int32_t convert_offset_binary (int32_t in) { return in^0x8000000; };
+inline int16_t convert_offset_binary (int16_t in) { return in^0x8000; };
+inline int8_t convert_offset_binary (int8_t in) { return in^0x80; };
+
 spip::UDPFormat::UDPFormat()
 {
   // some defaults
@@ -33,6 +37,10 @@ spip::UDPFormat::UDPFormat()
   noise_buffer = 0;
   noise_buffer_size = 1048576;
   noise_buffer_alignment = 1;
+
+  // default twos complement and little endian
+  twos_complement = false;
+  little_endian = true;
 
   prepared = false;
   configured = false;
@@ -98,7 +106,8 @@ void spip::UDPFormat::generate_noise_buffer (int nbits)
   // generate noise with mean of 0 and stddev of 0.078125 (10 / 128)
   noise_buffer_alignment = nbits / 8;
   const double mean = 0;
-  const double stddev = (10.0 / 128.0) * pow(2, (nbits-1));
+  //const double stddev = (10.0 / 128.0) * pow(2, (nbits-1));
+  const double stddev = (20.0 / 128.0) * pow(2, (7));
   const unsigned size = (noise_buffer_size * 8) / nbits;
   int8_t * buffer8 = (int8_t *) noise_buffer;
   int16_t * buffer16 = (int16_t *) noise_buffer;
@@ -112,15 +121,30 @@ void spip::UDPFormat::generate_noise_buffer (int nbits)
     double val = rint(rand_normal (mean, stddev)); 
 
     if (nbits == 8)
-      buffer8[i] = (int8_t) val;
+    {
+      if (twos_complement)
+        buffer8[i] = (int8_t) val;
+      else
+        buffer8[i] = convert_offset_binary((int8_t) val);
+    }
     else if (nbits == 16)
-      buffer16[i] = (int16_t) val;
+    {
+      if (twos_complement)
+        buffer16[i] = (int16_t) val;
+      else
+        buffer16[i] = convert_offset_binary ((int16_t) val);
+    }
     else if (nbits == 32)
-      buffer32[i] = (int32_t) val;
+    {
+      if (twos_complement)
+        buffer32[i] = (int32_t) val;
+      else
+        buffer32[i] = convert_offset_binary((int32_t) val);
+    }
     else
       return;
   }
-}    
+}
 
 void spip::UDPFormat::fill_noise (char * buf, size_t nbytes)
 {
