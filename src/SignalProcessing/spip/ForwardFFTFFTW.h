@@ -32,6 +32,8 @@ namespace spip {
       void prepare ();
       
       void reserve ();
+
+      void fft_shift ();
       
       void transform_SFPT_to_TFPS ();
 
@@ -39,9 +41,11 @@ namespace spip {
 
       void transform_SFPT_to_SFPT ();
 
+    protected:
+
       void normalize_output ();
 
-    protected:
+      void fft_shift (float * data);
     
     private:
     

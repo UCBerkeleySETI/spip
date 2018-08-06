@@ -26,12 +26,10 @@ namespace spip {
       
       ~ForwardFFTCUDA ();
       
-      void prepare ();
-
       void configure_plan ();
       
-      void reserve ();
-      
+      void fft_shift ();
+
       void transform_SFPT_to_TFPS ();
 
       void transform_SFPT_to_TSPF ();

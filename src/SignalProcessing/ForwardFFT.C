@@ -17,6 +17,7 @@ spip::ForwardFFT::ForwardFFT () : Transformation<Container,Container>("ForwardFF
   nfft = 0;
   nbatch = 0;
   normalize = true;
+  apply_fft_shift = false;
   scale_fac = 1.0f;
 }
 
@@ -61,7 +62,8 @@ void spip::ForwardFFT::configure (spip::Ordering output_order)
   nchan = input->get_nchan ();
   npol  = input->get_npol ();
   nsignal = input->get_nsignal ();
-  tsamp = input->get_tsamp();
+  tsamp = input->get_tsamp ();
+  int dsb = input->get_dual_sideband ();
 
   if (verbose)
     cerr << "spip::ForwardFFT::configure ndat=" << ndat << " nfft=" << nfft << endl;
@@ -93,6 +95,10 @@ void spip::ForwardFFT::configure (spip::Ordering output_order)
     throw Error(InvalidState, "spip::ForwardFFT::configure", 
                 "invalid ordering, allowed SFPT->TFPS, SFPT->TSPF, SFPT->SFPT");
 
+  // apply FFT shift if the data are dual sideband
+  if (dsb == 1)
+    apply_fft_shift = true;
+
   // copy input header to output
   output->clone_header (input->get_header());
 
@@ -100,6 +106,7 @@ void spip::ForwardFFT::configure (spip::Ordering output_order)
   output->read_header ();
 
   // update the parameters that this transformation will affect
+  output->set_dual_sideband (0);
   output->set_nchan (nchan * nfft);
   output->set_tsamp (tsamp * nfft);
   output->set_order (output_order);
@@ -149,8 +156,8 @@ void spip::ForwardFFT::configure_plan_dimensions()
   {
     istride = 1;                  // stride between samples
     idist = nfft * istride;       // stride between FFT blocks
-    ostride = npol * nsignal;     // stride between channels
-    odist = nchan_out * ostride;  // stride between FFT blocks
+    ostride = 1;                  // stride between channels
+    odist = nchan_out * nsignal * npol;  // stride between FFT blocks
   }
   else if ((input->get_order() == SFPT) && (output->get_order() == SFPT))
   {
@@ -218,6 +225,13 @@ void spip::ForwardFFT::transformation ()
   if (verbose)
     cerr << "spip::ForwardFFT::transform nfft=" << nfft << endl;
     
+  if (apply_fft_shift)
+  {
+    if (verbose)
+      cerr << "spip::ForwardFFT::transform fft_shift()" << endl;
+    fft_shift();
+  }
+
   // apply data transformation
   if ((input->get_order() == SFPT) && (output->get_order() == TFPS))
   {
