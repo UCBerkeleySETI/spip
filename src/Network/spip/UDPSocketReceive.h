@@ -19,7 +19,7 @@ namespace spip {
 
       UDPSocketReceive ();
 
-      ~UDPSocketReceive ();
+      virtual ~UDPSocketReceive ();
 
       // resize the socket
       void resize (size_t new_bufsz);

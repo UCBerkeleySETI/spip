@@ -13,8 +13,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <cerrno>
+#include <unistd.h>
 
 #include <stdexcept>
+
+//#define _DEBUG
 
 using namespace std;
 
@@ -63,13 +66,17 @@ void spip::UDPSocketReceiveVMA::open_multicast (string ip_address, string group,
 
 size_t spip::UDPSocketReceiveVMA::recv_from()
 {
+#ifdef _DEBUG
+  cerr << "spip::UDPSocketReceiveVMA::recv_from vma_api=" << (void *) vma_api << endl;
+#endif
   if (vma_api)
   {
     while (!have_packet && keep_receiving)
     {
       if (vma_pkts)
       {
-        vma_api->free_packets(fd, vma_pkts->pkts, vma_pkts->n_packet_num);
+        if (vma_pkts->n_packet_num == 1)
+          vma_api->free_packets(fd, vma_pkts->pkts, vma_pkts->n_packet_num);
         vma_pkts = NULL;
       }
 
@@ -86,8 +93,7 @@ size_t spip::UDPSocketReceiveVMA::recv_from()
           {
             if (vma_pkts->pkts[0].sz_iov == 1)
             {
-              // AJ to check this!
-              pkt_size = vma_pkts->pkts[0].iov[0].iov_len - 2;
+              pkt_size = vma_pkts->pkts[0].iov[0].iov_len;
               buf_ptr = (char *) vma_pkts->pkts[0].iov[0].iov_base;
               have_packet = true;
             }
@@ -96,19 +102,22 @@ size_t spip::UDPSocketReceiveVMA::recv_from()
               cerr << "spip::UDPSocketReceiveVMA::recv_from pkts->pkts[0].sz_iov=" << vma_pkts->pkts[0].sz_iov << endl;
             }
           }
+#ifdef _DEBUG
           else
-          {
-            cerr << "spip::UDPSocketReceiveVMA::recv_from pkts->n_packet_num=" << vma_pkts->n_packet_num << endl;
-          }
+            cerr << "spip::UDPSocketReceiveVMA::recv_from vma_pkts->n_packet_num=" << vma_pkts->n_packet_num << endl;
+#endif
         }
         else
         {
+#ifdef _DEBUG
+          cerr << "spip::UDPSocketReceiveVMA::recv_from zcopy not performed" << endl;
+#endif
           pkt_size = size;
           buf_ptr = buf;
           have_packet = true;
         }
       }
-      else if (pkt_size == -1)
+      else if (size == -1)
       {
         if (get_blocking())
           return -1;
@@ -118,11 +127,14 @@ size_t spip::UDPSocketReceiveVMA::recv_from()
       else
       {
         cerr << "spip::UDPReceiveSocketVMA error expected " << bufsz
-             << " B, received " << pkt_size << " B" <<  endl;
+             << " B, received " << size << " B" <<  endl;
         keep_receiving = false;
         pkt_size = 0;
       }
     }
+#ifdef _DEBUG
+    cerr << "spip::UDPSocketReceiveVMA::recv_from returning pkt_size=" << pkt_size << endl;
+#endif
     return pkt_size;
   }
   else

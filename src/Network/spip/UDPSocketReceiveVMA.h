@@ -29,8 +29,10 @@ namespace spip {
 
     private:
 
+      // pointer to API provided by parent application
       struct vma_api_t * vma_api;
 
+      // pointer to VMA offloaded packets
       struct vma_packets_t* vma_pkts = NULL;
 
   };
