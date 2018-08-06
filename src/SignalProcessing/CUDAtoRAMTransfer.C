@@ -31,6 +31,9 @@ void spip::CUDAtoRAMTransfer::configure (spip::Ordering output_order)
   // output will read the newly cloned header parameters
   output->read_header ();
 
+  // ensure output order is set
+  output->set_order (input->get_order());
+
   // update the output header parameters with the new details
   output->write_header ();
   
