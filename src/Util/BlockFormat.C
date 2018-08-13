@@ -86,12 +86,26 @@ void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime,
   stddevs.resize (npol * ndim);
 
   freq_time.resize(npol);
+  bandpass.resize(npol);
+  ts_min.resize(npol);
+  ts_mean.resize(npol);
+  ts_rms.resize(npol);
+  ts_max.resize(npol);
+  ts_sum.resize(npol);
+  ts_sumsq.resize(npol);
   hist.resize(npol);
 
   for (unsigned ipol=0; ipol<npol; ipol++)
   {
     freq_time[ipol].resize(nfreq_ft);
+    bandpass[ipol].resize(nfreq_ft);
     hist[ipol].resize(ndim);
+    ts_min[ipol].resize(ntime);
+    ts_mean[ipol].resize(ntime);
+    ts_rms[ipol].resize(ntime);
+    ts_max[ipol].resize(ntime);
+    ts_sum[ipol].resize(ntime);
+    ts_sumsq[ipol].resize(ntime);
     for (unsigned idim=0; idim<ndim; idim++)
     {
       hist[ipol][idim].resize(nfreq_hg);
@@ -115,6 +129,12 @@ void spip::BlockFormat::reset()
 {
   for (unsigned ipol=0; ipol<npol; ipol++)
   {
+    fill (ts_min[ipol].begin(), ts_min[ipol].end(), 1e9);
+    fill (ts_mean[ipol].begin(), ts_mean[ipol].end(), 0);
+    fill (ts_max[ipol].begin(), ts_max[ipol].end(), -1e9);
+    fill (ts_sum[ipol].begin(), ts_sum[ipol].end(), 0);
+    fill (ts_sumsq[ipol].begin(), ts_sumsq[ipol].end(), 0);
+    fill (bandpass[ipol].begin(), bandpass[ipol].end(), 0);
     for (unsigned ifreq=0; ifreq<nfreq_ft; ifreq++)
     {
       fill(freq_time[ipol][ifreq].begin(), freq_time[ipol][ifreq].end(), 0);
@@ -193,6 +213,61 @@ void spip::BlockFormat::write_freq_times(string ft_filename)
   if (rename(temp_file, ft_filename.c_str()) != 0)
   {
     throw Error (InvalidState, "spip::BlockFormat::write_freq_times",
+                 "failed to reame temporary file to actual");
+  }
+}
+
+void spip::BlockFormat::write_bandpasses (string bp_filename)
+{
+  // create a temporary filename tempplate  in the specified directory
+  sprintf (temp_file, "%sXXXXXX", bp_filename.c_str());
+  int fd = mkstemp (temp_file);
+  close (fd);
+
+  ofstream bp_file (temp_file, ofstream::binary);
+  bp_file.write (reinterpret_cast<const char *>(&npol), sizeof(npol));
+  bp_file.write (reinterpret_cast<const char *>(&nfreq_ft), sizeof(nfreq_ft));
+  bp_file.write (reinterpret_cast<const char *>(&freq), sizeof(freq));
+  bp_file.write (reinterpret_cast<const char *>(&bw), sizeof(bw));
+  for (unsigned ipol=0; ipol<npol; ipol++)
+  {
+    const char * buffer = reinterpret_cast<const char*>(&bandpass[ipol][0]);
+    bp_file.write (buffer, bandpass[ipol].size() * sizeof(float));
+  }
+  bp_file.close();
+
+  if (rename(temp_file, bp_filename.c_str()) != 0)
+  {
+    throw Error (InvalidState, "spip::BlockFormat::write_bandpass",
+                 "failed to reame temporary file to actual");
+  }
+}
+
+void spip::BlockFormat::write_time_series (string ts_filename)
+{
+  // create a temporary filename tempplate  in the specified directory
+  sprintf (temp_file, "%sXXXXXX", ts_filename.c_str());
+  int fd = mkstemp (temp_file);
+  close (fd);
+
+  ofstream ts_file (temp_file, ofstream::binary);
+  ts_file.write (reinterpret_cast<const char *>(&npol), sizeof(npol));
+  ts_file.write (reinterpret_cast<const char *>(&ntime), sizeof(ntime));
+  ts_file.write (reinterpret_cast<const char *>(&tsamp), sizeof(tsamp));
+  for (unsigned ipol=0; ipol<npol; ipol++)
+  {
+    const char * buffer = reinterpret_cast<const char*>(&ts_min[ipol][0]);
+    ts_file.write (buffer, ts_min[ipol].size() * sizeof(float));
+    buffer = reinterpret_cast<const char*>(&ts_mean[ipol][0]);
+    ts_file.write (buffer, ts_mean[ipol].size() * sizeof(float));
+    buffer = reinterpret_cast<const char*>(&ts_max[ipol][0]);
+    ts_file.write (buffer, ts_max[ipol].size() * sizeof(float));
+  }
+  ts_file.close();
+
+  if (rename(temp_file, ts_filename.c_str()) != 0)
+  {
+    throw Error (InvalidState, "spip::BlockFormat::write_time_series",
                  "failed to reame temporary file to actual");
   }
 }
