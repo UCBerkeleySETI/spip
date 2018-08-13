@@ -31,12 +31,13 @@ namespace spip {
 
       void prepare_output ();
 
-      void prepare_binplan ();
-
       void reserve ();
 
       //! Perform Integration and Binning on input block
       void transformation ();
+
+      //! Required preparation
+      virtual void prepare_binplan () = 0;
 
       //! Required data transformations
       virtual void transform_TSPF_to_TSPFB () = 0;
@@ -47,7 +48,8 @@ namespace spip {
 
       Container * fscr;
 
-      std::vector<int> binplan;
+      Container * binplan;
+      //std::vector<int> binplan;
 
       int64_t buffer_idat;
 
@@ -77,23 +79,24 @@ namespace spip {
 
       Signal::State state;
 
-    private:
-
       int cal_signal;
     
-      double cal_freq;
-
       double cal_period;
 
       double cal_phase;
 
       double cal_duty_cycle;
 
-      Time * cal_epoch;
-
       int64_t cal_epoch_delta;
 
       uint64_t start_idat;
+
+    private:
+
+      double cal_freq;
+
+      Time * cal_epoch;
+
   };
 
 }

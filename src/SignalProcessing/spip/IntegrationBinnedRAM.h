@@ -26,6 +26,8 @@ namespace spip {
  
       void configure (Ordering output_order);
 
+      void prepare_binplan ();
+
       void transform_TSPF_to_TSPFB ();
 
     protected:
