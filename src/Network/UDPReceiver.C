@@ -89,7 +89,6 @@ void spip::UDPReceiver::configure (const char * config_str)
 
   if (!format)
     throw runtime_error ("format was not allocated");
-  cerr << "spip::UDPReceiver::configure format->configure()" << endl;
   format->configure (header, "");
 }
 
@@ -203,6 +202,9 @@ void spip::UDPReceiver::receive ()
   if (verbose)
     cerr << "spip::UDPReceiver::receive starting main loop" << endl;
 
+  // clear all packets buffered at the socket
+  sock->clear_buffered_packets();
+
   while (sock->still_receiving())
   {
     // get a packet from the socket
@@ -293,6 +295,8 @@ void spip::UDPReceiver::receive ()
       }
     }
   }
+  sock->close_me();
+
 }
 
 void spip::UDPReceiver::stop_receiving ()
