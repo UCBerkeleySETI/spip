@@ -288,6 +288,8 @@ inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_si
   if (!configured_stream)
   {
     configure_stream (buf);
+    if (!configured_stream)
+      return -1;
   }
 
   // only accept packets from the specified VDIF thread
@@ -323,6 +325,10 @@ void spip::UDPFormatVDIF::configure_stream (char * buf)
 #endif
 
   int vdif_epoch = getVDIFEpoch (&header);
+
+  // ignore non VDIF packets
+  if (vdif_epoch == 0)
+    return;
     
   // handle older header versions
   if ((int) (header.legacymode) == 1)
@@ -331,16 +337,22 @@ void spip::UDPFormatVDIF::configure_stream (char * buf)
     packet_header_size = 32;
 
   if (ndim != unsigned(int(header.iscomplex) + 1))
+  {
     throw Error (InvalidState, "spip::UDPFormatVDIF::configure_stream",
                  "NDIM mismatch between CONFIG [%d] and VDIF [%d]", ndim, (header.iscomplex + 1));
+  }
 
   if (nbit != unsigned(getVDIFBitsPerSample (&header)))
+  {
     throw Error (InvalidState, "spip::UDPFormatVDIF::configure_stream",
                  "NBIT mismtach between CONFIG [%d] and VDIF header [%d]", nbit, int(getVDIFBitsPerSample (&header)));
+  }
 
   if  (nchan * npol != unsigned(getVDIFNumChannels (&header)))
+  {
     throw Error (InvalidState, "spip::UDPFormatVDIF::configure_stream",
                  "NCHAN/NPOL mismtach between config and VDIF header");
+  }
 
   packet_data_size = getVDIFFrameBytes (&header) - packet_header_size;
 
@@ -364,6 +376,13 @@ void spip::UDPFormatVDIF::configure_stream (char * buf)
     utc_start.set_time (key);
     std::string utc_str = utc_start.get_gmtime();
     utc_start.add_seconds (offset_second);
+
+#ifdef _DEBUG
+    time_t now = time(0);
+    spip::Time current(now);
+    cerr << "Current UTC=" << current.get_gmtime() << " packet UTC=" << utc_start.get_gmtime() << endl;
+#endif
+
     utc_start.add_seconds (2);
     std::string localtime_str = utc_start.get_localtime();
     utc_str = utc_start.get_gmtime();
@@ -383,6 +402,8 @@ void spip::UDPFormatVDIF::configure_stream (char * buf)
   {
     // add the delay here...
     Time vdif_epoch (key);
+    Time vdif_packet (key);
+    vdif_packet.add_seconds (offset_second);
     start_second = utc_start.get_time() - vdif_epoch.get_time();
     pico_seconds = 0;
   }
