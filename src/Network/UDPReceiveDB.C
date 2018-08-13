@@ -51,7 +51,6 @@ spip::UDPReceiveDB::UDPReceiveDB(const char * key_string)
   pthread_cond_init( &cond, NULL);
   pthread_mutex_init( &mutex, NULL);
   verbose = false;
-
 }
 
 spip::UDPReceiveDB::~UDPReceiveDB()
@@ -240,45 +239,60 @@ void spip::UDPReceiveDB::stop_stats_thread ()
  */
 void spip::UDPReceiveDB::stats_thread()
 {
-  uint64_t b_recv_total, b_recv_curr, b_recv_1sec;
-  uint64_t b_drop_total, b_drop_curr, b_drop_1sec;
+  uint64_t b_recv_total, b_recv_curr, b_recv_10sec;
+  uint64_t b_drop_total, b_drop_curr, b_drop_10sec;
+  uint64_t s_total, s_curr, s_10sec;
   double gb_recv_ps, gb_drop_ps, gb_drop;
 
   if (verbose)
     cerr << "spip::UDPReceiveDB::stats_thread starting polling" << endl;
 
+  int report_time = 0;
   while (control_cmd != Quit)
   {
     b_recv_total = 0;
     b_drop_total = 0;
+    s_total = 0;
 
 #ifdef _DEBUG
     if (verbose > 1)
       cerr << "spip::UDPReceiveDB::stats_thread control_cmd != Quit" << endl;
 #endif
 
+    double gbits = 1e9;
+    double gbits_per_10s = gbits * 10;
+    report_time = 0;
+
     while (control_state == Recording)
     {
-      // get a snapshot of the data as quickly as possible
-      b_recv_curr = udp_stats->get_data_transmitted();
-      b_drop_curr = udp_stats->get_data_dropped();
+      if (report_time >= 10)
+      {
+        // get a snapshot of the data as quickly as possible
+        b_recv_curr = udp_stats->get_data_transmitted();
+        b_drop_curr = udp_stats->get_data_dropped();
+        s_curr      = udp_stats->get_nsleeps();
 
-      // calc the values for the last second
-      b_recv_1sec = b_recv_curr - b_recv_total;
-      b_drop_1sec = b_drop_curr - b_drop_total;
+        // calc the values for the last second
+        b_recv_10sec = b_recv_curr - b_recv_total;
+        b_drop_10sec = b_drop_curr - b_drop_total;
+        s_10sec      = s_curr - s_total;
 
-      // update the totals
-      b_recv_total = b_recv_curr;
-      b_drop_total = b_drop_curr;
+        // update the totals
+        b_recv_total = b_recv_curr;
+        b_drop_total = b_drop_curr;
+        s_total      = s_curr;
 
-      // calculate current rate
-      gb_recv_ps = double(b_recv_1sec * 8) / 1000000000;
-      gb_drop_ps = double(b_drop_1sec * 8) / 1000000000;
-      gb_drop = double(b_drop_total * 8) / 1000000000;
+        // calculate current rate
+        gb_recv_ps = double(b_recv_10sec * 8) / gbits_per_10s;
+        gb_drop_ps = double(b_drop_10sec * 8) / gbits_per_10s;
+        gb_drop = double(b_drop_total * 8) / gbits;
 
-      fprintf (stderr,"Recv %6.3lf [Gb/s] Dropped %6.3lf [Gb/s] %lf [Gb] \n", 
-               gb_recv_ps, gb_drop_ps, gb_drop);
+        fprintf (stderr,"Recv %6.3lf [Gb/s] Dropped %6.3lf [Gb/s] %lf [Gb]\n", 
+                 gb_recv_ps, gb_drop_ps, gb_drop);
+        report_time = 0;
+      }
       sleep (1);
+      report_time++;
     }
     sleep(1);
   }
@@ -332,7 +346,8 @@ bool spip::UDPReceiveDB::open ()
       throw invalid_argument ("failed to write SOURCE to header");
   }
 
-  cerr << "spip::UDPReceiveDB::open format->prepare(header, )" << endl;
+  if (verbose)
+    cerr << "spip::UDPReceiveDB::open format->prepare(header, )" << endl;
   format->prepare(header, "");
 
   open (header.raw());
@@ -379,6 +394,9 @@ void spip::UDPReceiveDB::close ()
   if (verbose)
     cerr << "spip::UDPReceiveDB::close udp_stats->reset()" << endl;
   udp_stats->reset();
+
+  if (verbose)
+    cerr << "spip::UDPReceiveDB::close" << endl;
 }
 
 // receive UDP packets for the specified time at the specified data rate
@@ -404,9 +422,9 @@ bool spip::UDPReceiveDB::receive (int core)
     cerr << "spip::UDPReceiveDB::receive creating socket" << endl;
   // open socket within the context of this thread 
 #ifdef HAVE_VMA
-  sock = new UDPSocketReceiveVMA;
+  sock = new UDPSocketReceiveVMA ();
 #else
-  sock = new UDPSocketReceive;
+  sock = new UDPSocketReceive ();
 #endif
 
   // handle multi or uni case
@@ -435,7 +453,10 @@ bool spip::UDPReceiveDB::receive (int core)
 
   // configure the overflow buffer
   overflow = new UDPOverflow();
-  overflow->resize (resolution * 2);
+  uint64_t overflow_bufsz = resolution * 2;
+  while (overflow_bufsz <= 65536)
+    overflow_bufsz *= 2;
+  overflow->resize (overflow_bufsz);
   overflow_block = (char *) overflow->get_buffer();
 
   // block accounting
@@ -479,7 +500,7 @@ bool spip::UDPReceiveDB::receive (int core)
       case Quit:
         if (verbose)
           cerr << "Quiting" << endl;
-        control_state = Idle;
+        control_state = Quitting;
         spip::UDPSocketReceive::keep_receiving = false;
         set_control_cmd (None);
         break;
@@ -508,6 +529,9 @@ bool spip::UDPReceiveDB::receive (int core)
 #ifdef _DEBUG
   cerr << "spip::UDPReceiveDB::receive exiting" << endl;
 #endif
+
+  // close the socket
+  sock->close_me();
 
   // close the data block
   if (verbose)
@@ -611,9 +635,4 @@ void spip::UDPReceiveDB::receive_block (UDPFormat * fmt)
       }
     }
   }
-#ifndef HAVE_VMA
-  // update udp_stats for any sleeps
-  uint64_t nsleeps = sock->process_sleeps();
-  udp_stats->sleeps(nsleeps);
-#endif
 }
