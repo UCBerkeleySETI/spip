@@ -61,6 +61,22 @@ class Daemon(object):
     self.quit_file = self.control_dir + "/"  + self.name + ".quit"
     self.reload_file = self.control_dir + "/"  + self.name + ".reload"
 
+    # check if the script is running
+
+    try: 
+      int_id = int(self.id)
+      cmd = "pgrep -xfl 'python " + str(sys.argv[0]) + " " + str(self.id) + "'"
+    except ValueError:
+      cmd = "pgrep -xfl 'python " + str(sys.argv[0]) + "'"
+    rval, lines = self.system (cmd, 3, quiet=True)
+    if not rval and len(lines) > 1:
+      sys.stderr.write ("ERROR: script with same name exists launch pids=" + str(lines) + "\n")
+      return 1
+
+    # an existing PID file must be from a previous failed execution, delete
+    if os.path.exists(self.pid_file):
+      self.delpid
+
     if os.path.exists(self.quit_file):
       sys.stderr.write ("ERROR: quit file existed at launch: " + self.quit_file + "\n")
       return 1
@@ -206,6 +222,10 @@ class Daemon(object):
         cmd = "pkill -SIG" + signal + " -f '^" + binary + "'"
         rval, lines = self.system (cmd, 2)
 
+    time.sleep(1)
+
+    for binary in self.binary_list:
+
       # check if the binary is still running
       cmd = "pgrep -f '^" + binary + "'"
       rval, lines = self.system (cmd, 3, quiet=True)
@@ -232,7 +252,7 @@ class Daemon(object):
 
       # if a binary is running after SIGINT
       if existed:
-        time.sleep(2)
+        time.sleep(1)
         signal_required = "TERM"
         self.log (3, "Daemon::killBinaries tryKill(TERM)")
         existed = self.tryKill ("TERM")
@@ -240,7 +260,7 @@ class Daemon(object):
 
         # if a binary is running after SIGTERM
         if existed:
-          time.sleep(2)
+          time.sleep(1)
           signal_required = "KILL"
           self.log (3, "Daemon::killBinaries tryKill(KILL)")
           existed = self.tryKill ("KILL")
