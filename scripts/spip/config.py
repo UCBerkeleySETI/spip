@@ -57,14 +57,18 @@ class Config(object):
       return cfg
 
   @staticmethod
-  def writeDictToCFGFile (cfg, filename):
+  def writeDictToCFGFile (cfg, filename, prepend='', postpend=''):
     #try:
     fptr = open(filename, 'w')
     #except IOError, e:
     #  print "ERROR: cannot open " + filename + " for writing: " + str(e)
     #else:
+    if not prepend == '':
+      fptr.write (prepend + "\n")
     for key in sorted(cfg.keys()):
       fptr.write(key.ljust(19) + " " + cfg[key] + "\n")
+    if not postpend == '':
+      fptr.write (postpend + "\n")
     fptr.close()
 
   @staticmethod
@@ -108,6 +112,10 @@ class Config(object):
     return string
 
   @staticmethod
+  def writePaddedString (key, val):
+    return str(key).ljust(19) + " " + str(val)
+
+  @staticmethod
   def readDictFromString (string):
     cfg = {}
     for line in string.split("\n"):
@@ -149,6 +157,8 @@ class Config(object):
     cfg["TELESCOPE"]     = self.site["TELESCOPE"]
     cfg["DSB"]           = self.site["DSB"]
     cfg["BACKEND_PHASE"] = self.site["BACKEND_PHASE"]
+    cfg["ENCODING"]      = self.site["ENCODING"]
+    cfg["ENDIAN"]        = self.site["ENDIAN"]
 
     cfg["RECEIVER"]   = self.config["RECEIVER"]
     cfg["INSTRUMENT"] = self.config["INSTRUMENT"]
