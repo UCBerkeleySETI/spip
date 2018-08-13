@@ -158,6 +158,22 @@ void spip::Container::read_header()
     encoding = spip::Encoding::TwosComplement;
   }
 
+  // read calibration parameters
+  if (header.get ("CAL_SIGNAL", "%d", &cal_signal) != 1)
+    throw Error (InvalidState, "spip::Container::read_header", "CAL_SIGNAL not present in header");
+  if (cal_signal == 1)
+  {
+    if (header.get ("CAL_FREQ", "%lf", &cal_freq) != 1)
+      throw Error (InvalidState, "spip::Container::read_header", "CAL_FREQ not present in header");
+    if (header.get ("CAL_PHASE", "%lf", &cal_phase) != 1)
+      throw Error (InvalidState, "spip::Container::read_header", "CAL_PHASE not present in header");
+    if (header.get ("CAL_DUTY_CYCLE", "%lf", &cal_duty_cycle) != 1)
+      throw Error (InvalidState, "spip::Container::read_header", "CAL_DUTY_CYCLE not present in header");
+    if (header.get ("CAL_EPOCH", "%s", tmp_buf) == -1)
+      throw Error (InvalidState, "spip::Container::read_header", "CAL_EPOCH not present in header");
+    cal_epoch = new spip::Time(tmp_buf);
+  }
+
 }
 
 void spip::Container::write_header ()
@@ -232,14 +248,29 @@ void spip::Container::write_header ()
   if (encoding == spip::Encoding::TwosComplement)
   {
     if (header.set ("ENCODING", "%s", "TWOSCOMPLEMENT") < 0)
-      throw invalid_argument ("Could not write ENCODINGto header");
+      throw invalid_argument ("Could not write ENCODING to header");
   }
   else
   {
     if (header.set ("ENCODING", "%s", "OFFSETBINARY") < 0)
-      throw invalid_argument ("Could not write ENCODINGto header");
+      throw invalid_argument ("Could not write ENCODING to header");
   }
 
+  // write calibration parameters
+  if (header.set ("CAL_SIGNAL", "%d", cal_signal) < 0)
+    throw invalid_argument ("Could not write CAL_SIGNAL to header");
+  if (cal_signal == 1)
+  {
+    if (header.set ("CAL_FREQ", "%lf", cal_freq) < 0)
+      throw invalid_argument ("Could not write CAL_FREQ to header");
+    if (header.set ("CAL_PHASE", "%lf", cal_phase) < 0)
+      throw invalid_argument ("Could not write CAL_PHASE to header");
+    if (header.set ("CAL_DUTY_CYCLE", "%lf", cal_duty_cycle) < 0)
+      throw invalid_argument ("Could not write CAL_DUTY_CYCLE to header");
+    std::string cal_epoch_str = cal_epoch->get_gmtime();
+    if (header.set ("CAL_EPOCH", "%s", cal_epoch_str.c_str()) < 0)
+      throw invalid_argument ("Could not write CAL_EPOCH to header");
+  }
 
   // update the calculated parameters of the Container
   recalculate ();
@@ -258,6 +289,7 @@ void spip::Container::write_header ()
 
   if (header.set ("ORDER", "%s", get_order_string(order).c_str()) < 0)
     throw invalid_argument ("Could not write ORDER to header");
+
 }
 
 void spip::Container::clone_header (const spip::AsciiHeader &obj)

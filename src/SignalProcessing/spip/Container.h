@@ -36,7 +36,7 @@ namespace spip {
       //! Null constructor
       Container ();
 
-      ~Container();
+      virtual ~Container();
 
       void set_nchan (unsigned n) { nchan = n; }
       unsigned get_nchan () { return nchan; }
@@ -98,6 +98,21 @@ namespace spip {
 
       Time * get_utc_start () { return utc_start; };
       Time * get_utc_start () const { return utc_start; };
+
+      bool get_cal_signal () { return cal_signal; };
+      bool get_cal_signal () const { return cal_signal; };
+
+      double get_cal_freq () { return cal_freq; };
+      double get_cal_freq () const { return cal_freq; };
+
+      double get_cal_phase () { return cal_phase; };
+      double get_cal_phase () const { return cal_phase; };
+
+      double get_cal_duty_cycle () { return cal_duty_cycle; };
+      double get_cal_duty_cycle () const { return cal_duty_cycle; };
+
+      Time * get_cal_epoch () { return cal_epoch; };
+      Time * get_cal_epoch () const { return cal_epoch; };
 
       size_t calculate_buffer_size () { return size_t (ndat * nchan * nsignal * ndim * npol * nbin * nbit) / 8; }
       size_t calculate_buffer_size () const { return size_t (ndat * nchan * nsignal * ndim * npol * nbin * nbit) / 8; }
@@ -269,6 +284,21 @@ namespace spip {
 
       //! Dual [1] or Single [0] Sideband
       int dual_sideband;
+
+      //! Present [1] or absent [0]
+      int cal_signal;
+
+      //! Frequency of calibration signal in hertz
+      double cal_freq;
+
+      //! Phase of calibration signal [0 .. 1]
+      double cal_phase;
+
+      //! Duty cycle of calibration signal [0 .. 1]
+      double cal_duty_cycle;
+
+      //! Epoch of calibration signal in UTC
+      Time * cal_epoch;
 
     private:
 

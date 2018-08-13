@@ -21,11 +21,16 @@ using namespace std;
 spip::CalibrationPipeline::CalibrationPipeline (const char * in_key_string, const char * out_key_string)
 {
   output_state = spip::Signal::Coherence;
-  dat_dec = 1;
-  dat_offset = 0;
-  nbin = 1;
 
+  nfft = 128;
+  dat_dec = 1;
+  pol_dec = 1;
+  chan_dec = 1;
+  signal_dec = 1;
+
+#ifdef HAVE_CUDA
   device = -1;
+#endif
 
   in_db  = new DataBlockRead (in_key_string);
   out_db = new DataBlockWrite (out_key_string);
@@ -50,13 +55,21 @@ spip::CalibrationPipeline::~CalibrationPipeline()
   delete out_db;
 }
 
-void spip::CalibrationPipeline::set_periodicity (unsigned _nbin, uint64_t _dat_dec)
+void spip::CalibrationPipeline::set_channelisation (unsigned _nfft)
+{
+  if (verbose)
+    cerr << "spip::CalibrationPipeline::set_channelisation nfft=" << _nfft << endl;
+  nfft = _nfft;
+}
+
+void spip::CalibrationPipeline::set_decimation (uint64_t _dat_dec, unsigned _pol_dec, unsigned _chan_dec)
 {
   if (verbose) 
-    cerr << "spip::CalibrationPipeline::set_periodicity nbin=" << _nbin << " dat_dec=" << _dat_dec << endl;
-  nbin = _nbin;
-  dat_offset = 0;
+    cerr << "spip::CalibrationPipeline::set_periodicity dat_dec=" << _dat_dec << " pol_dec=" << _pol_dec << endl;
   dat_dec = _dat_dec;
+  pol_dec = _pol_dec;
+  chan_dec = _chan_dec;
+  signal_dec = 1;
 }
 
 void spip::CalibrationPipeline::set_output_state (spip::Signal::State _state)
@@ -91,19 +104,47 @@ void spip::CalibrationPipeline::configure (spip::UnpackFloat * unpacker)
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
 
+  // finer channels
+  if (verbose)
+    cerr << "spip::ContinuumPipeline::configure allocating channelised container" << endl;
+  channelised = new spip::ContainerRAM ();
+
+  if (verbose)
+    cerr << "spip::ContinuumPipeline::configure allocating Forward FFT" << endl;
+  // forward FFT operation
+  fwd_fft = new spip::ForwardFFTFFTW();
+  fwd_fft->set_input (unpacked);
+  fwd_fft->set_output (channelised);
+  fwd_fft->set_nfft (nfft);
+  fwd_fft->set_verbose (verbose);
+
+
+  // detected data
+  if (verbose)
+    cerr << "spip::ContinuumPipeline::configure allocating detected container" << endl;
+  detected = new spip::ContainerRAM ();
+
+  if (verbose)
+    cerr << "spip::ContinuumPipeline::configure allocating DetectionSquareLaw" << endl;
+  // detection operation
+  detection = new spip::DetectionSquareLawRAM();
+  detection->set_input (channelised);
+  detection->set_output (detected);
+  detection->set_output_state (spip::Signal::PPQQ);
+  detection->set_verbose (verbose);
+
   if (verbose)
     cerr << "spip::CalibrationPipeline::configure allocating output Ring Buffer" << endl;
   output = new spip::ContainerBufferedRingWrite (out_db);
 
   if (verbose)
-    cerr << "spip::CalibrationPipeline::configure allocating SampleFold" << endl;
+    cerr << "spip::CalibrationPipeline::configure allocating IntergrationBinned" << endl;
   // sample fold operation
-  sample_fold = new spip::SampleFoldRAM();
-  sample_fold->set_input (unpacked);
-  sample_fold->set_output (output);
-  cerr << "spip::CalibrationPipeline::configure sample_fold->set_periodicity(" << nbin << "," << dat_offset << "," << dat_dec << ")" << endl;
-  sample_fold->set_periodicity (nbin, dat_offset, dat_dec);
-  sample_fold->set_verbose (verbose);
+  integration_binned = new spip::IntegrationBinnedRAM();
+  integration_binned->set_input (detected);
+  integration_binned->set_output (output);
+  integration_binned->set_decimation (dat_dec, pol_dec, chan_dec, signal_dec);
+  integration_binned->set_verbose (verbose);
 }
 
 #ifdef HAVE_CUDA
@@ -165,19 +206,44 @@ void spip::CalibrationPipeline::configure_cuda (spip::UnpackFloat * unpacker)
   UnpackFloatCUDA * tmp = dynamic_cast<UnpackFloatCUDA *>(unpacker);
   tmp->set_stream (stream);
 
-  // output of sample fold
+  // output of forward fft
   if (verbose)
-    cerr << "spip::CalibrationPipeline::configure_cuda allocating folded container" << endl;
+    cerr << "spip::CalibrationPipeline::configure_cuda allocating channelised container" << endl;
+  channelised  = new spip::ContainerCUDADevice ();
+
+  if (verbose)
+    cerr << "spip::ContinuumPipeline::configure_cuda allocating Forward FFT" << endl;
+  // forward FFT operation
+  fwd_fft = new spip::ForwardFFTCUDA(stream);
+  fwd_fft->set_input (unpacked);
+  fwd_fft->set_output (channelised);
+  fwd_fft->set_nfft (nfft);
+  fwd_fft->set_verbose (verbose);
+
+  // detected data
+  if (verbose)
+    cerr << "spip::ContinuumPipeline::configure_cuda allocating detected container" << endl;
+  detected = new spip::ContainerCUDADevice();
+
+  if (verbose)
+    cerr << "spip::ContinuumPipeline::configure_cuda allocating DetectionSquareLaw" << endl;
+  // forward FFT operation
+  detection = new spip::DetectionSquareLawCUDA(stream);
+  detection->set_input (channelised);
+  detection->set_output (detected);
+  detection->set_output_state (spip::Signal::PPQQ);
+  detection->set_verbose (verbose);
+
+  // output of integration binned
   d_output = new spip::ContainerCUDADevice ();
 
-  // fold samples at the requested period
   if (verbose)
-    cerr << "spip::CalibrationPipeline::configure_cuda allocating Sample Fold" << endl;
-  sample_fold = new spip::SampleFoldCUDA(stream);
-  sample_fold->set_input (unpacked);
-  sample_fold->set_output (d_output);
-  sample_fold->set_periodicity (nbin, dat_offset, dat_dec);
-  sample_fold->set_verbose (verbose);
+    cerr << "spip::CalibrationPipeline::configure_cuda allocating IntegrationBinnedCUDA" << endl;
+  integration_binned = new spip::IntegrationBinnedCUDA(stream);
+  integration_binned->set_input (detected);
+  integration_binned->set_output (d_output);
+  integration_binned->set_decimation (dat_dec, pol_dec, chan_dec, signal_dec);
+  integration_binned->set_verbose (verbose);
 
   if (verbose)
     cerr << "spip::CalibrationPipeline::configure_cuda allocating output Ring Buffer" << endl;
@@ -212,7 +278,7 @@ void spip::CalibrationPipeline::open ()
   {
     if (verbose)
       cerr << "spip::CalibrationPipeline::open ram_to_cuda->configure()" << endl;
-    ram_to_cuda->configure(spip::Ordering::SFPT);
+    ram_to_cuda->configure(spip::Ordering::Custom);
   }
 #endif
   
@@ -222,10 +288,21 @@ void spip::CalibrationPipeline::open ()
   unpack_float->set_scale (1.0f / 100.0f);
   unpack_float->configure(spip::Ordering::SFPT);
 
+ 
+  // configure the forward fft
+  if (verbose)
+    cerr << "spip::CalibrationPipeline::open fwd_fft->configure()" << endl;
+  fwd_fft->configure(spip::Ordering::TSPF);
+
+  // configure the detection
+  if (verbose)
+    cerr << "spip::CalibrationPipeline::open detection->configure()" << endl;
+  detection->configure (spip::Ordering::TSPF);
+
   // configure the sample fold
   if (verbose)
-    cerr << "spip::CalibrationPipeline::open sample_fold->configure()" << endl;
-  sample_fold->configure(spip::Ordering::TSPFB);
+    cerr << "spip::CalibrationPipeline::open integration_binned->configure()" << endl;
+  integration_binned->configure(spip::Ordering::TSPFB);
 
 #ifdef HAVE_CUDA
   if (device >= 0)
@@ -287,7 +364,9 @@ bool spip::CalibrationPipeline::process ()
     if (verbose)
       cerr << "spip::CalibrationPipeline::process input->open_block()" << endl;
     nbytes_input = input->open_block();
-
+    if (verbose)
+      cerr << "spip::CalibrationPipeline::process nbytes_input=" << nbytes_input << endl;
+    
     if (nbytes_input < input_bufsz)
       keep_processing = false;
 
@@ -295,24 +374,34 @@ bool spip::CalibrationPipeline::process ()
     if (keep_processing)
     {
 
-  #ifdef HAVE_CUDA
+#ifdef HAVE_CUDA
       if (device >= 0)
       {
         ram_to_cuda->prepare();
         ram_to_cuda->transformation();
       }
-  #endif
+#endif
 
       if (verbose)
         cerr << "spip::CalibrationPipeline::process unpack_float->transformation()" << endl;
       unpack_float->prepare();
       unpack_float->transformation();
 
+      if (verbose)
+        cerr << "spip::CalibrationPipeline::process fwd_fft->transformation()" << endl;
+      fwd_fft->prepare();
+      fwd_fft->transformation();
+
+      if (verbose)
+        cerr << "spip::CalibrationPipeline::process detection->transformation()" << endl;
+      detection->prepare();
+      detection->transformation();
+
       // perform Sample Fold
       if (verbose)
-        cerr << "spip::CalibrationPipeline::process sample_fold->transformation()" << endl;
-      sample_fold->prepare();
-      sample_fold->transformation ();
+        cerr << "spip::CalibrationPipeline::process integration_binned->transformation()" << endl;
+      integration_binned->prepare();
+      integration_binned->transformation ();
 
 #ifdef HAVE_CUDA
       if (device >= 0)

@@ -13,7 +13,9 @@
 #include "spip/DataBlockRead.h"
 #include "spip/DataBlockWrite.h"
 #include "spip/UnpackFloatRAM.h"
-#include "spip/SampleFoldRAM.h"
+#include "spip/ForwardFFTFFTW.h"
+#include "spip/DetectionSquareLawRAM.h"
+#include "spip/IntegrationBinnedRAM.h"
 #include "spip/ContainerRingRead.h"
 #include "spip/ContainerBufferedRingWrite.h"
 #include "spip/ContainerRAM.h"
@@ -23,7 +25,9 @@
 #ifdef HAVE_CUDA
 #include "spip/ContainerCUDA.h"
 #include "spip/UnpackFloatCUDA.h"
-#include "spip/SampleFoldCUDA.h"
+#include "spip/ForwardFFTCUDA.h"
+#include "spip/DetectionSquareLawCUDA.h"
+#include "spip/IntegrationBinnedCUDA.h"
 #include "spip/RAMtoCUDATransfer.h"
 #include "spip/CUDAtoRAMTransfer.h"
 #endif
@@ -40,7 +44,9 @@ namespace spip {
 
       ~CalibrationPipeline ();
 
-      void set_periodicity (unsigned, uint64_t);
+      void set_decimation (uint64_t, unsigned, unsigned);
+
+      void set_channelisation (unsigned);
 
       void set_output_state (Signal::State);
 
@@ -72,21 +78,33 @@ namespace spip {
 
       UnpackFloat * unpack_float;
 
-      SampleFold * sample_fold;
+      ForwardFFT * fwd_fft;
+
+      DetectionSquareLaw * detection;
+
+      IntegrationBinned * integration_binned;
 
       ContainerRingRead * input;
 
       Container * unpacked;
 
+      Container * channelised;
+
+      Container * detected;
+
       ContainerBufferedRingWrite * output;
 
       Signal::State output_state;
 
-      unsigned nbin;
-
-      uint64_t dat_offset;
+      unsigned nfft;
 
       uint64_t dat_dec;
+
+      unsigned pol_dec;
+
+      unsigned chan_dec;
+
+      unsigned signal_dec;
 
       bool verbose;
 
