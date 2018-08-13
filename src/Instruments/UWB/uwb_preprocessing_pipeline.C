@@ -127,9 +127,9 @@ int main(int argc, char *argv[]) try
   }
 
   // Check arguments
-  if ((argc - optind) != 3)
+  if ((argc - optind) != 4)
   {
-    fprintf(stderr,"ERROR: 3 command line arguments expected\n");
+    fprintf(stderr,"ERROR: 4 command line arguments expected\n");
     usage();
     return EXIT_FAILURE;
   }
@@ -204,7 +204,7 @@ catch (std::exception& exc)
 
 void usage()
 {
-  cout << "filterbank_pipeline [options] inkey calkey transkey outkey" << endl;
+  cout << "uwb_preprocessing_pipeline [options] inkey calkey transkey outkey" << endl;
   cout << " -a        apply adaptive filtering" << endl;
   cout << " -c tsamp  write binned calibration spectra to calkey with specified sampling interval in seconds [default 10]" << endl;
 #ifdef HAVE_CUDA
