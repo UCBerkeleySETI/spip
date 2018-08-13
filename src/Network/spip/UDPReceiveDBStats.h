@@ -25,7 +25,17 @@ namespace spip {
 
       void start_monitor () { set_control_cmd (Monitor); };
 
-      bool receive (int core);
+      void start_recording () { set_control_cmd (Record); };
+
+      bool main (int core);
+
+      void receive ();
+
+      void monitor();
+
+      void ack_control_command ();
+
+      void prepare_socket();
 
       void set_block_format (BlockFormat * fmt);
 

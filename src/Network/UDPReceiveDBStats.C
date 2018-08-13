@@ -28,6 +28,7 @@
 #include <stdexcept>
 #include <new>
 #include <pthread.h>
+#include <sys/time.h>
 
 //#define _DEBUG
 
@@ -195,7 +196,8 @@ void spip::UDPReceiveDBStats::control_thread()
           cerr << "control_thread: open()" << endl;
         open ();
 
-        // write header
+        //wait_control_state ();
+
         if (verbose)
           cerr << "control_thread: control_cmd = Start" << endl;
         set_control_cmd(Record);
@@ -220,12 +222,9 @@ void spip::UDPReceiveDBStats::control_thread()
 #endif
 }
 
-// receive UDP packets for the specified time at the specified data rate
-bool spip::UDPReceiveDBStats::receive (int core)
-{
-  if (verbose)
-    cerr << "spip::UDPReceiveDBStats::receive ()" << endl;
 
+bool spip::UDPReceiveDBStats::main (int core)
+{
   // configure the cpu and memory binding
 #ifdef HAVE_HWLOC
   spip::HardwareAffinity hw_affinity;
@@ -238,132 +237,232 @@ bool spip::UDPReceiveDBStats::receive (int core)
   }
 #endif
 
-  // configure the UDP socket
   if (verbose)
-    cerr << "spip::UDPReceiveDBStats::receive creating socket" << endl;
-  // open socket within the context of this thread 
+    cerr << "spip::UDPReceiveDBStats::main creating socket" << endl;
 #ifdef HAVE_VMA
-  sock = new UDPSocketReceiveVMA;
+  sock = new UDPSocketReceiveVMA();
 #else
-  sock = new UDPSocketReceive;
+  sock = new UDPSocketReceive();
 #endif
 
-  // handle multi or uni case
-  if (data_mcast.size() > 0)
-  {
-    if (verbose)
-      cerr << "spip::UDPReceiveDBStats::receive opening multicast socket" << endl;
-    sock->open_multicast (data_host, data_mcast, data_port);
-  }
-  else
-  {
-    if (verbose)
-      cerr << "spip::UDPReceiveDBStats::receive opening socket" << endl;
-    sock->open (data_host, data_port);
-  }
-  
-  // configure the socket buffer sizes
-  size_t sock_bufsz = format->get_header_size() + format->get_data_size();
   if (verbose)
-    cerr << "spip::UDPReceiveDBStats::receive sock->resize(" << sock_bufsz << ")" << endl;
-  sock->resize (sock_bufsz);
-  size_t kernel_bufsz = 64*1024*1024;
-  if (verbose)
-    cerr << "spip::UDPReceiveDBStats::receive sock->resize_kernel_buffer(" << kernel_bufsz << ")" << endl;
-  sock->resize_kernel_buffer (kernel_bufsz);
-
+    cerr << "spip::UDPReceiveDBStats::main creating overflow with " << resolution * 8 << " bytes" << endl;
   // configure the overflow buffer
   overflow = new UDPOverflow();
-  overflow->resize  (resolution * 512);
+  overflow->resize  (resolution * 8);
   overflow_block = (char *) overflow->get_buffer();
 
-  // block accounting
-  curr_byte_offset = 0;
-  next_byte_offset = 0;
-  overflow_maxbyte = 0;
-
+  // always begin as Idle
   control_state = Idle;
-
-  spip::UDPSocketReceive::keep_receiving = true;
 
   // wait for a control command to begin
   pthread_mutex_lock (&mutex);
   while (control_cmd == None)
     pthread_cond_wait (&cond, &mutex);
   pthread_mutex_unlock (&mutex);
- 
-  unsigned monitor_period = 9;  // seconds
-  unsigned monitor_wait = monitor_period + 1; // seconds
- 
-  // we have control command, so start the main loop
+
+  if (verbose)
+    cerr << "spip::UDPReceiveDBStats::main received control command" << endl;
+
+  bool keep_processing = true;
+  while (keep_processing)
+  {
+    // read the control command
+    ack_control_command ();
+
+    if (verbose)
+      cerr << "spip::UDPReceiveDBStats::main acknowledged control command" << endl;
+
+    if (control_state == Monitoring)
+      monitor();
+    else if (control_state == Recording)
+      receive ();
+    else
+      keep_processing = false;
+  }
+  
+  if (verbose)
+    cerr << "spip::UDPReceiveDBStats::main deleting overflow" << endl;
+  // delete allocated devices
+  delete overflow;
+  if (verbose)
+    cerr << "spip::UDPReceiveDBStats::main deleting socket" << endl;
+  delete sock;
+
+  if (control_state == Quitting)
+    return false;
+  else
+    return true;
+
+}
+
+void spip::UDPReceiveDBStats::ack_control_command ()
+{
+  // read thecontrol command
+  switch (control_cmd)
+  {
+    case Monitor:
+#ifdef _DEBUG
+      cerr << "spip::UDPReceiveDBStats::receive control_cmd=Monitor"<< endl;
+#endif
+      cerr << "Start Monitoring" << endl;
+      control_state = Monitoring;
+      set_control_cmd (None);
+      break;
+
+    case Record:
+#ifdef _DEBUG
+      cerr << "spip::UDPReceiveDBStats::receive control_cmd=Record" << endl;
+#endif
+      cerr << "Start Recording" << endl;
+      control_state = Recording;
+      set_control_cmd (None);
+      break;
+
+    case Stop:
+#ifdef _DEBUG
+      cerr << "spip::UDPReceiveDBStats::receive control_cmd=Stop" << endl;
+#endif
+      cerr << "Stop Monitoring/Recording" << endl;
+      control_state = Idle;
+      spip::UDPSocketReceive::keep_receiving = false;
+      set_control_cmd (None);
+      break;
+
+    case Quit:
+#ifdef _DEBUG
+      cerr << "spip::UDPReceiveDBStats::receive control_cmd=Quit" << endl;
+#endif
+      if (verbose)
+        cerr << "Quiting" << endl;
+      control_state = Quitting;
+      spip::UDPSocketReceive::keep_receiving = false;
+      set_control_cmd (None);
+      break;
+
+    case None:
+
+    default:
+      break;
+  }
+}
+
+void spip::UDPReceiveDBStats::prepare_socket ()
+{
+  // configure the UDP socket
+  if (data_mcast.size() > 0)
+  {
+    if (verbose)
+      cerr << "spip::UDPReceiveDBStats::prepare_socket opening multicast socket" << endl;
+    sock->open_multicast (data_host, data_mcast, data_port);
+  }
+  else
+  {
+    if (verbose)
+      cerr << "spip::UDPReceiveDBStats::prepare_socket opening socket" << endl;
+    sock->open (data_host, data_port);
+  }
+
+  // configure the socket buffer sizes
+  size_t sock_bufsz = format->get_header_size() + format->get_data_size();
+  if (verbose)
+    cerr << "spip::UDPReceiveDBStats::prepare_socket sock->resize(" << sock_bufsz  + 64 << ")" << endl;
+  sock->resize (sock_bufsz + 64);
+
+  size_t kernel_bufsz = 64*1024*1024;
+  if (verbose)
+    cerr << "spip::UDPReceiveDBStats::prepare_socket sock->resize_kernel_buffer(" << kernel_bufsz << ")" << endl;
+  sock->resize_kernel_buffer (kernel_bufsz);
+}
+
+
+// receive UDP packets for the specified time at the specified data rate
+void spip::UDPReceiveDBStats::receive ()
+{
+  if (verbose)
+    cerr << "spip::UDPReceiveDBStats::receive ()" << endl;
+
+  // configure the UDP socket
+  if (verbose)
+    cerr << "spip::UDPReceiveDBStats::receive opening socket" << endl;
+  prepare_socket();
+
+  // block accounting
+  curr_byte_offset = 0;
+  next_byte_offset = 0;
+  overflow_maxbyte = 0;
+
+  // ensure that a receive_block call will start from the start
+  overflow->reset();
+  udp_stats->reset();
+
+  // ensure all packets buffered at the socket are cleared
+  sock->clear_buffered_packets();
+
+  spip::UDPSocketReceive::keep_receiving = true;
   while (spip::UDPSocketReceive::keep_receiving)
   {
-    // read thecontrol command
-    switch (control_cmd)
-    {
-      case Monitor:
+    block = (char *) db->open_block();
+    receive_block (format);
+    db->close_block (data_block_bufsz);
+
+    // check or a control cmd, to handle a change in state
+    ack_control_command ();
+  }
+
 #ifdef _DEBUG
-        cerr << "spip::UDPReceiveDBStats::receive control_cmd=Monitor"<< endl;
+  cerr << "spip::UDPReceiveDBStats::receive exiting" << endl;
 #endif
-        if (verbose)
-          cerr << "Start Monitoring" << endl;
-        control_state = Monitoring;
-        set_control_cmd (None);
-        break;
 
-      case Record:
-#ifdef _DEBUG
-        cerr << "spip::UDPReceiveDBStats::receive control_cmd=Record" << endl;
-#endif
-        if (verbose)
-          cerr << "Start Recording" << endl;
-        control_state = Recording;
-        set_control_cmd (None);
-        udp_stats->reset();
-        break;
+  // close the socket
+  sock->close_me();
 
-      case Stop:
-#ifdef _DEBUG
-        cerr << "spip::UDPReceiveDBStats::receive control_cmd=Stop" << endl;
-#endif
-        if (verbose)
-          cerr << "Stop Recording, Start Monitoring" << endl;
-        control_state = Monitoring;
-        set_control_cmd (None);
-        break;
+  // close the data block
+  if (verbose)
+    cerr << "spip::UDPReceiveDBStats::receive this->close()"  << endl;
+  close();
 
-      case Quit:
-//#ifdef _DEBUG
-        cerr << "spip::UDPReceiveDBStats::receive control_cmd=Quit" << endl;
-//#endif
-        if (verbose)
-          cerr << "Quiting" << endl;
-        control_state = Idle;
-        spip::UDPSocketReceive::keep_receiving = false;
-        set_control_cmd (None);
-        break;
+  if (verbose)
+    cerr << "spip::UDPReceiveDBStats::receive returning"  << endl;
+}
 
-      case None:
+// receive UDP packets for the specified time at the specified data rate
+void spip::UDPReceiveDBStats::monitor ()
+{
+  if (verbose)
+    cerr << "spip::UDPReceiveDBStats::monitor ()" << endl;
 
-      default:
-        break;
-    }
+  unsigned monitor_period = 9;  // seconds
+  unsigned monitor_wait = monitor_period + 1; // seconds
 
-    if (control_state == Recording)
+  bool keep_monitoring = true;
+  spip::UDPSocketReceive::keep_receiving = true;
+  while (keep_monitoring && spip::UDPSocketReceive::keep_receiving)
+  {
+    // record data to the monitoring block
+    block = monitor_block;
+
+    // if time has come to update the monitoring data
+    if (monitor_wait > monitor_period)
     {
-      block = (char *) db->open_block();
-      receive_block (format);
-      db->close_block (data_block_bufsz);
-    }
-    else if (control_state == Monitoring && block_format && monitor_wait > monitor_period)
-    {
+      // open the UDP socket
+      if (verbose)
+        cerr << "spip::UDPReceiveDBStats::monitor creating socket" << endl;
+      prepare_socket();
+
+      // block accounting
+      curr_byte_offset = 0;
+      next_byte_offset = 0;
+      overflow_maxbyte = 0;
+
+      // we have control command, so start the main loop
       // form a temporary header based on the configuration
       AsciiHeader monitor_header (config);
 
       // generate a UTC_START in 2s from now
       spip::Time utc_start (time(0));
       std::string utc_str = utc_start.get_gmtime();
-      utc_start.add_seconds (4);
+      utc_start.add_seconds (2);
       utc_str = utc_start.get_gmtime();
 
       // set this UTC_START in the monitoring header
@@ -373,36 +472,44 @@ bool spip::UDPReceiveDBStats::receive (int core)
       }
 
       if (verbose)
-        cerr << "spip::UDPReceiveDBStats::receive capturing block at UTC=" << utc_str.c_str() << endl;
+       cerr << "spip::UDPReceiveDBStats::monitor capturing monitoring block at UTC=" << utc_str.c_str() << endl;
 
 #ifdef _DEBUG
-      cerr << "spip::UDPReceiveDBStats::receive monitoring_udp_format->prepare(monitor_header, '')" << endl;
+      cerr << "spip::UDPReceiveDBStats::monitor monitoring_udp_format->prepare(monitor_header, '')" << endl;
 #endif
+
       // prepare the monitoring format with the monitoring header
       monitoring_udp_format->prepare (monitor_header, "");
 
-      block = monitor_block;
-      overflow->reset();
-      next_byte_offset = 0;
+      // reset the UDP statistics counter
+      udp_stats->reset();
 
-      // clear all packets buffered at the socket
-      sock->clear_buffered_packets();
+      // reset the overslow buffer
+      overflow->reset();
 
 #ifdef _DEBUG
-      cerr << "spip::UDPReceiveDBStats::receive receive_block()" << endl;
+      cerr << "spip::UDPReceiveDBStats::monitor receive_block()" << endl;
 #endif
+
       // receive 1 data_block's worth of samples
       receive_block (monitoring_udp_format);
 
+      // immediately close the UDP socket
+      sock->close_me();
+
+      uint64_t b_recv_curr = udp_stats->get_data_transmitted();
+      uint64_t b_drop_curr = udp_stats->get_data_dropped();
+      if (b_drop_curr > 0)
+        cerr << "spip::UDPReceiveDBStats::monitor recv=" << b_recv_curr << " drop=" << b_drop_curr << " buf=" << data_block_bufsz << endl;
+
 #ifdef _DEBUG
-      cerr << "spip::UDPReceiveDBStats::receive analyze_block()" << endl;
+      cerr << "spip::UDPReceiveDBStats::monitor analyze_block()" << endl;
 #endif
+
       // process the data block, writing files to disk
       analyze_block();
     
-      // ensure that a receive_block call will start from the start
-      overflow->reset();
-      next_byte_offset = 0;
+      // reset the monitoring wait counter to zero
       monitor_wait = 0;
     }
     else
@@ -410,23 +517,16 @@ bool spip::UDPReceiveDBStats::receive (int core)
       sleep (1);
       monitor_wait++;
     }
+
+    // check or a control cmd, to handle a change in state
+    ack_control_command ();
+
+    // return if monitoring is over
+    if (control_state != Monitoring)
+      keep_monitoring = false;
   }
-
-#ifdef _DEBUG
-  cerr << "spip::UDPReceiveDBStats::receive exiting" << endl;
-#endif
-
-  // close the data block
-  if (verbose)
-    cerr << "spip::UDPReceiveDBStats::receive this->close()"  << endl;
-  close();
-
-  if (control_state == Idle)
-    return true;
-  else
-    return false;
 }
-     
+
 void spip::UDPReceiveDBStats::analyze_block ()
 {
   if (verbose)
@@ -467,11 +567,26 @@ void spip::UDPReceiveDBStats::analyze_block ()
   block_format->write_histograms (ss.str());
 
   // generate the freq/time files
+  //ss.str("");
+  //ss << stats_dir << "/" << freq << "/" << local_time << "." << stream_id << ".ft.stats";
+  //if (verbose > 1)
+  //  cerr << "spip::UDPReceiveDBStats::analyze_block creating FT stats file " << ss.str() << endl;
+  //block_format->write_freq_times (ss.str());
+
+  // generate the bandpass files
   ss.str("");
-  ss << stats_dir << "/" << freq << "/" << local_time << "." << stream_id << ".ft.stats";
+  ss << stats_dir << "/" << freq << "/" << local_time << "." << stream_id << ".bp.stats";
   if (verbose > 1)
-    cerr << "spip::UDPReceiveDBStats::analyze_block creating FT stats file " << ss.str() << endl;
-  block_format->write_freq_times (ss.str());
+    cerr << "spip::UDPReceiveDBStats::analyze_block creating BP stats file " << ss.str() << endl;
+  block_format->write_bandpasses (ss.str());
+
+
+  // generate the time series files
+  ss.str("");
+  ss << stats_dir << "/" << freq << "/" << local_time << "." << stream_id << ".ts.stats";
+  if (verbose > 1)
+    cerr << "spip::UDPReceiveDBStats::analyze_block creating TS stats file " << ss.str() << endl;
+  block_format->write_time_series (ss.str());
 
   // generate the mean and stddev files
   ss.str("");
