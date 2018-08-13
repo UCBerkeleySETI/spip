@@ -52,90 +52,50 @@ class UWBContinuumDaemon (UWBProcDaemon):
     self.out_dir = self.cfg["CLIENT_CONTINUUM_DIR"] + "/processing/" + self.beam + "/" \
                    + self.utc_start + "/" + self.source + "/" + self.cfreq
 
-    # create DSPSR input file for the data block
-    db_key_filename = "/tmp/spip_" + self.db_key + ".info"
-    if not os.path.exists (db_key_filename):
-      db_key_file = open (db_key_filename, "w")
-      db_key_file.write("DADA INFO:\n")
-      db_key_file.write("key " +  self.db_key + "\n")
-      db_key_file.close()
-
-    outnstokes = -1
-    outtsubint = -1
-    dm = -1
-    innchan = self.header["NCHAN"]
-    outnchan = innchan
-    outnstokes = 1
-    outnbit = 8
+    out_tsamp = -1
+    out_tsubint = -1
+    out_npol = -1
+    out_nchan = -1
+    in_nchan = int(self.header["NCHAN"])
 
     try:
-      outtsubint = int(self.header["OUTTSUBINT"])
+      out_tsamp = float(self.header["CONTINUUM_OUTTSAMP"])
     except:
-      outtsubint = 10
+      out_tsamp = 1
 
     try:
-      outnstokes = int(self.header["OUTNSTOKES"])
+      out_tsubint = int(self.header["CONTINUUM_OUTTSUBINT"])
     except:
-      outnstokes = 1
+      out_tsubint = 10
 
     try:
-      outnbit = int(self.header["OUTNBIT"])
+      out_npol = int(self.header["CONTINUUM_OUTNPOL"])
     except:
-      outnbit = 8
+      out_npol = 1
 
     try:
-      outtdec = int(self.header["OUTTDEC"])
+      out_nchan = int(self.header["CONTINUUM_OUTNCHAN"])
     except:
-      outtdec = 32
-
-    try:
-      outnchan = int(self.header["OUTNCHAN"])
-    except:
-      outnchan = 0
-      innchan = 0
-
-    try:
-      dm = float(self.header["DM"])
-    except:
-      dm = -1
-
-    nsblk = 1024
+      out_nchan = 1024
 
     # configure the command to be run
-    self.cmd = "digifits -Q " + db_key_filename + " -cuda " + self.gpu_id + " -nsblk " + str(nsblk)
+    self.cmd = "uwb_continuum_pipeline " + self.db_key + " " + self.out_dir + " -d " + self.gpu_id
 
     # handle detection options
-    if outnstokes == 1 or outnstokes == 2 or outnstokes == 4:
-      self.cmd = self.cmd + " -p " + str(outnstokes)
+    if out_npol == 1 or out_npol == 2 or out_npol == 4:
+      self.cmd = self.cmd + " -p " + str(out_npol)
     else:
       self.log(-1, "ignoring invalid outnstokes of " + str(outnstokes))
 
     # handle channelisation
-    if outnchan > innchan:
-      if outnchan % innchan == 0:
-        self.cmd = self.cmd + " -F " + str(outnchan) + ":D"
+    if out_nchan > in_nchan:
+      if out_nchan % in_nchan == 0:
+        self.cmd = self.cmd + " -n " + str(out_nchan)
       else:
         self.log(-1, "Invalid output channelisation")
 
-    # handle output digitization
-    if outnbit == 1 or outnbit == 2 or outnbit == 4 or outnbit == 8:
-      self.cmd = self.cmd + " -b " + str(outnbit)
-
-    # handle temporal integration
-    out_tsamp = (float(self.header["TSAMP"]) * outtdec) / 1000000
-    self.cmd = self.cmd +  " -t " + str(out_tsamp)
-
-    # handle output sub-int length, need lots of precision
-    block_length_seconds = out_tsamp * nsblk
-    blocks_per_subint = int(math.floor(outtsubint / block_length_seconds))
-    subint_length_seconds = block_length_seconds * blocks_per_subint
-    self.cmd = self.cmd + " -L " + format(subint_length_seconds, ".16f")
-
-    # handle a custom DM
-    if dm >= 0:
-      self.cmd = self.cmd + " -do_dedisp true -D " + str(dm)
-      # set a minimum kernel length
-      self.cmd = self.cmd + " -x 2048"
+    # handle temporal integration and sub-integration length
+    self.cmd = self.cmd + " -t " + str(out_tsamp) + " -L " + str(out_tsubint)
 
     self.log(1, self.cmd)
     self.log_prefix = "continuum_src"
@@ -161,6 +121,7 @@ if __name__ == "__main__":
 
   try:
 
+    script.log(1, "STARTING SCRIPT")
     script.main ()
 
   except:
@@ -171,6 +132,7 @@ if __name__ == "__main__":
     print '-'*60
     script.quit_event.set()
 
+  script.log(1, "STOPPING SCRIPT")
   script.conclude()
   sys.exit(0)
 

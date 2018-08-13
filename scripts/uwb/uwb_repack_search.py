@@ -7,7 +7,7 @@
 # 
 ###############################################################################
 #
-#     UWB Repack Fold:
+#     UWB Repack Search:
 #       updates header parameters [PSRFITS]
 #       copies output from a sub-band to web server
 #
@@ -22,31 +22,28 @@ from spip.daemons.daemon import Daemon
 from spip.threads.reporting_thread import ReportingThread
 from spip.utils import times,sockets
 from spip.config import Config
-from spip.plotting import SNRPlot
 
 DAEMONIZE = True
 DL        = 1
 
-class RepackFoldDaemon(Daemon):
+#############################################################################
+# RepackSearchDaemon
+class RepackSearchDaemon(Daemon):
 
+  #############################################################################
+  # RepackSearchDaemon::__init__
   def __init__ (self, name, id):
     Daemon.__init__(self, name, str(id))
 
-    self.valid_plots = ["freq_vs_phase", "flux_vs_phase", "time_vs_phase", "bandpass", "snr_vs_time"]
     self.beam = ""
     self.subbands = []
     self.results = {}
-    self.snr_history = {}
-
-    self.snr_plot = SNRPlot()
 
   #################################################################
-  # main
-  #       id >= 0   process folded archives from a stream
-  #       id == -1  process folded archives from all streams
+  # RepackSearchDaemon::main
   def main (self):
 
-    archives_glob = "*.ar"
+    archives_glob = "*.?f"
 
     self.log (2, "main: beam=" + str(self.beam))
 
@@ -70,7 +67,7 @@ class RepackFoldDaemon(Daemon):
 
       processed_this_loop = 0
 
-      # check each beam for folded archives to process    
+      # check each beam for searched archives to process    
       beam_dir = self.processing_dir + "/" + self.beam
       self.log (2, "main: beam=" + self.beam + " beam_dir=" + beam_dir)
 
@@ -79,7 +76,7 @@ class RepackFoldDaemon(Daemon):
 
       # get a list of all the processing observations for any utc / source for this cfreq
       cmd = "find " + beam_dir + " -mindepth 3 -maxdepth 3 -type d -name '" + self.cfreq + "'"
-      rval, observations = self.system (cmd, 3)
+      rval, observations = self.system (cmd, 2)
 
       # for each observation
       for observation in observations:
@@ -96,7 +93,7 @@ class RepackFoldDaemon(Daemon):
 
         in_dir = beam_dir + "/" + observation
 
-        # find folded archives in the processing directory
+        # find searched archives in the processing directory
         cmd = "find " + in_dir + " -mindepth 1 -maxdepth 1 " + \
               "-type f -name '" + archives_glob + "' -printf '%f\\n'"
         rval, files = self.system (cmd, 3)
@@ -148,15 +145,13 @@ class RepackFoldDaemon(Daemon):
           time.sleep(1)
           to_sleep -= 1
 
-  # 
+  #############################################################################
   # convert a UTC in ????-??-??-??:??:?? to ????-??-??-??-??-??
-  #  
   def atnf_utc (self, instr):
     return instr.replace(":","-")
 
-  # 
+  #############################################################################
   # patch missing information into the PSRFITS header 
-  #
   def patch_psrfits_header (self, input_dir, input_file):
 
     header_file = input_dir + "/obs.header"
@@ -164,52 +159,19 @@ class RepackFoldDaemon(Daemon):
 
     header = Config.readCFGFileIntoDict (input_dir + "/obs.header")
 
-    new = {}
-    new["obs:observer"] = header["OBSERVER"] 
-    new["obs:projid"]   = header["PID"]
-    new["be:nrcvr"]     = "2"
-    new["be:phase"]     = header["BACKEND_PHASE"] # Phase convention of backend
+    return (0, "")
 
-    # need to know what these mean!
-    new["rcvr:sa"]      = "0"     # Advised by D.Manchester
-    new["be:tcycle"]    = "8"     # Correlator cycle time
-    new["be:dcc"]       = "0"     # Downconversion conjugation corrected
-    new["sub:nsblk"]    = "1"     # Samples/row (SEARCH mode, else 1)
-  
-    # this needs to come from CAM, hack for now
-    new["ext:trk_mode"] = "TRACK" # Tracking mode
-    new["ext:bpa"]      = "0" # Beam position angle [?]
-    new["ext:bmaj"]     = "0" # Beam major axis [degrees]
-    new["ext:bmin"]     = "0" # Beam minor axis [degrees]
-
-    new["ext:obsfreq"]  = header["FREQ"]
-    new["ext:obsbw"]    = header["BW"]
-    new["ext:obsnchan"] = header["NCHAN"]
-
-    new["ext:stp_crd1"] = header["RA"]
-    new["ext:stp_crd2"] = header["DEC"]
-    new["ext:stt_date"] = header["UTC_START"][0:10]
-    new["ext:stt_time"] = header["UTC_START"][11:19]
-
-    # create the psredit command necessary to apply "new"
-    cmd = "psredit -m -c " + ",".join(['%s=%s' % (key, value) for (key, value) in new.items()]) + " " + input_file
-    rval, lines = self.system(cmd, 2)
-    if rval:
-      return rval, lines[0]
-    return 0, ""
-
-  #
+  #############################################################################
   # create a remote directory for the observation
-  #
   def create_remote_dir (self, utc, source):
 
     in_dir = self.processing_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
-    rem_dir = self.cfg["SERVER_FOLD_DIR"] + "/processing/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
+    rem_dir = self.cfg["SERVER_SEARCH_DIR"] + "/processing/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
     ctrl_file = in_dir + "/remdir.created"
 
     # use a local control file to know if remote directory exists
     if not os.path.exists(ctrl_file):
-      cmd = "ssh " + self.rsync_user + "@" + self.rsync_server + " 'mkdir -p " + rem_dir + " -m 0755'";
+      cmd = "ssh " + self.rsync_user + "@" + self.rsync_server + " 'mkdir -p " + rem_dir + "'";
       rval, lines = self.system(cmd, 2)
       if rval:
         return (rval, "failed to create remote dir " + str(lines[0]))
@@ -219,13 +181,27 @@ class RepackFoldDaemon(Daemon):
       if rval:
         return (rval, "failed to create control file " + str(lines[0]))
 
+      # copy the header to the remote directory
+      header_file = in_dir + "/obs.header"
+      cmd = "rsync -a " + header_file + " " + self.rsync_user + "@" + \
+            self.rsync_server + "::" + self.rsync_module + "/search/processing/" + self.beam + "/" + utc + \
+            "/" + source + "/" + self.cfreq + "/"
+
+      # we dont have an rsync module setup on the server yet
+      cmd = "rsync -a " + header_file + " " + self.rsync_user + "@" + \
+            self.rsync_server + ":" + self.cfg["SERVER_SEARCH_DIR"] + "/processing/" + self.beam + "/" + utc + \
+            "/" + source + "/" + self.cfreq + "/"
+
+      rval, lines = self.system (cmd, 2)
+      if rval:
+        return (rval, "failed to rsync files to the server")
+
       return (0, "remote directory created")
     else:
       return (0, "remote directory existed")
 
-  #
+  #############################################################################
   # process and file in the directory, adding file to 
-  #
   def process_archive (self, utc, source, file): 
 
     utc_out = self.atnf_utc(utc)
@@ -241,7 +217,7 @@ class RepackFoldDaemon(Daemon):
     # create a remote directory on the server [should no longer be necessary]
     rval, message = self.create_remote_dir (utc, source)
     if rval:
-      self.log (-2, "RepackFoldDaemon::process_archive create_remote_dir failed: " + message)
+      self.log (-2, "RepackSearchDaemon::process_archive create_remote_dir failed: " + message)
       return (rval, "failed to create remote directory: " + message)
 
     input_file = in_dir + "/" + file
@@ -254,122 +230,17 @@ class RepackFoldDaemon(Daemon):
       if rval:
         return (rval, "failed to copy obs.header to out_dir: " + str(lines[0]))
 
-    # convert all upper sideband archives to lower sideband
-    if float(self.bw) > 0:
-      cmd = "pam --reverse_freqs -m " + input_file
-      rval, lines = self.system (cmd, 2)
-      if rval:
-        self.log (-1, "RepackFoldDaemon::process_archive " + cmd + " failed: " + str(lines))
-        return (rval, "failed to convert upper sideband to lower sideband")
-
-    # convert the timer archive file to psrfits in the output directory
-    cmd = "psrconv " + input_file + " -O " + out_dir
-    rval, lines = self.system (cmd, 2)
-    if rval:
-      return (rval, "failed to copy processed file to send dir")
-    psrfits_file = out_dir + "/" + os.path.basename (input_file)
-    self.log (2, "process_archive() psrfits_file=" + psrfits_file)
-
-    # update the header parameters in the psrfits file
-    (rval, message) = self.patch_psrfits_header (out_dir, psrfits_file)
-    if rval:
-      return (rval, "failed to convert psrfits file")
-
     # rename the psrfits file to match ATNF standards
     atnf_psrfits_file = out_dir + "/" + self.atnf_utc(os.path.basename (input_file))
     try:
-      os.rename (psrfits_file, atnf_psrfits_file)
+      os.rename (input_file, atnf_psrfits_file)
     except OSError, e:
       self.log (0, "fail_observation: failed to rename " + psrfits_file + " to " + atnf_psrfits_file)
       return (1, "failed to rename psrfits file")
 
-    # auto-zap bad channels
-    cmd = "zap_uwl.psh -m " + input_file
-    rval, lines = self.system (cmd, 2)
-    if rval:
-      return (rval, "failed to zap known bad channels")
-
-    # scrunch to 128 channels for the Fsum
-    cmd = "pam --setnchn 128 -m " + input_file
-    rval, lines = self.system (cmd, 2)
-    if rval:
-      return (rval, "could not fscrunch to 128 channels")
-
-    # rsync the zapped input file to the server
-    cmd = "rsync -a " + header_file + " " + input_file + " " + self.rsync_user + "@" + \
-          self.rsync_server + "::" + self.rsync_module + "/fold/processing/" + self.beam + "/" + utc + \
-          "/" + source + "/" + self.cfreq + "/"
-
-    # we dont have an rsync module setup on the server yet
-    cmd = "rsync -a " + header_file + " " + input_file + " " + self.rsync_user + "@" + \
-          self.rsync_server + ":" + self.cfg["SERVER_FOLD_DIR"] + "/processing/" + self.beam + "/" + utc + \
-          "/" + source + "/" + self.cfreq + "/"
-
-    rval, lines = self.system (cmd, 2)
-    if rval:
-      return (rval, "failed to rsync files to the server")
-
-    cmd = "rm -f " + input_file
-    rval, lines = self.system (cmd, 2)
-    if rval:
-      return (rval, "failed to delete local files")
-
     return (0, "")
 
-  def fail_observation (self, utc, source):
-
-    utc_out = self.atnf_utc (utc)
-    in_dir = self.processing_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
-    fail_dir = self.failed_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
-    send_dir = self.send_dir + "/" + self.beam + "/" + utc_out + "/" + source + "/" + self.cfreq
-
-    # ensure required directories exist
-    required_dirs = [fail_dir, send_dir]
-    for dir in required_dirs:
-      if not os.path.exists(dir):
-        os.makedirs(dir, 0755)
-
-    # touch obs.failed file in the send directory
-    cmd = "touch " + send_dir + "/obs.failed"
-    rval, lines = self.system (cmd, 3)
-
-    # create remote directory on the server [this should no longer be required]
-    self.log (3, "RepackFoldDaemon::fail_observation create_remote_dir(" + utc + ", " + source + ")")
-    (rval, message) = self.create_remote_dir (utc, source)
-    if rval:
-      return (1, "fail_observation: failed to create remote directory: " + message)
-
-    # touch obs.failed file in the remote processing directory
-    rem_cmd = "touch " + self.cfg["SERVER_FOLD_DIR"] + "/processing/" + self.beam + \
-          "/" + utc + "/" + source + "/" + self.cfreq + "/obs.failed"
-    cmd = "ssh " + self.rsync_user + "@" + self.rsync_server + " '" + rem_cmd + "'"
-    rval, lines = self.system(cmd, 2)
-    if rval:
-      return (rval, "failed to touch remote obs.failed file")
-
-    # simply move the observation to the failed directory
-    try:
-      fail_parent_dir = os.path.dirname(fail_dir)
-      if not os.path.exists(fail_parent_dir):
-        os.mkdir (fail_parent_dir, 0755)
-      os.rename (in_dir, fail_dir)
-    except OSError, e:
-      self.log (0, "fail_observation: failed to rename " + in_dir + " to " + fail_dir)
-      self.log (0, str(e))
-      return (1, "failed to rename in_dir to fail_dir")
-
-    # count the number of other sub-band directories
-    src_dir = os.path.dirname (in_dir)
-    self.log (2, "RepackFoldDaemon::fail_observation src_dir=" + src_dir)
-    subdir_count = len(os.listdir(src_dir))
-    self.log (2, "RepackFoldDaemon::fail_observation src_dir subdir_count=" + str(subdir_count))
-    if subdir_count == 0:
-      os.rmdir(src_dir)
-      utc_dir = os.path.dirname (src_dir)
-      os.rmdir(utc_dir)
-
-    return (0, "")
-
+  #############################################################################
   # transition observation from processing to finished
   def finalise_observation (self, utc, source):
 
@@ -391,13 +262,13 @@ class RepackFoldDaemon(Daemon):
       return (1, "finalise_observation: failed to create " + send_dir + "/obs.finished")
 
     # create remote directory on server
-    self.log (3, "RepackFoldDaemon::finalise_observation create_remote_dir(" + utc + ", " + source + ")")
+    self.log (3, "RepackSearchDaemon::finalise_observation create_remote_dir(" + utc + ", " + source + ")")
     (rval, message) = self.create_remote_dir (utc, source)
     if rval:
       return (1, "finalise_observation: failed to create remote directory: " + message)
 
     # touch obs.finished file in the remote directory
-    rem_cmd = "touch " + self.cfg["SERVER_FOLD_DIR"] + "/processing/" + self.beam + \
+    rem_cmd = "touch " + self.cfg["SERVER_SEARCH_DIR"] + "/processing/" + self.beam + \
           "/" + utc + "/" + source + "/" + self.cfreq + "/obs.finished"
     cmd = "ssh " + self.rsync_user + "@" + self.rsync_server + " '" + rem_cmd + "'"
     rval, lines = self.system(cmd, 2)
@@ -414,48 +285,101 @@ class RepackFoldDaemon(Daemon):
 
     # count the number of other sub-band directories
     src_dir = os.path.dirname (in_dir)
-    self.log (2, "RepackFoldDaemon::finalise_observation src_dir=" + src_dir)
+    self.log (2, "RepackSearchDaemon::finalise_observation src_dir=" + src_dir + " list=" + str(os.listdir(src_dir)))
     subdir_count = len(os.listdir(src_dir))
-    self.log (2, "RepackFoldDaemon::finalise_observation src_dir subdir_count=" + str(subdir_count))
+    self.log (2, "RepackSearchDaemon::finalise_observation src_dir subdir_count=" + str(subdir_count))
     if subdir_count == 0:
-      try:
-        os.rmdir(src_dir)
-      except OSError, e:
-        self.log (1, "finalise_observation: could not remove src_dir [" + src_dir + "]: " + str(e))
-        return (0, "")
-
+      os.rmdir(src_dir)
       utc_dir = os.path.dirname (src_dir)
-      try:
-        os.rmdir(utc_dir)
-      except OSError, e:
-        self.log (1, "finalise_observation: could not remove utc_dir [" + src_dir + "]: " + str(e))
-        return (0, "")
+      os.rmdir(utc_dir)
 
     return (0, "")
 
-class RepackFoldStreamDaemon (RepackFoldDaemon, StreamBased):
+  #############################################################################
+  # transition an observation from processing to failed
+  def fail_observation (self, utc, source):
 
+    utc_out = self.atnf_utc (utc)
+    in_dir = self.processing_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
+    fail_dir = self.failed_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
+    send_dir = self.send_dir + "/" + self.beam + "/" + utc_out + "/" + source + "/" + self.cfreq
+
+    # ensure required directories exist
+    required_dirs = [fail_dir, send_dir]
+    for dir in required_dirs:
+      if not os.path.exists(dir):
+        os.makedirs(dir, 0755)
+
+    # touch obs.failed file in the send directory
+    cmd = "touch " + send_dir + "/obs.failed"
+    rval, lines = self.system (cmd, 3)
+
+    # create remote directory on the server [this should no longer be required]
+    self.log (3, "RepackSearchDaemon::fail_observation create_remote_dir(" + utc + ", " + source + ")")
+    (rval, message) = self.create_remote_dir (utc, source)
+    if rval:
+      return (1, "fail_observation: failed to create remote directory: " + message)
+
+    # touch obs.failed file in the remote processing directory
+    rem_cmd = "touch " + self.cfg["SERVER_SEARCH_DIR"] + "/processing/" + self.beam + \
+          "/" + utc + "/" + source + "/" + self.cfreq + "/obs.failed"
+    cmd = "ssh " + self.rsync_user + "@" + self.rsync_server + " '" + rem_cmd + "'"
+    rval, lines = self.system(cmd, 2)
+    if rval:
+      return (rval, "failed to touch remote obs.failed file")
+
+    # simply move the observation to the failed directory
+    try:
+      fail_parent_dir = os.path.dirname(fail_dir)
+      if not os.path.exists(fail_parent_dir):
+        os.mkdir (fail_parent_dir, 0755)
+      os.rename (in_dir, fail_dir)
+    except OSError, e:
+      self.log (0, "fail_observation: failed to rename " + in_dir + " to " + fail_dir)
+      self.log (0, str(e))
+      return (1, "failed to rename in_dir to fail_dir")
+
+    # count the number of other sub-band directories
+    src_dir = os.path.dirname (in_dir)
+    self.log (2, "RepackSearchDaemon::fail_observation src_dir=" + src_dir)
+    subdir_count = len(os.listdir(src_dir))
+    self.log (2, "RepackSearchDaemon::fail_observation src_dir subdir_count=" + str(subdir_count))
+    if subdir_count == 0:
+      os.rmdir(src_dir)
+      utc_dir = os.path.dirname (src_dir)
+      os.rmdir(utc_dir)
+
+    return (0, "")
+
+##########################a#######################################################
+# RepackSearchStreamDaemon
+class RepackSearchStreamDaemon (RepackSearchDaemon, StreamBased):
+
+  #############################################################################
+  # RepackSearchStreamDaemon::__init__
   def __init__ (self, name, id):
-    RepackFoldDaemon.__init__(self, name, str(id))
+    RepackSearchDaemon.__init__(self, name, str(id))
     StreamBased.__init__(self, str(id), self.cfg)
 
+  #############################################################################
+  # RepackSearchStreamDaemon::configure
   def configure (self, become_daemon, dl, source, dest):
  
-    self.log(2, "RepackFoldStreamDaemon::configure()")
+    self.log(2, "RepackSearchStreamDaemon::configure()")
     Daemon.configure(self, become_daemon, dl, source, dest)
 
-    self.log(3, "RepackFoldStreamDaemon::configure stream_id=" + self.id)
-    self.log(3, "RepackFoldStreamDaemon::configure beam_id=" + self.beam_id)
-    self.log(3, "RepackFoldStreamDaemon::configure subband_id=" + self.subband_id)
+    self.log(3, "RepackSearchStreamDaemon::configure stream_id=" + self.id)
+    self.log(3, "RepackSearchStreamDaemon::configure beam_id=" + self.beam_id)
+    self.log(3, "RepackSearchStreamDaemon::configure subband_id=" + self.subband_id)
   
     # beam_name
     self.beam = self.cfg["BEAM_" + str(self.beam_id)]
 
-    # base directories for fold data products
-    self.processing_dir = self.cfg["CLIENT_FOLD_DIR"] + "/processing"
-    self.finished_dir   = self.cfg["CLIENT_FOLD_DIR"] + "/finished"
-    self.send_dir       = self.cfg["CLIENT_FOLD_DIR"] + "/send"
-    self.failed_dir     = self.cfg["CLIENT_FOLD_DIR"] + "/failed"
+    # base directories for search data products
+    self.processing_dir = self.cfg["CLIENT_SEARCH_DIR"] + "/processing"
+    self.finished_dir   = self.cfg["CLIENT_SEARCH_DIR"] + "/finished"
+    self.send_dir       = self.cfg["CLIENT_SEARCH_DIR"] + "/send"
+    self.failed_dir     = self.cfg["CLIENT_SEARCH_DIR"] + "/failed"
 
     # get the properties for this subband
     (cfreq , bw, nchan) = self.cfg["SUBBAND_CONFIG_" + str(self.subband_id)].split(":")
@@ -471,8 +395,6 @@ class RepackFoldStreamDaemon (RepackFoldDaemon, StreamBased):
     self.rsync_server = "medusa-srv0.atnf.csiro.au"
     self.rsync_module = "TBD"
 
-    self.log(3, "RepackFoldStreamDaemon::configure done")
-
     return 0
 
 ###############################################################################
@@ -487,12 +409,12 @@ if __name__ == "__main__":
   stream_id = sys.argv[1]
 
   if int(stream_id) < 0:
-    print "ERROR: RepackFoldDaemon can only operate on streams"
+    print "ERROR: RepackSearchDaemon can only operate on streams"
     sys.exit(1)
   else:
-    script = RepackFoldStreamDaemon ("uwb_repack_fold", stream_id)
+    script = RepackSearchStreamDaemon ("uwb_repack_search", stream_id)
 
-  state = script.configure (DAEMONIZE, DL, "uwb_repack_fold", "uwb_repack_fold") 
+  state = script.configure (DAEMONIZE, DL, "uwb_repack_search", "uwb_repack_search") 
   if state != 0:
     script.quit_event.set()
     sys.exit(state)

@@ -7,7 +7,7 @@
 # 
 ###############################################################################
 
-import os, threading, sys, time, socket, select, traceback
+import os, threading, sys, time, socket, select, traceback, copy
 
 from spip.daemons.bases import StreamBased
 from spip.daemons.daemon import Daemon
@@ -28,6 +28,7 @@ class UWBFoldDaemon (UWBProcDaemon):
   def __init__ (self, name, id):
     UWBProcDaemon.__init__(self, name , id)
     self.tag = "fold"
+    self.wideband_predictor = False
 
   def getEnvironment (self):
     self.log (2, "UWBFoldDaemon::getEnvironment()")
@@ -65,6 +66,15 @@ class UWBFoldDaemon (UWBProcDaemon):
       db_key_file.write("DADA INFO:\n")
       db_key_file.write("key " +  self.db_key + "\n")
       db_key_file.close()
+
+    # create DSPSR viewing file for the data block
+    view_key_filename = "/tmp/spip_" + self.db_key + ".viewer"
+    if not  os.path.exists (view_key_filename):
+      view_key_file = open (view_key_filename, "w")
+      view_key_file.write("DADA INFO:\n")
+      view_key_file.write("key " +  self.db_key + "\n")
+      view_key_file.write("viewer\n")
+      view_key_file.close()
 
     outnstokes = -1
     outtsubint = -1
@@ -114,7 +124,7 @@ class UWBFoldDaemon (UWBProcDaemon):
       sk = False
 
     try:
-      sk_threshold = float(self.header["FOLD_SK_THRESHOLD"])
+      sk_threshold = int(self.header["FOLD_SK_THRESHOLD"])
     except:
       sk_threshold = 3
 
@@ -156,7 +166,7 @@ class UWBFoldDaemon (UWBProcDaemon):
 
     # subint is required
     self.cmd = self.cmd + " -L " + str(outtsub)
-    mintsub = outtsub - 1
+    mintsub = outtsub - 5
     if mintsub > 0:
       self.cmd = self.cmd + " -Lmin " + str(mintsub)
 
@@ -176,6 +186,59 @@ class UWBFoldDaemon (UWBProcDaemon):
 
         if sk_nsamps != -1:
           self.cmd = self.cmd + " -skzm " + str(sk_nsamps)
+
+      # if we are trialing the wideband predictor mode
+      if self.wideband_predictor:
+
+        # create a copy of the header to modify
+        fullband_header = copy.deepcopy (self.header)
+
+        nchan_total = 0
+        freq_low = 1e12
+        freq_high = -1e12
+
+        # now update the key parameters of the header
+        for i in range(int(self.cfg["NUM_STREAM"])):
+          (cfreq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + str(i)].split(":")
+          nchan_total += int(nchan)
+          chan_bw = abs(float(bw))
+          freq_low_subband = float(cfreq) - (chan_bw / 2)
+          freq_high_subband = float(cfreq) - (chan_bw / 2)
+          if freq_low_subband < freq_low:
+            freq_low = freq_low_subband
+          if freq_high_subband > freq_high:
+            freq_high = freq_high_subband
+
+        bw = (freq_high - freq_low)
+        fullband_header["NCHAN"] = str(nchan_total)
+        fullband_header["BW"] = str(bw)
+        fullband_header["FREQ"] = str(freq_low + bw/2)
+
+        # create the output directory
+        if not os.path.exists (self.out_dir):
+          os.makedirs (self.out_dir, 0755)
+
+        # write the sub-bands header to the out_dir
+        dummy_file = self.out_dir + "/obs.dummy"
+        Config.writeDictToCFGFile (fullband_header, dummy_file, prepend='DUMMY')
+ 
+        # generate an ephemeris file
+        ephemeris_file = self.out_dir + "/pulsar.eph"
+        cmd = "psrcat -all -e " + self.header["SOURCE"] + " > " + ephemeris_file
+        rval, lines = self.system(cmd, 1)
+
+        # generate the tempo2 predictor
+        cmd = "t2pred " + ephemeris_file + " " + dummy_file
+        rval, lines = self.system(cmd, 1)
+
+        # copy the predictor file to the out_dir
+        predictor_file = self.out_dir + "/pulsar.pred"
+        cmd = "cp /tmp/tempo2/uwb" + str(self.id) + "/t2pred.dat " + predictor_file
+        rval, lines = self.system(cmd, 1)
+
+        # append the ephemeris and predictor to DSPSR command line
+        self.cmd = self.cmd + " -E " + ephemeris_file + " -P " + predictor_file
+
 
     # set the optimal filterbank kernel length
     self.cmd = self.cmd + " -fft-bench"
