@@ -185,6 +185,7 @@ class StatDaemon(Daemon,StreamBased):
     self.ts_valid = False
 
     self.pref_freq = 0
+    self.histogram_abs_xmax = 128
 
   #################################################################
   # main
@@ -230,7 +231,7 @@ class StatDaemon(Daemon,StreamBased):
       os.makedirs(stat_dir, 0755)
 
     # configure the histogram plot with all channels included
-    self.hg_plot.configure (-1)
+    self.hg_plot.configure (-1, self.histogram_abs_xmax)
 
     log = False
     zap = False
