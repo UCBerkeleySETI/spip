@@ -56,7 +56,7 @@ void spip::UnpackFloatRAMUWB::transform_custom_to_SFPT ()
   const uint64_t block_stride = ndat_per_block * ndim;
   const uint64_t pol_stride = ndat * ndim;
   const uint64_t nval = ndat_per_block * ndim;
-  
+
   // input data are in BlockPolTime format, 1 channel, 1 signal
   for (uint64_t iblock=0; iblock<nblock; iblock++)
   {
