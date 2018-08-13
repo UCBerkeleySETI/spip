@@ -58,6 +58,8 @@ void spip::UnpackFloat::configure (spip::Ordering output_order)
   bool valid_transform = false;
   if (input->get_order() == spip::Ordering::SFPT && output_order == spip::Ordering::SFPT)
     valid_transform = true;
+  if (input->get_order() == spip::Ordering::Custom && output_order == spip::Ordering::SFPT)
+    valid_transform = true;
   if (!valid_transform)
     throw invalid_argument ("UnpackFloat::configure invalid ordering, must be SFPT->SFPT");
 
@@ -103,7 +105,7 @@ void spip::UnpackFloat::transformation ()
   prepare_output ();
 
   // apply data transformation
-  transform_SFPT_to_SFPT ();
+  transform_custom_to_SFPT ();
 }
 
 void spip::UnpackFloat::prepare_output ()
