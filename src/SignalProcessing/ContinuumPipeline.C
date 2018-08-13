@@ -28,7 +28,10 @@ spip::ContinuumPipeline::ContinuumPipeline (const char * in_key_string, const ch
 
   nchan_out = -1;
   nfft = -1;
+
+#ifdef HAVE_CUDA
   device = -1;
+#endif
 
   in_db  = new DataBlockRead (in_key_string);
   out_dir = string(out_dir_string);

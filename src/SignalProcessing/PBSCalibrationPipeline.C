@@ -25,7 +25,9 @@ spip::PBSCalibrationPipeline::PBSCalibrationPipeline (const char * in_key_string
   dat_offset = 0;
   nbin = 1;
 
+#ifdef HAVE_CUDA
   device = -1;
+#endif
 
   in_db  = new DataBlockRead (in_key_string);
   out_db = new DataBlockWrite (out_key_string);
