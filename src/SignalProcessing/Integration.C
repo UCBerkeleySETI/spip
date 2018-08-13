@@ -47,6 +47,8 @@ void spip::Integration::configure (spip::Ordering output_order)
   ndim  = input->get_ndim ();
   nsignal = input->get_nsignal ();
 
+  double tsamp = input->get_tsamp();
+
   if (ndim != 1)
     throw invalid_argument ("Integration::configure only ndim==1 supported");
 
@@ -80,12 +82,13 @@ void spip::Integration::configure (spip::Ordering output_order)
   output->set_npol (npol / pol_dec);
   output->set_nchan (nchan / chan_dec);
   output->set_nsignal (nsignal / signal_dec);
+  output->set_tsamp (tsamp * dat_dec);
   
   // the output file size should be a single sample
-  unsigned bits_per_sample = output->calculate_nbits_per_sample();
+  //unsigned bits_per_sample = output->calculate_nbits_per_sample();
 
-  uint64_t file_size = bits_per_sample / 8;
-  output->set_file_size (file_size);
+  //uint64_t file_size = bits_per_sample / 8;
+  //output->set_file_size (file_size);
 
   output->set_order (output_order);
 
@@ -102,8 +105,11 @@ void spip::Integration::configure (spip::Ordering output_order)
   buffer->read_header();
   buffer->write_header();
   buffer->set_ndat (1);
+  buffer->set_order (output_order);
   buffer->resize();
   buffer->zero();
+  if (verbose)
+    cerr << "spip::Integration::configure completed" << endl;
 }
 
 void spip::Integration::prepare ()
