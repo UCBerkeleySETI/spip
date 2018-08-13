@@ -1,15 +1,22 @@
 
 noinst_LTLIBRARIES = libinstuwb.la
 
-libinstuwb_headers = spip/UnpackFloatRAMUWB.h
+libinstuwb_headers = \
+  spip/PreprocessingPipeline.h \
+  spip/UnpackFloatRAMUWB.h
 
-libinstuwb_la_SOURCES = UnpackFloatRAMUWB.C
+libinstuwb_la_SOURCES = \
+  PreprocessingPipeline.C \
+  UnpackFloatRAMUWB.C
 
 bin_PROGRAMS = uwb_adaptive_filter_pipeline \
   uwb_adaptive_filter_test \
   uwb_calibration_pipeline \
   uwb_continuum_pipeline \
-  uwb_filterbank_pipeline
+  uwb_continuum_scrunch \
+  uwb_continuum_tadd \
+  uwb_filterbank_pipeline \
+  uwb_preprocessing_pipeline
 
 AM_CXXFLAGS = -I .\
   -I$(top_builddir)/src/Affinity \
@@ -32,6 +39,7 @@ uwb_adaptive_filter_pipeline_SOURCES = uwb_adaptive_filter_pipeline.C
 uwb_continuum_pipeline_SOURCES = uwb_continuum_pipeline.C
 uwb_calibration_pipeline_SOURCES = uwb_calibration_pipeline.C
 uwb_filterbank_pipeline_SOURCES = uwb_filterbank_pipeline.C
+uwb_preprocessing_pipeline_SOURCES = uwb_preprocessing_pipeline.C
 
 if HAVE_CUDA
 
