@@ -23,7 +23,7 @@
 namespace spip {
 
   enum ControlCmd   { None, Record, Monitor, Stop, Quit };
-  enum ControlState { Idle, Recording, Monitoring, Stopping };
+  enum ControlState { Idle, Recording, Monitoring, Stopping, Quitting };
 
   class UDPReceiveDB {
 
@@ -49,11 +49,11 @@ namespace spip {
       {
         // ensure the control thread is not offloaded
 #ifdef HAVE_VMA
-        pthread_t id = pthread_self();
-        struct vma_api_t * vma_api = vma_get_api();
-        if (vma_api)
+        struct vma_api_t * api = vma_get_api();
+        if (api)
         {
-          vma_api->thread_offload (0, id);
+          pthread_t id = pthread_self();
+          api->thread_offload (0, id);
         }
 #endif
         ((UDPReceiveDB*) obj)->control_thread ();
@@ -73,6 +73,8 @@ namespace spip {
       void start_capture () { set_control_cmd (Record); };
 
       void stop_capture () { set_control_cmd (Stop); };
+
+      void quit_capture () { set_control_cmd (Quit); };
 
       static void * stats_thread_wrapper (void * obj)
       {
@@ -101,9 +103,9 @@ namespace spip {
       int data_port;
 
 #ifdef HAVE_VMA
-      UDPSocketReceiveVMA * sock = new UDPSocketReceiveVMA;
+      UDPSocketReceiveVMA * sock;
 #else
-      UDPSocketReceive * sock = new UDPSocketReceive;
+      UDPSocketReceive * sock;
 #endif
 
       UDPFormat * format;
@@ -128,29 +130,8 @@ namespace spip {
 
       AsciiHeader header;
 
-#ifdef HAVE_VMA
-      struct vma_api_t *vma_api;
-
-      struct vma_packets_t* pkts;
-#else
-      char vma_api;
-#endif
-
       uint64_t resolution;
 
-/*
-      unsigned nchan;
-
-      unsigned ndim;
-
-      unsigned nbit;
-
-      unsigned npol;
-
-      float bw;
-
-      float tsamp;
-*/
       char verbose;
 
       int64_t curr_byte_offset;
