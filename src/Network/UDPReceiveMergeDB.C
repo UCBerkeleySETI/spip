@@ -13,6 +13,8 @@
 
 #ifdef HAVE_VMA
 #include "spip/UDPSocketReceiveVMA.h"
+#else
+#include "spip/UDPSocketReceive.h"
 #endif
 
 #include "spip/TCPSocketServer.h"
@@ -560,7 +562,7 @@ bool spip::UDPReceiveMergeDB::receive_thread (int p)
 
   // open socket within the context of this thread 
 #ifdef HAVE_VMA
-  UDPSocketReceiveVMA * sock = new UDPSocketReceiveVMA;
+  UDPSocketReceiveVMA * sock = new UDPSocketReceiveVMA ();
 #else
   UDPSocketReceive * sock = new UDPSocketReceive;
 #endif
