@@ -24,6 +24,8 @@ namespace spip {
 
       ~RAMtoCUDATransfer ();
 
+      void set_output_reblock (unsigned);
+
       void configure (Ordering output_order);
 
       void prepare ();
@@ -42,6 +44,10 @@ namespace spip {
       cudaStream_t stream;
 
       uint64_t ndat;
+
+      unsigned iblock_out;
+
+      unsigned nblock_out;
 
   };
 
