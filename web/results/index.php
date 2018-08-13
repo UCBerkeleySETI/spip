@@ -179,7 +179,7 @@ class results extends spip_webpage
     <th style='text-align: left;'>Bandwidth</th>
     <!--<th style='text-align: left;'>Num Channels</th>-->
     <th style='text-align: left;'>Project ID</th>
-    <th style='text-align: left;'>SNR</th>
+    <th style='text-align: left;'>S/N</th>
     <th style='text-align: left;'>Length</th>
     <th style='text-align: left;'>Profile</th>
     <th style='text-align: left;'>Time</th>
