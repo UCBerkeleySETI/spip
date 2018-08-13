@@ -276,7 +276,7 @@ class ResultsDaemon(Daemon):
 
           self.log (2, "main: collecting data for beam="+beam+" utc_start="+utc_start+" source="+source)
           (result, response) = self.collect_data (obs_dir, beam, utc_start, source)
-          self.log (2, "main: result=" + result + " response=" + response)
+          self.log (2, "main: result=" + result + " response=" + str(response))
           if not result == "ok":
             self.log (2, "main: removing beam="+beam+" utc_start="+utc_start+" source="+source)
             del self.results[utc_start][source]
@@ -309,7 +309,10 @@ class ResultsDaemon(Daemon):
     if rval:
       return ("fail", data)
   
+    if not len(lines) == 1:
+      return ("fail", data)
     header_file = lines[0]
+
     self.log (3, "collect_data: header_file=" + header_file)
 
     # read the contents of the header
