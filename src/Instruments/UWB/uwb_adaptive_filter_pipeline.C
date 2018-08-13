@@ -33,8 +33,6 @@ int main(int argc, char *argv[]) try
 {
   string in_key;
 
-  string rfi_key;
-
   string out_key;
 
   spip::AdaptiveFilterPipeline * dp;
@@ -96,9 +94,9 @@ int main(int argc, char *argv[]) try
   }
 
   // Check arguments
-  if ((argc - optind) != 3)
+  if ((argc - optind) != 2)
   {
-    fprintf(stderr,"ERROR: 3 command line argument expected\n");
+    fprintf(stderr,"ERROR: 2 command line argument expected\n");
     usage();
     return EXIT_FAILURE;
   }
@@ -106,25 +104,25 @@ int main(int argc, char *argv[]) try
   signal(SIGINT, signal_handler);
 
   in_key = argv[optind];
-  rfi_key = argv[optind+1];
-  out_key = argv[optind+2];
+  out_key = argv[optind+1];
 
-  dp = new spip::AdaptiveFilterPipeline (in_key.c_str(), rfi_key.c_str(), out_key.c_str());
+  dp = new spip::AdaptiveFilterPipeline (in_key.c_str(), out_key.c_str());
 
   if (verbose)
     dp->set_verbose();
 
   dp->set_channelisation (nfft);
+  //dp->set_filtering (1);
 #ifdef HAVE_CUDA
   if (device >= 0)
   {
     dp->set_device (device);
-    dp->configure (new spip::UnpackFloatCUDAUWB(), new spip::UnpackFloatCUDAUWB());
+    dp->configure (new spip::UnpackFloatCUDAUWB());
   }
   else
   #endif
   {
-    dp->configure (new spip::UnpackFloatRAMUWB(), new spip::UnpackFloatRAMUWB());
+    dp->configure (new spip::UnpackFloatRAMUWB());
   }
   dp->open ();
   dp->process ();
@@ -146,7 +144,7 @@ catch (std::exception& exc)
 
 void usage()
 {
-  cout << "filterbank_pipeline [options] inkey rfikey outkey" << endl;
+  cout << "filterbank_pipeline [options] inkey outkey" << endl;
 #ifdef HAVE_CUDA
   cout << " -d gpu    use GPU" << endl;
 #endif

@@ -33,8 +33,6 @@ int main(int argc, char *argv[]) try
 {
   string in_key;
 
-  string rfi_key;
-
   string out_key;
 
   spip::AdaptiveFilterTest * dp;
@@ -100,10 +98,9 @@ int main(int argc, char *argv[]) try
   signal(SIGINT, signal_handler);
 
   in_key = argv[optind];
-  rfi_key = argv[optind+1];
-  out_key = argv[optind+2];
+  out_key = argv[optind+1];
 
-  dp = new spip::AdaptiveFilterTest (in_key.c_str(), rfi_key.c_str(), out_key.c_str());
+  dp = new spip::AdaptiveFilterTest (in_key.c_str(), out_key.c_str());
 
   if (verbose)
     dp->set_verbose();
@@ -112,12 +109,12 @@ int main(int argc, char *argv[]) try
   if (device >= 0)
   {
     dp->set_device (device);
-    dp->configure_cuda (new spip::UnpackFloatCUDAUWB(), new spip::UnpackFloatRAMUWB());
+    dp->configure_cuda (new spip::UnpackFloatCUDAUWB());
   }
   else
 #endif
   {
-    dp->configure (new spip::UnpackFloatRAMUWB(), new spip::UnpackFloatRAMUWB());
+    dp->configure (new spip::UnpackFloatRAMUWB());
   }
   dp->open ();
   dp->process ();
@@ -139,7 +136,7 @@ catch (std::exception& exc)
 
 void usage()
 {
-  cout << "adaptive_filter_test [options] inkey rfikey outkey" << endl;
+  cout << "adaptive_filter_test [options] inkey outkey" << endl;
 #ifdef HAVE_CUDA
   cout << " -d gpu    use GPU" << endl;
 #endif
