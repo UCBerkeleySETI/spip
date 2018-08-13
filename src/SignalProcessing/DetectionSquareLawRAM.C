@@ -283,11 +283,6 @@ void spip::DetectionSquareLawRAM::transform_TSPFB_to_TSPFB ()
               else
                 *out += (re * re) + (im * im);
 
-/*
-              if (ichan == 0)
-                printf ("idat=%lu idx=%lu (%f, %f) odx=%lu sum=%f\n", idat, uint64_t(in-(float *) input->get_buffer()), re, im, uint64_t(out-(float *) output->get_buffer()), *out);
-*/
-
               in += 2;
               out++;
             }
