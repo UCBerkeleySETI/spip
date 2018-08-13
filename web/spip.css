@@ -139,6 +139,11 @@ body {
   line-height: 25px;
 }
 
+.form {
+  font-size: 8px;
+  line-height: 8px;
+}
+
 #left {
   float: left;
   width: 200px;
@@ -269,11 +274,11 @@ table.config th {
   margin-bottom: 10px;
   background-color: #FFAAAA;
   border-color: black;
-  padding: 5px;
+  padding: 2px;
 }
 
 table.config td {
-  padding: 3px;
+  padding: 1px;
 }
 
 

@@ -8,7 +8,7 @@ class spip_webpage
   var $ejs = array();
   var $title = "spip";
   var $callback_freq = 4000;
-  var $doc_type = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\n \"http://www.w3.org/TR/html4/loose.dtd\">";
+  var $doc_type = '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN" "http://www.w3.org/TR/html4/frameset.dtd">';
 
   var $nav_item = "";
   var $logo_text = "";
@@ -71,7 +71,7 @@ class spip_webpage
          "barImage : Array( '/spip/images/jsprogress/percentImage_back1_40.png', ".
          "'/spip/images/jsprogress/percentImage_back2_40.png', ".
          "'/spip/images/jsprogress/percentImage_back3_40.png', ".
-        "'/spip/images/jsprogress/percentImage_back4_40.png') } );\n";
+         "'/spip/images/jsprogress/percentImage_back4_40.png') } );\n";
   }
 
   static function renderProgressBar($id)
@@ -148,11 +148,11 @@ function handleDirect($child_class)
     if ($obj->nav_item != "")
     {
       $nav_items = array ("/spip/timing/" => "Timing", 
+                          "/spip/continuum/" => "Continuum",
                           "/spip/stats/" => "Stats",
                           "/spip/status/" => "Status",
                           "/spip/results/" => "Results",
-                          "/spip/controls/" => "Controls",
-                          "/spip/logs/" => "Logs");
+                          "/spip/controls/" => "Controls");
 
       #echo "<table height='60px' width='100%' id='nav'>\n";
       #echo "<tr>\n";
