@@ -26,6 +26,8 @@ class UWBStatDaemon(StatDaemon):
         self.gen_bandpass = True
         self.gen_histogram = True
 
+        self.histogram_abs_xmax = 1024
+
 
 ###############################################################################
 

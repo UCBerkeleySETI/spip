@@ -89,6 +89,7 @@ class InlinePlot (object):
       #self.ax.set_ylabel(self.ylabel, color=self.fgcolor)
 
     self.ax.grid(False)
+    self.imgdata.truncate(0)
 
   def showPlot (self):
     FigureCanvas(self.fig).savefig('test.png')
@@ -109,8 +110,10 @@ class HistogramPlot (InlinePlot):
     super(HistogramPlot, self).__init__()
     self.configure (-1)
     self.setLabels ('Histogram', '', '')
+    self.abs_xmax = 128
 
-  def configure (self, channel):
+  def configure (self, channel, abs_xmax):
+    self.abs_xmax = abs_xmax
     if channel == -1:
       self.setLabels ('Histogram all channels', '', '') 
     else:
@@ -131,7 +134,7 @@ class HistogramPlot (InlinePlot):
     self.bins = numpy.arange(minbin,maxbin,1)
     self.ax.plot(self.bins, real, color='red', label='real')
     self.ax.plot(self.bins, imag, color='green', label='imag')
-    self.ax.set_xlim((-128, 128))
+    self.ax.set_xlim((-1 * self.abs_xmax, self.abs_xmax))
     self.closePlot()
 
   def plot_binned_image (self, xres, yres, plain, data, nfreq, nbins):
@@ -167,27 +170,24 @@ class TimeseriesPlot (InlinePlot):
 
   def __init__(self):
     super(TimeseriesPlot, self).__init__()
-    self.nsamps = 0
-    self.configure (64, self.nsamps)
-    self.samps = numpy.arange (self.nsamps)
+    self.setLabels ('Minimum, Mean and Max', 'Time (microseconds)', 'Power (Arbitrary Units)')
 
-  def configure (self, channel, nsamps):
-    self.setLabels ('Timeseries Channel ' + str(channel), 'Time (samples)', 'States (Voltages)')
-    if self.nsamps != nsamps:
-      self.nsamps = nsamps
-      self.samps = numpy.arange (self.nsamps)
- 
-  def plot (self, xres, yres, plain, real, imag):
+  def plot (self, xres, yres, plain, xvals, ts, labels, colors):
+
     self.openPlot(xres, yres, plain)
 
-    if len(real) > 0:
-      self.ax.plot(self.samps, real, c='r', marker=',', linestyle='None', label='real')
-    if len(imag) > 0:
-      self.ax.plot(self.samps, imag, c='g', marker=',', linestyle='None', label='imag')
+    ymax = 0
+    ymin = 0
+    for i in range(len(ts)):
+      ymax = max(ymax, numpy.amax(ts[i]))
 
-    self.ax.set_xlim((0, self.nsamps))
-    self.ax.set_ylim((-128.0, 127.0))
+    self.ax.set_xlim((numpy.amin(xvals), numpy.amax(xvals)))
+    self.ax.set_ylim(ymin, ymax)
 
+    for i in range(len(ts)):
+      self.ax.plot(xvals, ts[i], label=labels[i], color=colors[i])
+    if not plain:
+      self.ax.legend()
     self.closePlot()
 
 class SNRPlot (InlinePlot):
@@ -254,6 +254,47 @@ class BandpassPlot (InlinePlot):
       self.ax.set_ylim((ymin, ymax))
 
     self.closePlot()
+
+  def plot_npol (self, xres, yres, plain, nchan, freq, bw, spectra, labels):
+
+    if self.nchan != nchan or self.xmin != freq-(bw/2) or self.xmax != freq+(bw/2):
+      self.xmin = freq-(bw/2)
+      self.xmax = freq+(bw/2)
+      self.xstep = bw/nchan
+
+      self.nchan = nchan
+      self.xvals = numpy.arange (self.xmin, self.xmax, \
+                                 self.xstep, dtype=float)
+
+    self.openPlot (xres, yres, plain)
+    if self.log:
+      self.ax.set_yscale ('log', nonposy='clip')
+    else:
+      self.ax.set_yscale ('linear')
+    if self.zap:
+      spectra[:,0] = 0
+    if self.transpose:
+      for i in range(len(spectra)):
+        self.ax.plot(self.xvals, spectra[i], label=labels[i])
+      self.ax.set_ylim((0, nchan))
+    else:
+      ymax = numpy.amax(spectra)
+      ymin = 1e100
+      for i in range(min(2, len(spectra))):
+        ymin = min(ymin, numpy.amin(spectra[i]))
+
+      if ymax == ymin:
+        ymax = ymin + 1
+        spectra[:,0] = 1
+      for i in range(len(spectra)):
+        self.ax.plot(self.xvals, spectra[i], label=labels[i])
+      self.ax.set_xlim((self.xmin, self.xmax))
+      self.ax.set_ylim((ymin, ymax))
+
+    self.ax.legend()
+
+    self.closePlot()
+
 
 class FreqTimePlot (InlinePlot):
 
