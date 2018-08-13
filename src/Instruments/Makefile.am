@@ -1,3 +1,3 @@
 
-SUBDIRS = MeerKAT UWB
+SUBDIRS = MeerKAT UWB KeckRTC
 
