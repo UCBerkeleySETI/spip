@@ -36,6 +36,9 @@ spip::ContainerFileWrite::ContainerFileWrite (std::string _dir)
 
 spip::ContainerFileWrite::~ContainerFileWrite ()
 {
+  // if the file is still open, write out the remainder
+  if (fd > -1)
+    close_file();
 }
 
 //! write data stored in the buffer to disk
