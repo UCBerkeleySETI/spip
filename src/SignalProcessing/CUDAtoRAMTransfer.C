@@ -57,9 +57,16 @@ void spip::CUDAtoRAMTransfer::transformation ()
   // ensure output is appropriately sized
   prepare_output ();
 
+  if (ndat == 0)
+    return;
+
   void * host = (void *) input->get_buffer();
   void * device = (void *) output->get_buffer();
   size_t nbytes = input->calculate_buffer_size();
+
+  if (verbose)
+    cerr << "spip::CUDAtoRAMTransfer::transformation cudaMemcpyAsync(" 
+         << device << "," << host << "," << nbytes << ",cudaMemcpyDeviceToHost, stream)" << endl;
 
   // perform host to device transfer TODO check for smaller buffesr
   cudaError_t err = cudaMemcpyAsync (device, host, nbytes, cudaMemcpyDeviceToHost, stream);
@@ -73,7 +80,6 @@ void spip::CUDAtoRAMTransfer::transformation ()
 void spip::CUDAtoRAMTransfer::prepare_output ()
 {
   output->set_ndat (ndat);
-
   output->resize();
 }
 
