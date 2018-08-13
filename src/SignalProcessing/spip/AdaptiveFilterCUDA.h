@@ -21,26 +21,23 @@ namespace spip {
   {
     public:
     
-      AdaptiveFilterCUDA ();
+      AdaptiveFilterCUDA (cudaStream_t, std::string);
       
       ~AdaptiveFilterCUDA ();
 
-      void set_input_ref (Container *);
-      
       void configure (Ordering output_order);
 
-      void prepare ();
-      
-      void reserve ();
-      
       void transform_TSPF ();
 
       void transform_SFPT ();
+
+      void write_gains ();
 
     protected:
     
     private:
 
+      cudaStream_t stream;
   };
 }
 

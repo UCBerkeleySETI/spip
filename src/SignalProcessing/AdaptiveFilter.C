@@ -12,16 +12,27 @@
 
 using namespace std;
 
-spip::AdaptiveFilter::AdaptiveFilter () : Transformation<Container,Container>("AdaptiveFilter", outofplace)
+spip::AdaptiveFilter::AdaptiveFilter (std::string dir) : 
+  output_dir (dir), 
+  Transformation<Container,Container>("AdaptiveFilter", outofplace)
 {
   // default, should be configured [TODO]
   filter_update_time = 1000;
   epsilon = 1e-1;
   gains = NULL;
+  ref_pol = 0;
 }
 
 spip::AdaptiveFilter::~AdaptiveFilter ()
 {
+}
+
+//! set filtering parameters, and indicate if a reference polarisation is present
+void spip::AdaptiveFilter::set_filtering (int pol)
+{
+  ref_pol = pol;
+  if (ref_pol <= 0)
+    throw invalid_argument ("AdaptiveFilter::set_filtering invalid reference pol");
 }
 
 //! configure parameters at the start of a data stream
@@ -35,6 +46,11 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   npol  = input->get_npol ();
   nsignal = input->get_nsignal ();
   tsamp = input->get_tsamp();
+
+  if (ref_pol != int(npol) - 1)
+    throw Error (InvalidState, "AdaptiveFilter::configure", "ref_pol [%d] != npol-1 [%d]\n",
+                 ref_pol, npol - 1);
+  out_npol = npol - 1;
 
   if (ndim != 2)
     throw invalid_argument ("AdaptiveFilter::configure input ndim != 2");
@@ -61,6 +77,9 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
 
   // adjust the required parameters
   output->set_order (input->get_order());
+
+  // set the output number of polarisations
+  output->set_npol (out_npol);
 
   // update the output header parameters with the new details
   output->write_header ();
@@ -139,7 +158,8 @@ void spip::AdaptiveFilter::transformation ()
   {
     if (verbose)
       cerr << "spip::AdaptiveFilter::transformation transform_SFPT()" << endl;
-    transform_SFPT ();
+    if (perform_filtering)
+      transform_SFPT ();
   }
   else
   {

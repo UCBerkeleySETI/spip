@@ -36,16 +36,16 @@ namespace spip {
 
     public:
 
-      AdaptiveFilterTest (const char * in_key_string, const char * ref_key_string, const char * out_key_string);
+      AdaptiveFilterTest (const char * in_key_string, const char * out_key_string);
 
       ~AdaptiveFilterTest ();
 
-      void configure (UnpackFloat *, UnpackFloat *);
+      void configure (UnpackFloat *);
 
 #ifdef HAVE_CUDA
       void set_device (int _device);
 
-      void configure_cuda(UnpackFloat *, UnpackFloat *);
+      void configure_cuda (UnpackFloat *);
 #endif
 
       void open ();
@@ -64,23 +64,15 @@ namespace spip {
 
       DataBlockRead * in_db;
 
-      DataBlockRead * ref_db;
-
       DataBlockWrite * out_db;
 
       UnpackFloat * unpack_float;
-
-      UnpackFloat * unpack_float_ref;
 
       AdaptiveFilter * filter;
 
       ContainerRingRead * input;
 
-      ContainerRingRead * input_ref;
-
       Container * unpacked;
-
-      Container * unpacked_ref;
 
       ContainerRingWrite * output;
 
@@ -95,11 +87,7 @@ namespace spip {
 
       RAMtoCUDATransfer * ram_to_cuda; 
 
-      RAMtoCUDATransfer * ram_to_cuda_ref; 
-
       ContainerCUDADevice * d_input;
-
-      ContainerCUDADevice * d_input_ref; 
 
       ContainerCUDADevice * d_output; 
 

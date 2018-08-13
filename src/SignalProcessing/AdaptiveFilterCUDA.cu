@@ -6,9 +6,9 @@
  ***************************************************************************/
 
 #include "spip/AdaptiveFilterCUDA.h"
+#include "spip/Error.h"
 
 #include <iostream>
-#include <stdexcept>
 #include <cmath>
 #include <cuComplex.h>
 #include <cstdio>
@@ -52,10 +52,11 @@ cuFloatComplex blockReduceSumFC(cuFloatComplex val)
 
 
 // SFPT implementation of adaptive filter algorithm
-__global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex * ref,
-                                           cuFloatComplex * out, cuFloatComplex * gains,
-                                           uint64_t nloops, uint64_t sig_stride,
-                                           uint64_t chanpol_stride)
+__global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex * out, cuFloatComplex * gains,
+                                           uint64_t nloops, 
+                                           uint64_t in_sig_stride, uint64_t in_chan_stride, 
+                                           uint64_t out_sig_stride, uint64_t out_chan_stride,
+                                           uint64_t pol_stride, unsigned ref_pol)
 {
   // there is one complex gain per block
   __shared__ cuFloatComplex g;
@@ -71,8 +72,11 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
   // ensure all threads have the complex gain
   __syncthreads();
 
-  //             (isig * sig_stride)       + (ichanpol * chanpol_stride) + sample_idx
-  uint64_t idx = (blockIdx.x * sig_stride) + (ichanpol * chanpol_stride) + threadIdx.x;
+  // offsets for input, reference and output
+  uint64_t idx = (blockIdx.x * in_sig_stride)  + (blockIdx.y * in_chan_stride)  + (blockIdx.z * pol_stride) + threadIdx.x;
+  uint64_t rdx = (blockIdx.x * in_sig_stride)  + (blockIdx.y * in_chan_stride)  + (ref_pol * pol_stride)    + threadIdx.x;
+  uint64_t odx = (blockIdx.x * out_sig_stride) + (blockIdx.y * out_chan_stride) + (blockIdx.z * pol_stride) + threadIdx.x;
+
   //if (threadIdx.x == 0 || threadIdx.x == 1023)
   //  printf ("[%d][%d] ichanpol=%u idx=%lu\n", blockIdx.x, threadIdx.x, ichanpol, idx);
 
@@ -82,12 +86,13 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
   for (unsigned iloop=0; iloop<nloops; iloop++)
   {
     // read the reference antenna value
-    cuFloatComplex r = ref[idx];
+    cuFloatComplex r = in[rdx];
+    // read the astronomy antenna value
     cuFloatComplex a = in[idx];
 
-///////////////////////////////////
+    ///////////////////////////////////
     cuFloatComplex pa = cuCmulf(a, cuConjf(a));
-    cuFloatComplex pr =  cuCmulf(r, cuConjf(r));
+    cuFloatComplex pr = cuCmulf(r, cuConjf(r));
 
     pa = blockReduceSumFC(pa);
     pr = blockReduceSumFC(pr);
@@ -157,10 +162,12 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
     af = cuCsubf(a, f);
 
     // write the output global memory
-    out[idx] = af;
+    out[odx] = af;
   
     // increment to the next filter
     idx += blockDim.x;
+    rdx += blockDim.x;
+    odx += blockDim.x;
   }
 
   // update the gains
@@ -171,33 +178,23 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
 }
 
 
-spip::AdaptiveFilterCUDA::AdaptiveFilterCUDA ()
+spip::AdaptiveFilterCUDA::AdaptiveFilterCUDA (cudaStream_t _stream, string dir) : AdaptiveFilter (dir)
 {
+  stream = _stream;
 }
 
 spip::AdaptiveFilterCUDA::~AdaptiveFilterCUDA ()
 {
 }
 
-void spip::AdaptiveFilterCUDA::set_input_ref (Container * _input_ref)
-{
-  input_ref = dynamic_cast<spip::ContainerCUDADevice *>(_input_ref);
-  if (!input_ref)
-    throw invalid_argument ("spip::AdaptiveFilterCUDA::set_input_ref RFI input was not castable to spip::ContainerCUDADevice");
-}
-
 // configure the pipeline prior to runtime
 void spip::AdaptiveFilterCUDA::configure (spip::Ordering output_order)
 {
+  // TODO implement a ContainerCUDADeviceFileWrite class [Nuer]
   if (!gains)
     gains = new spip::ContainerCUDADevice ();
-  spip::AdaptiveFilter::configure (output_order);
-}
 
-//! no special action required
-void spip::AdaptiveFilterCUDA::prepare ()
-{
-  spip::AdaptiveFilter::prepare();
+  spip::AdaptiveFilter::configure (output_order);
 }
 
 // convert to antenna minor order
@@ -205,6 +202,7 @@ void spip::AdaptiveFilterCUDA::transform_TSPF()
 {
   if (verbose)
     std::cerr << "spip::AdaptiveFilterCUDA::transform_TSPF ()" << endl;
+  throw Error (InvalidState, "spip::AdaptiveFilterCUDA::transform_TSPF", "not implemented");
 }
 
 void spip::AdaptiveFilterCUDA::transform_SFPT()
@@ -214,7 +212,6 @@ void spip::AdaptiveFilterCUDA::transform_SFPT()
 
   // pointers to the buffers for in, rfi and out
   cuFloatComplex * in = (cuFloatComplex *) input->get_buffer();
-  cuFloatComplex * ref = (cuFloatComplex *) input_ref->get_buffer();
   cuFloatComplex * out = (cuFloatComplex *) output->get_buffer();
   cuFloatComplex * gai = (cuFloatComplex *) gains->get_buffer();
 
@@ -234,15 +231,19 @@ void spip::AdaptiveFilterCUDA::transform_SFPT()
     cerr << "spip::AdaptiveFilterCUDA::transform_SFPT ndat=" << ndat << " nthread=" << nthread << " nloops=" << nloops << " kernels" << endl;
   }
 
-  uint64_t chanpol_stride = ndat;
-  uint64_t sig_stride = nchan * npol * chanpol_stride;
+  uint64_t pol_stride = ndat;
+  uint64_t in_chan_stride = npol * pol_stride;
+  uint64_t in_sig_stride  = nchan * in_chan_stride;
+  uint64_t out_chan_stride = out_npol * pol_stride;
+  uint64_t out_sig_stride  = nchan * out_chan_stride;
 
-  if (verbose)
-    cerr << "spip::AdaptiveFilterCUDA::transform_SFPT chanpol_stride=" << chanpol_stride << " sig_stride=" << sig_stride << endl;
-
-  AdaptiveFilterKernel_SFPT<<<blocks, nthread>>>(in, ref, out, gai, nloops, sig_stride, chanpol_stride);
+  AdaptiveFilterKernel_SFPT<<<blocks, nthread, 0, stream>>>(in, out, gai, nloops, in_sig_stride, in_chan_stride, out_sig_stride, out_chan_stride, pol_stride, ref_pol);
 
   if (verbose)
     cerr << "spip::AdaptiveFilterCUDA::transform_SFPT kernels complete" << endl;
 }
 
+void spip::AdaptiveFilterCUDA::write_gains ()
+{
+  throw Error (InvalidState, "spip::AdaptiveFilterCUDA::write_gains", "not implemented");
+}

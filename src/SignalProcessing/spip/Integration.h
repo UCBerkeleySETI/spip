@@ -9,7 +9,7 @@
 #ifndef __Integration_h
 #define __Integration_h
 
-#include "spip/ContainerCUDA.h"
+#include "spip/Container.h"
 #include "spip/Transformation.h"
 
 namespace spip {

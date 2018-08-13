@@ -6,35 +6,36 @@
  ***************************************************************************/
 
 #include "spip/AdaptiveFilterRAM.h"
+#include "spip/Error.h"
 
-#include <stdexcept>
 #include <float.h>
+#include <string.h>
 #include <complex.h>
 #include <cmath>
 
 using namespace std;
 
-spip::AdaptiveFilterRAM::AdaptiveFilterRAM ()
+spip::AdaptiveFilterRAM::AdaptiveFilterRAM (string dir) : AdaptiveFilter (dir)
 {
 }
 
 spip::AdaptiveFilterRAM::~AdaptiveFilterRAM ()
 {
-}
-
-void spip::AdaptiveFilterRAM::set_input_ref (Container * _input_ref)
-{
-  input_ref = dynamic_cast<spip::ContainerRAM *>(_input_ref);
-  if (!input_ref)
-    throw Error (InvalidState, "spip::AdaptiveFilterRAM::set_input_ref", 
-                 "RFI input was not castable to spip::ContainerRAM *");
+  if (gains)
+    delete gains;
+  gains = NULL;
 }
 
 // configure the pipeline prior to runtime
 void spip::AdaptiveFilterRAM::configure (spip::Ordering output_order)
 {
   if (!gains)
-    gains = new spip::ContainerRAM();
+    gains = new spip::ContainerFileWrite (output_dir);
+
+  int64_t gains_size = nchan * npol * ndim * sizeof(float);
+  gains_file_write = dynamic_cast<spip::ContainerFileWrite *>(gains);
+  gains_file_write->set_file_length_bytes (gains_size);
+
   spip::AdaptiveFilter::configure (output_order);
 
   float * gains_buf = (float *) gains->get_buffer();
@@ -54,6 +55,7 @@ void spip::AdaptiveFilterRAM::transform_TSPF()
 {
   if (verbose)
     cerr << "spip::AdaptiveFilterRAM::transform_TSPF ()" << endl;
+  throw Error (InvalidState, "spip::AdaptiveFilterRAM::transform_TSPF", "not implemented");
 }
 
 void spip::AdaptiveFilterRAM::transform_SFPT()
@@ -63,7 +65,6 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
 
   // pointers to the buffers for in, rfi and out
   float * in = (float *) input->get_buffer();
-  float * in_ref = (float *) input_ref->get_buffer();
   float * out = (float *) output->get_buffer();
   float * gains_buf = (float *) gains->get_buffer();
 
@@ -83,28 +84,38 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
 
   if (verbose)
     cerr << "spip::AdaptiveFilterRAM::transform_SFPT ndat=" << ndat
-         << " nblocks=" << nblocks << endl;
+         << " nblocks=" << nblocks << " npol=" << npol << " out_npol=" << out_npol << endl;
+
+  // strides through the data block
+  const uint64_t pol_stride = ndat * ndim;
+  const uint64_t in_chan_stride  = npol * pol_stride;
+  const uint64_t out_chan_stride = out_npol * pol_stride;
+  const uint64_t in_sig_stride  = nchan * in_chan_stride;
+  const uint64_t out_sig_stride = nchan * out_chan_stride;
 
   // loop over the dimensions of the input block
   for (unsigned isig=0; isig<nsignal; isig++)
   {
-    const uint64_t sig_offset = isig * nchan * npol * ndat * ndim;
+    const uint64_t in_sig_offset  = isig * in_sig_stride;
+    const uint64_t out_sig_offset = isig * out_sig_stride;
     for (unsigned ichan=0; ichan<nchan; ichan++)
     {
-      const uint64_t chan_offset = ichan * npol * ndat * ndim;
-      for (unsigned ipol=0; ipol<npol; ipol++)
+      const uint64_t in_chan_offset = in_sig_offset + ichan * in_chan_stride;
+      const uint64_t out_chan_offset = out_sig_offset + ichan * out_chan_stride;
+      for (unsigned ipol=0; ipol<out_npol; ipol++)
       {
-        const uint64_t pol_offset = ipol * ndat * ndim;
-        const uint64_t sfp_offset = sig_offset + chan_offset + pol_offset;
-
+        const uint64_t in_sfp_offset = in_chan_offset + ipol * pol_stride;
+        const uint64_t in_ref_offset = in_chan_offset + ref_pol * pol_stride;
+        const uint64_t out_sfp_offset = out_chan_offset + ipol * pol_stride;
+          
         // read previous gain values
         g_real = gains_buf[2*((ipol * nchan) + ichan) + 0];
         g_imag = gains_buf[2*((ipol * nchan) + ichan) + 1];
 
         // offset pointers for this signal, channel and polarisation
-        float * in_ptr  = in + sfp_offset;
-        float * ref_ptr = in_ref + sfp_offset;
-        float * out_ptr = out + sfp_offset;
+        float * in_ptr  = in + in_sfp_offset;
+        float * ref_ptr = in + in_ref_offset;
+        float * out_ptr = out + out_sfp_offset;
 
         // we compute the filter over blocks of data
         for (uint64_t iblock=0; iblock<nblocks; iblock++)
@@ -218,9 +229,6 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
             // write af to output
             out_ptr[re_idat] = af_real;
             out_ptr[im_idat] = af_imag;
-            out_ptr[re_idat] = ast_real;
-            out_ptr[im_idat] = ast_imag;;
-
             idat++;
           }
         }
@@ -231,4 +239,10 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
       }
     }
   }
+}
+
+void spip::AdaptiveFilterRAM::write_gains ()
+{
+  // write the current values of the gains (for each polarisation and channel) to file
+  gains_file_write->write();
 }
