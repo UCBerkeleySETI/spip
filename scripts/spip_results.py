@@ -410,7 +410,7 @@ class ResultsDaemon(Daemon):
       data["bandpass"]["yres"] = 120
       band_plot_file = dir + "/band.png"
       if not os.path.exists (band_plot_file):
-        cmd = "psrplot -p b " + band_file + " -x -lpol=0,1 -N2,1 " + psrplot_opts
+        cmd = "psrplot -p b " + band_file + " -x -lpol=0,1 -N2,1 -c log=1 " + psrplot_opts
         rval, data["bandpass"]["raw"] = self.system_raw (cmd, 3)
         if rval < 0:
           return (rval, "failed to create band plot")

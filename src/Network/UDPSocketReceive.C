@@ -68,11 +68,21 @@ void spip::UDPSocketReceive::open (string ip_address, int port)
   }
 
   // bind socket to file descriptor
-  if (bind(fd, (struct sockaddr *)&udp_sock, sizeof(udp_sock)) == -1) 
+  bind (port);
+  //if (bind(fd, (struct sockaddr *)&udp_sock, sizeof(udp_sock)) == -1) 
+  //{
+  //  throw runtime_error ("could not bind to UDP socket");
+  //}
+  set_nonblock();
+}
+
+void spip::UDPSocketReceive::bind (int port)
+{
+  // bind socket to file descriptor
+  if (::bind(fd, (struct sockaddr *)&udp_sock, sizeof(udp_sock)) == -1)
   {
     throw runtime_error ("could not bind to UDP socket");
   }
-  set_nonblock();
 }
 
 void spip::UDPSocketReceive::open_multicast (string ip_address, string group, int port)
@@ -142,6 +152,7 @@ void spip::UDPSocketReceive::open_multicast (string ip_address, string group, in
       throw runtime_error ("could not subscribe to multicast address");
     }
   }
+
   multicast = true;
   set_nonblock();
 }

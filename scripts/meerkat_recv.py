@@ -36,8 +36,8 @@ class MeerKATRecvDaemon(RecvDaemon):
     env = RecvDaemon.getEnvironment (self)
     env["LD_PRELOAD"] = "libvma.so"
     env["VMA_MTU"] = "4200"
-    env["VMA_RING_ALLOCATION_LOGIC_RX"] = "10"
-    env["VMA_INTERNAL_THREAD_AFFINITY"] = "6"
+    #env["VMA_RING_ALLOCATION_LOGIC_RX"] = "10"
+    env["VMA_INTERNAL_THREAD_AFFINITY"] = self.cpu_core
     env["VMA_TRACELEVEL"] = "WARNING"
     return env
 
@@ -52,8 +52,12 @@ class MeerKATRecvDaemon(RecvDaemon):
 
     cmd = self.cfg["STREAM_BINARY"] + " " + config_file + " " + key1 + " " + key2 \
             + " -b " + self.cpu_core \
-            + " -c " + self.ctrl_port \
-            + " -f spead"
+            + " -c " + self.ctrl_port
+
+    if self.local_config["NCHAN"] == "1024":
+      cmd = cmd + " -f spead1k"
+    else:
+      cmd = cmd + " -f spead"
 
     # hack for sub-band mode
     if self.id != "0":

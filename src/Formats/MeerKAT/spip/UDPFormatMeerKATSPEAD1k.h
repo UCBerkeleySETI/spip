@@ -1,6 +1,6 @@
 
-#ifndef __UDPFormatMeerKATSPEAD_h
-#define __UDPFormatMeerKATSPEAD_h
+#ifndef __UDPFormatMeerKATSPEAD1k_h
+#define __UDPFormatMeerKATSPEAD1k_h
 
 #include "spip/meerkat_def.h"
 #include "spip/meerkat_spead_def.h"
@@ -14,13 +14,13 @@
 
 namespace spip {
 
-  class UDPFormatMeerKATSPEAD : public UDPFormat {
+  class UDPFormatMeerKATSPEAD1k : public UDPFormat {
 
     public:
 
-      UDPFormatMeerKATSPEAD ();
+      UDPFormatMeerKATSPEAD1k ();
 
-      ~UDPFormatMeerKATSPEAD ();
+      ~UDPFormatMeerKATSPEAD1k ();
 
       void configure (const spip::AsciiHeader& config, const char* suffix);
 

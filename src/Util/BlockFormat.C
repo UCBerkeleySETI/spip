@@ -57,11 +57,15 @@ void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime,
   freq = _freq;
   tsamp = _tsamp;
 
+#ifdef _DEBUG
+  cerr << "spip::BlockFormat::prepare nbin=" << nbin << " ntime=" << ntime << " nfreq=" << _nfreq << " bw=" << bw << " freq=" << freq << " tsamp=" << tsamp << " nchan=" << nchan << endl;
+#endif
+
   // configure the number of channels in the FT
   if (_nfreq < nchan)
   {
     nfreq_ft = nchan;
-    while (_nfreq <= nfreq_ft)
+    while (_nfreq < nfreq_ft)
     {
       nfreq_ft /= 2;
     }
@@ -75,10 +79,13 @@ void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime,
 
   // configure the number of channels in the HG 
   nfreq_hg = nchan;
-  while (_nfreq <= nfreq_hg)
+  while (_nfreq < nfreq_hg)
   {
     nfreq_hg /= 2;
   }
+  // frequency resolved histograms formed from channelisers are not all that useful
+  nfreq_hg = 1;
+
 
   sums.resize (npol * ndim);
   means.resize (npol * ndim);
@@ -94,6 +101,10 @@ void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime,
   ts_sum.resize(npol);
   ts_sumsq.resize(npol);
   hist.resize(npol);
+
+#ifdef _DEBUG
+  cerr << "spip::BlockFormat::prepare hist [" << npol << "][" << ndim << "][" << nfreq_hg << "][" << nbin << "]" << endl;
+#endif
 
   for (unsigned ipol=0; ipol<npol; ipol++)
   {

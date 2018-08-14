@@ -13,6 +13,7 @@
 
 #ifdef HAVE_SPEAD2
 #include "spip/UDPFormatMeerKATSPEAD.h"
+#include "spip/UDPFormatMeerKATSPEAD1k.h"
 #endif
 
 #include <unistd.h>
@@ -105,6 +106,10 @@ int main(int argc, char *argv[])
     else if (format->compare("spead") == 0)
     {
       udprecv->set_format (new spip::UDPFormatMeerKATSPEAD());
+    }
+    else if (format->compare("spead1k") == 0)
+    {
+      udprecv->set_format (new spip::UDPFormatMeerKATSPEAD1k());
     }
 #endif
     else

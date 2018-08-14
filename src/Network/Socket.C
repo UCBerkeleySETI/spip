@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <strings.h>
 
 #include <stdexcept>
 #include <cstdlib>
@@ -60,7 +61,14 @@ void spip::Socket::resize (size_t new_bufsz)
     buf = (char *) malloc (bufsz);
     if (!buf)
       cerr << "spip::Socket::resize malloc failed" << endl;
+    reset_buffer();
   }
+}
+
+void spip::Socket::reset_buffer ()
+{
+  if (buf)
+    bzero (buf, bufsz);
 }
 
 int spip::Socket::set_nonblock ()

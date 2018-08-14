@@ -14,9 +14,10 @@
 
 using namespace std;
 
-spip::BlockFormatMeerKAT::BlockFormatMeerKAT()
+spip::BlockFormatMeerKAT::BlockFormatMeerKAT(int _nchan)
 {
-  nchan = 4096;
+  nbin = 256;
+  nchan = _nchan;
   npol = 2;
   ndim = 2;
   nbit = 8;
@@ -41,6 +42,12 @@ void spip::BlockFormatMeerKAT::unpack_hgft (char * buffer, uint64_t nbytes)
   int re, im;
   unsigned power;
 
+#ifdef _DEBUG
+  cerr << "spip::BlockFormatMeerKAT::unpack_hgft nchan=" << nchan << " nfreq_ft=" << nfreq_ft << endl;
+
+  cerr << "spip::BlockFormatMeerKAT::unpack_hgft nsamp=" << nsamp << " nsamp_per_time=" << nsamp_per_time << " nchan_per_freq_hg=" << nchan_per_freq_hg << " nchan_per_freq_ft=" << nchan_per_freq_ft << " nsamp_block=" << nsamp_block << " nblock=" << nblock << endl;
+#endif
+
   for (unsigned iblock=0; iblock<nblock; iblock++)
   {
     for (unsigned ipol=0; ipol<npol; ipol++)
@@ -52,6 +59,9 @@ void spip::BlockFormatMeerKAT::unpack_hgft (char * buffer, uint64_t nbytes)
 
         for (unsigned isamp=0; isamp<nsamp_block; isamp++)
         {
+#ifdef _DEBUG
+          cerr << "[" << iblock << "][" << ipol << "][" << ichan << "][" << isamp << "]" << endl;
+#endif
           re = (int) in[idat];
           im = (int) in[idat+1];
 
@@ -64,7 +74,7 @@ void spip::BlockFormatMeerKAT::unpack_hgft (char * buffer, uint64_t nbytes)
           ibin = im + 128;
           hist[ipol][1][ifreq_hg][ibin]++;
 
-          // detect and average the timesamples into a NPOL sets of NCHAN * 512 waterfalls
+          // detect and average the time samples into a NPOL sets of NCHAN * 512 waterfalls
           power = (unsigned) ((re * re) + (im * im));
           itime = ((iblock * nsamp_block) + isamp) / nsamp_per_time;
           freq_time[ipol][ifreq_ft][itime] += power;

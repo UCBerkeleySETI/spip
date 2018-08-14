@@ -9,6 +9,7 @@
 #include "spip/UDPFormatMeerKATSimple.h"
 #ifdef HAVE_SPEAD2
 #include "spip/UDPFormatMeerKATSPEAD.h"
+#include "spip/UDPFormatMeerKATSPEAD1k.h"
 #endif
 #include "spip/TCPSocketServer.h"
 
@@ -109,6 +110,8 @@ int main(int argc, char *argv[])
   #ifdef HAVE_SPEAD2
     else if (format.compare("spead") == 0)
       udpmerge2db->set_formats (new spip::UDPFormatMeerKATSPEAD(), new spip::UDPFormatMeerKATSPEAD());
+    else if (format.compare("spead1k") == 0)
+      udpmerge2db->set_formats (new spip::UDPFormatMeerKATSPEAD1k(), new spip::UDPFormatMeerKATSPEAD1k());
   #endif
     else
     {
@@ -195,7 +198,7 @@ void usage()
       "  -b c1,c2    bind pols 1 and 2 to cores c1 and c2\n"
       "  -c port     listen for control commands on port\n"
   #ifdef HAVE_SPEAD2
-      "  -f format   UDP data format [simple spead]\n"
+      "  -f format   UDP data format [simple spead spead1k]\n"
   #else
       "  -f format   UDP data format [simple]\n"
   #endif

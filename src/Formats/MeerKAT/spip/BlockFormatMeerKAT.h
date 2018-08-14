@@ -12,7 +12,7 @@ namespace spip {
 
     public:
 
-      BlockFormatMeerKAT ();
+      BlockFormatMeerKAT (int nchan);
 
       ~BlockFormatMeerKAT ();
 

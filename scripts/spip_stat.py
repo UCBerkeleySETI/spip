@@ -263,9 +263,12 @@ class StatDaemon(Daemon,StreamBased):
       self.quit_event.set()
       return
 
+    # determine the number of channels to be processed by this stream
+    (cfreq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + stream_id].split(":")
+
     # this stat command will not change from observation to observation
     stat_cmd = self.cfg["STREAM_STATS_BINARY"] + " -k " + db_key + \
-               " " + stream_config_file + " -D  " + stat_dir
+               " " + stream_config_file + " -D  " + stat_dir + " -n " + nchan
 
     while (not self.quit_event.isSet()):
 
@@ -279,7 +282,7 @@ class StatDaemon(Daemon,StreamBased):
       # add this binary to the list of active commands
       self.binary_list.append (self.cfg["STREAM_STATS_BINARY"] + " -k " + db_key)
 
-      self.log (1, stat_cmd)
+      self.log (1, "START " + stat_cmd)
 
        # initialize the threads
       stat_thread = dbstatsThread (stat_cmd, stat_dir, stat_log_pipe.sock, 2)
@@ -332,6 +335,9 @@ class StatDaemon(Daemon,StreamBased):
       self.log (2, "StatDaemon::main joining stat thread")
       rval = stat_thread.join()
       self.log (2, "StatDaemon::main stat thread joined")
+
+      self.log (1, "END   " + stat_cmd)
+
       if rval:
         self.log (-2, "stat thread failed")
         self.quit_event.set()
@@ -355,7 +361,7 @@ class StatDaemon(Daemon,StreamBased):
       ndim = np.fromfile(hg_fptr, dtype=np.uint32, count=1)[0]
       nbin = np.fromfile(hg_fptr, dtype=np.uint32, count=1)[0]
 
-      self.log (3, "StatDaemon::process_hg npol=" + str(npol) + " ndim=" + str(ndim) + " nbin=" + str(nbin))
+      self.log (2, "StatDaemon::process_hg npol=" + str(npol) + " ndim=" + str(ndim) + " nbin=" + str(nbin) + " nfreq=" + str(nfreq))
       hg_data = {}
       for ipol in range(npol):
         hg_data[ipol] = {}
@@ -372,25 +378,6 @@ class StatDaemon(Daemon,StreamBased):
       dims = {0: "real", 1: "imag"}
 
       for ipol in range(npol):
-        for idim in range(ndim):
-          prefix = "histogram_" + str(ipol) + "_" + dims[idim]
-
-          if nfreq > 1:
-
-            self.hg_plot.plot_binned_image (160, 120, True, hg_data[ipol][idim], nfreq, nbin)
-            self.results[prefix] = self.hg_plot.getRawImage()
-            self.hg_plot.plot_binned_image (1024, 768, True, hg_data[ipol][idim], nfreq, nbin)
-            self.results[prefix + "_hires"] = self.hg_plot.getRawImage()
-
-          else:
-
-            chan = hg_data[ipol][idim][0,:]
-
-            self.log (2, "StatDaemon::process_hg " + str(chan.shape) + " " + str(chan) + " nbin=" + str(nbin))
-            self.hg_plot.plot_binned (160, 120, True, chan, nbin)
-            self.results[prefix] = self.hg_plot.getRawImage()
-            self.hg_plot.plot_binned (1024, 768, False, chan, nbin)
-            self.results[prefix + "_hires"] = self.hg_plot.getRawImage()
 
         # dual-dim histogram
         if nfreq == 1:
@@ -399,9 +386,9 @@ class StatDaemon(Daemon,StreamBased):
           ifreq = nfreq / 2
 
         prefix = "histogram_" + str(ipol) + "_none"
-
-        chan_real = hg_data[ipol][0][0,:]
-        chan_imag = hg_data[ipol][1][0,:]
+        
+        chan_real = hg_data[ipol][0][ifreq]
+        chan_imag = hg_data[ipol][1][ifreq]
         self.hg_plot.plot_binned_dual (160, 120, True, chan_real, chan_imag, nbin)
         self.results[prefix] = self.hg_plot.getRawImage()
         self.hg_plot.plot_binned_dual (1024, 768, False, chan_real, chan_imag, nbin)

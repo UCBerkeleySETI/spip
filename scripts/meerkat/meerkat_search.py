@@ -105,20 +105,20 @@ class MEERKATSearchDaemon (MEERKATProcDaemon):
       dm = float(self.header["SEARCH_DM"])
     except:
       dm = -1
-      self.log(-1, "SEARCH_OUTDM not present in header, assuming " + str(dm))
-      self.header["SEARCH_OUTDM"] = str(dm)
+      self.log(-1, "SEARCH_DM not present in header, assuming " + str(dm))
+      self.header["SEARCH_DM"] = str(dm)
 
     # this seems to be a good default
-    nsblk = 1024
+    nsblk = 256
 
     # configure the command to be run
     self.cmd = "digifits -Q " + db_key_filename + " -cuda " + self.gpu_id + " -nsblk " + str(nsblk)
  
     # handle detection options
-    if outnpol == 1 or outnstokes == 2 or outnstokes == 4:
+    if outnpol == 1 or outnpol == 2 or outnpol == 4:
       self.cmd = self.cmd + " -p " + str(outnpol)
     else:
-      self.log(-1, "ignoring invalid outnpol of " + str(outnstokes))
+      self.log(-1, "ignoring invalid outnpol of " + str(outnpol))
 
     # handle channelisation
     if outnchan > innchan:
