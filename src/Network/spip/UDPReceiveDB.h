@@ -5,7 +5,6 @@
 #include "config.h"
 
 #include "spip/AsciiHeader.h"
-#include "spip/UDPSocketReceiveVMA.h"
 #include "spip/UDPSocketReceive.h"
 #include "spip/UDPFormat.h"
 #include "spip/UDPStats.h"
@@ -17,7 +16,7 @@
 #include <pthread.h>
 
 #ifdef  HAVE_VMA
-#include <mellanox/vma_extra.h>
+#include "spip/UDPSocketReceiveVMA.h"
 #endif
 
 namespace spip {
