@@ -17,6 +17,7 @@ spip::AdaptiveFilter::AdaptiveFilter (std::string dir) :
   Transformation<Container,Container>("AdaptiveFilter", outofplace)
 {
   // default, should be configured [TODO]
+  perform_filtering = false;
   filter_update_time = 1000;
   epsilon = 1e-1;
   gains = NULL;
@@ -33,6 +34,7 @@ void spip::AdaptiveFilter::set_filtering (int pol)
   ref_pol = pol;
   if (ref_pol <= 0)
     throw invalid_argument ("AdaptiveFilter::set_filtering invalid reference pol");
+  perform_filtering = true;
 }
 
 //! configure parameters at the start of a data stream

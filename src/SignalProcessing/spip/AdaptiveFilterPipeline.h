@@ -48,6 +48,8 @@ namespace spip {
 
       void configure (UnpackFloat *);
 
+      void set_filtering (int);
+
 #ifdef HAVE_CUDA
       void set_device (int _device);
 
@@ -91,6 +93,8 @@ namespace spip {
       ContainerRingWrite * output;
 
       int nfft;
+
+      int reference_pol;
 
       bool verbose;
 

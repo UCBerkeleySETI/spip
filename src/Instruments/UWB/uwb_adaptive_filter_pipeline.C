@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) try
     dp->set_verbose();
 
   dp->set_channelisation (nfft);
-  //dp->set_filtering (1);
+  dp->set_filtering (1);
 #ifdef HAVE_CUDA
   if (device >= 0)
   {

@@ -21,6 +21,7 @@ using namespace std;
 spip::AdaptiveFilterPipeline::AdaptiveFilterPipeline (const char * in_key_string, const char * out_key_string)
 {
   nfft = -1;
+  reference_pol = -1;
 #ifdef HAVE_CUDA
   device = -1;
 #endif
@@ -53,6 +54,11 @@ void spip::AdaptiveFilterPipeline::set_channelisation (int freq_res)
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::set_channelisation freq_res=" << freq_res  << endl;
   nfft = freq_res;
+}
+
+void spip::AdaptiveFilterPipeline::set_filtering (int ref_pol)
+{
+  reference_pol = ref_pol;
 }
 
 //! build the pipeline containers and transforms
@@ -108,6 +114,7 @@ void spip::AdaptiveFilterPipeline::configure (spip::UnpackFloat * unpacker)
   filter->set_input (channelised);
   filter->set_output (cleaned);
   filter->set_verbose (verbose);
+  filter->set_filtering (reference_pol);
 
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure allocating output Ring Buffer" << endl;
@@ -208,6 +215,7 @@ void spip::AdaptiveFilterPipeline::configure_cuda (spip::UnpackFloat * unpacker)
   filter = new spip::AdaptiveFilterCUDA(stream, output_dir);
   filter->set_input (channelised);
   filter->set_output (cleaned);
+  filter->set_filtering (reference_pol);
   filter->set_verbose (verbose);
 
   // output of BWD fft
