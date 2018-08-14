@@ -153,18 +153,18 @@ int main(int argc, char *argv[]) try
   sock_send.open (client, port, server);
   sock_send.resize (bufsz);
 
+  void * send_buf_ptr = (void *) sock_send.get_buf();
+  void * recv_buf_ptr = (void *) sock_recv.get_buf();
+
 #ifdef HAVE_CUDA
-  void * send_buf_ptr, * recv_buf_ptr;
   unsigned int flags = 0;
   cudaError_t rval;
 
   // register the udp socket buffers as host memory
-  send_buf_ptr = (void *) sock_send.get_buf();
   rval = cudaHostRegister (send_buf_ptr, bufsz, flags);
   if (rval != cudaSuccess)
     cerr << "cudaHostRegister failed on sock_send" << endl;
 
-  recv_buf_ptr = (void *) sock_recv.get_buf();
   rval = cudaHostRegister (recv_buf_ptr, bufsz, flags);
   if (rval != cudaSuccess)
     cerr << "cudaHostRegister failed on sock_recv" << endl;

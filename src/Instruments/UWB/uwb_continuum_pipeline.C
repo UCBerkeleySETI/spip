@@ -16,7 +16,7 @@
 #endif
 
 #include <signal.h>
-
+#include <math.h>
 #include <cstdio>
 #include <cstring>
 #include <iostream>

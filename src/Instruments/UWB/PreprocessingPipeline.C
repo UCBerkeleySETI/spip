@@ -40,7 +40,9 @@ spip::PreprocessingPipeline::PreprocessingPipeline (const char * in_key_string,
 
   ref_pol = 0;
 
+#ifdef HAVE_CUDA
   device = -1;
+#endif
   calibrate = false;
   transients = false;
   filter = false;
@@ -257,8 +259,11 @@ void spip::PreprocessingPipeline::configure (spip::UnpackFloat * unpacker)
     // cleaned data
     filtered = new spip::ContainerRAM ();
 
+    // TODO parameterise
+    string output_dir = string(".");
+
     // The filtering pipeline will filter pols 1+2 against pol3
-    adap_fil = new spip::AdaptiveFilterRAM();
+    adap_fil = new spip::AdaptiveFilterRAM(output_dir);
     adap_fil->set_input (channelised);
     adap_fil->set_output (filtered);
     adap_fil->set_filtering (ref_pol);
@@ -472,10 +477,12 @@ void spip::PreprocessingPipeline::configure_cuda (spip::UnpackFloat * unpacker)
     // cleaned data
     filtered = new spip::ContainerCUDADevice ();
 
+    string output_dir = string(".");
+
     // The filtering pipeline will filter pols 1+2 against pol3
     if (verbose)
       cerr << "spip::PreprocessingPipeline::configure_cuda configuring AdaptiveFilterCUDA" << endl;
-    adap_fil = new spip::AdaptiveFilterCUDA(stream);
+    adap_fil = new spip::AdaptiveFilterCUDA(stream, output_dir);
     adap_fil->set_input (channelised);
     adap_fil->set_output (filtered);
     adap_fil->set_filtering (ref_pol);
