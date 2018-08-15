@@ -41,6 +41,8 @@ int main(int argc, char *argv[]) try
 
   int verbose = 0;
 
+  int ref_pol = 0;
+
   opterr = 0;
   int c;
 
@@ -49,9 +51,9 @@ int main(int argc, char *argv[]) try
 #ifdef HAVE_CUDA
   int device = -1;
 
-  while ((c = getopt(argc, argv, "b:d:hv")) != EOF)
+  while ((c = getopt(argc, argv, "b:d:hr:v")) != EOF)
 #else
-  while ((c = getopt(argc, argv, "b:hv")) != EOF)
+  while ((c = getopt(argc, argv, "b:hr:v")) != EOF)
 #endif
   {
     switch(c)
@@ -61,7 +63,6 @@ int main(int argc, char *argv[]) try
         hw_affinity.bind_process_to_cpu_core (core);
         hw_affinity.bind_to_memory (core);
         break;
-
 
 #ifdef HAVE_CUDA
       case 'd':
@@ -73,6 +74,10 @@ int main(int argc, char *argv[]) try
         cerr << "Usage: " << endl;
         usage();
         exit(EXIT_SUCCESS);
+        break;
+
+      case 'r':
+        ref_pol = atoi(optarg);
         break;
 
       case 'v':
@@ -105,8 +110,7 @@ int main(int argc, char *argv[]) try
   if (verbose)
     dp->set_verbose();
 
-  // TODO parameterize this
-  dp->set_filtering(1);
+  dp->set_filtering(ref_pol);
 
 #ifdef HAVE_CUDA
   if (device >= 0)
@@ -144,6 +148,7 @@ void usage()
   cout << " -d gpu    use GPU" << endl;
 #endif
   cout << " -h        display usage" << endl;
+  cout << " -r ipol   polarisation containing RFI reference signal [default 0]" << endl;
   cout << " -v        verbose output" << endl;
 }
 
