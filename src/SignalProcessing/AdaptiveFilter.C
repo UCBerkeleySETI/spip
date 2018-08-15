@@ -49,9 +49,10 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   nsignal = input->get_nsignal ();
   tsamp = input->get_tsamp();
 
-  if (ref_pol != int(npol) - 1)
-    throw Error (InvalidState, "AdaptiveFilter::configure", "ref_pol [%d] != npol-1 [%d]\n",
-                 ref_pol, npol - 1);
+  // Now allow any pol to be the reference polarisation
+  //if (ref_pol != int(npol) - 1)
+  //  throw Error (InvalidState, "AdaptiveFilter::configure", "ref_pol [%d] != npol-1 [%d]\n",
+  //               ref_pol, npol - 1);
   out_npol = npol - 1;
 
   if (ndim != 2)
@@ -98,6 +99,7 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   // update the parameters that this transformation will affect
   gains->set_nbit (32);
   gains->set_ndim (2);
+  gains->set_npol (out_npol);
   gains->set_order (spip::Ordering::TSPF);
 
   gains->write_header();

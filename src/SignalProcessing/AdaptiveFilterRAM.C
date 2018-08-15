@@ -32,14 +32,14 @@ void spip::AdaptiveFilterRAM::configure (spip::Ordering output_order)
   if (!gains)
     gains = new spip::ContainerFileWrite (output_dir);
 
-  int64_t gains_size = nchan * npol * ndim * sizeof(float);
+  int64_t gains_size = nchan * out_npol * ndim * sizeof(float);
   gains_file_write = dynamic_cast<spip::ContainerFileWrite *>(gains);
   gains_file_write->set_file_length_bytes (gains_size);
 
   spip::AdaptiveFilter::configure (output_order);
 
   float * gains_buf = (float *) gains->get_buffer();
-  for (unsigned ipol=0; ipol<npol; ipol++)
+  for (unsigned ipol=0; ipol<out_npol; ipol++)
     for (unsigned ichan=0; ichan<nchan; ichan++)
       for (unsigned idim=0; idim<ndim; idim++)
          gains_buf[ndim*(ipol*nchan+ichan) + idim] = 0.0f;
@@ -102,9 +102,11 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
     {
       const uint64_t in_chan_offset = in_sig_offset + ichan * in_chan_stride;
       const uint64_t out_chan_offset = out_sig_offset + ichan * out_chan_stride;
+
       for (unsigned ipol=0; ipol<out_npol; ipol++)
       {
-        const uint64_t in_sfp_offset = in_chan_offset + ipol * pol_stride;
+        unsigned ast_pol = (ipol < ref_pol) ? ipol : ipol + 1;
+        const uint64_t in_sfp_offset = in_chan_offset + ast_pol * pol_stride;
         const uint64_t in_ref_offset = in_chan_offset + ref_pol * pol_stride;
         const uint64_t out_sfp_offset = out_chan_offset + ipol * pol_stride;
           
