@@ -32,7 +32,7 @@ spip::AdaptiveFilter::~AdaptiveFilter ()
 void spip::AdaptiveFilter::set_filtering (int pol)
 {
   ref_pol = pol;
-  if (ref_pol <= 0)
+  if (ref_pol < 0)
     throw invalid_argument ("AdaptiveFilter::set_filtering invalid reference pol");
   perform_filtering = true;
 }
