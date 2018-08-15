@@ -33,6 +33,7 @@ spip::AdaptiveFilterTest::AdaptiveFilterTest (const char * in_key_string, const 
   out_db->connect();
   out_db->lock();
 
+  reference_pol = -1;
   verbose = false;
 }
 
@@ -45,6 +46,11 @@ spip::AdaptiveFilterTest::~AdaptiveFilterTest()
   out_db->unlock();
   out_db->disconnect();
   delete out_db;
+}
+
+void spip::AdaptiveFilterTest::set_filtering (int ref_pol)
+{
+  reference_pol = ref_pol;
 }
 
 //! build the pipeline containers and transforms
@@ -87,6 +93,7 @@ void spip::AdaptiveFilterTest::configure (spip::UnpackFloat * unpacker)
   filter = new spip::AdaptiveFilterRAM(output_dir);
   filter->set_input (unpacked);
   filter->set_output (output);
+  filter->set_filtering (reference_pol);
   filter->set_verbose (verbose);
 }
 
@@ -160,6 +167,7 @@ void spip::AdaptiveFilterTest::configure_cuda (spip::UnpackFloat * unpacker)
   filter = new spip::AdaptiveFilterCUDA(stream, output_dir);
   filter->set_input (unpacked);
   filter->set_output (d_output);
+  filter->set_filtering (reference_pol);
   filter->set_verbose (verbose);
 
   if (verbose)

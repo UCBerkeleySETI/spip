@@ -42,6 +42,8 @@ namespace spip {
 
       void configure (UnpackFloat *);
 
+      void set_filtering (int ref_pol);
+
 #ifdef HAVE_CUDA
       void set_device (int _device);
 
@@ -79,6 +81,8 @@ namespace spip {
       int nfft;
 
       bool verbose;
+
+      int reference_pol;
 
 #ifdef HAVE_CUDA
       int device;

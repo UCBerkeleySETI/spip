@@ -88,9 +88,9 @@ int main(int argc, char *argv[]) try
   }
 
   // Check arguments
-  if ((argc - optind) != 3)
+  if ((argc - optind) != 2)
   {
-    fprintf(stderr,"ERROR: 3 command line argument expected\n");
+    fprintf(stderr,"ERROR: 2 command line argument expected\n");
     usage();
     return EXIT_FAILURE;
   }
@@ -104,6 +104,9 @@ int main(int argc, char *argv[]) try
 
   if (verbose)
     dp->set_verbose();
+
+  // TODO parameterize this
+  dp->set_filtering(1);
 
 #ifdef HAVE_CUDA
   if (device >= 0)
@@ -136,7 +139,7 @@ catch (std::exception& exc)
 
 void usage()
 {
-  cout << "adaptive_filter_test [options] inkey outkey" << endl;
+  cout << "uwb_adaptive_filter_test [options] inkey outkey" << endl;
 #ifdef HAVE_CUDA
   cout << " -d gpu    use GPU" << endl;
 #endif

@@ -144,7 +144,7 @@ catch (std::exception& exc)
 
 void usage()
 {
-  cout << "filterbank_pipeline [options] inkey outkey" << endl;
+  cout << "uwb_adaptive_filterbank_pipeline [options] inkey outkey" << endl;
 #ifdef HAVE_CUDA
   cout << " -d gpu    use GPU" << endl;
 #endif
