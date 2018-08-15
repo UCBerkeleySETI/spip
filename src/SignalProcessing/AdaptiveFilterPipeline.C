@@ -109,6 +109,8 @@ void spip::AdaptiveFilterPipeline::configure (spip::UnpackFloat * unpacker)
   // TODO parameterise this
   std::string output_dir = string(".");
 
+  if (verbose)
+    cerr << "spip::AdaptiveFilterPipeline::configure allocating Adaptive Filter" << endl;
   // RFI Filtering operation
   filter = new spip::AdaptiveFilterRAM(output_dir);
   filter->set_input (channelised);
