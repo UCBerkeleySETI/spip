@@ -105,11 +105,11 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
 
       for (unsigned ipol=0; ipol<out_npol; ipol++)
       {
-        unsigned ast_pol = (ipol < ref_pol) ? ipol : ipol + 1;
+        unsigned ast_pol = (int(ipol) < ref_pol) ? ipol : ipol + 1;
         const uint64_t in_sfp_offset = in_chan_offset + ast_pol * pol_stride;
         const uint64_t in_ref_offset = in_chan_offset + ref_pol * pol_stride;
         const uint64_t out_sfp_offset = out_chan_offset + ipol * pol_stride;
-          
+
         // read previous gain values
         g_real = gains_buf[2*((ipol * nchan) + ichan) + 0];
         g_imag = gains_buf[2*((ipol * nchan) + ichan) + 1];

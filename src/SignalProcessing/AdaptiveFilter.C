@@ -18,8 +18,8 @@ spip::AdaptiveFilter::AdaptiveFilter (std::string dir) :
 {
   // default, should be configured [TODO]
   perform_filtering = false;
-  filter_update_time = 1000;
-  epsilon = 1e-1;
+  filter_update_time = 1024;
+  epsilon = 0.4;
   gains = NULL;
   ref_pol = 0;
 }

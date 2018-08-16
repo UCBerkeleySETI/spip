@@ -41,6 +41,9 @@ void spip::ContainerFileRead::process_header()
 //! read data into the container
 uint64_t spip::ContainerFileRead::read_data()
 {
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerFileRead::read_data reading " << file_size 
+         << " bytes into " << (void *) buffer << endl;
   // read from the FD into the containers buffer the file size listed in the header
   size_t bytes_read = ::read (fd, buffer, file_size);
   if (bytes_read < size_t(file_size))

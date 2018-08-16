@@ -10,6 +10,7 @@ libinstuwb_la_SOURCES = \
   UnpackFloatRAMUWB.C
 
 bin_PROGRAMS = uwb_adaptive_filter_pipeline \
+  uwb_adaptive_filter_combine \
   uwb_adaptive_filter_test \
   uwb_calibration_pipeline \
   uwb_continuum_pipeline \
@@ -34,6 +35,7 @@ LDADD = libinstuwb.la \
 AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @FFTW_CFLAGS@
 LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @FFTW_LIBS@
 
+uwb_adaptive_filter_combine_SOURCES = uwb_adaptive_filter_combine.C
 uwb_adaptive_filter_test_SOURCES = uwb_adaptive_filter_test.C
 uwb_adaptive_filter_pipeline_SOURCES = uwb_adaptive_filter_pipeline.C
 uwb_continuum_pipeline_SOURCES = uwb_continuum_pipeline.C

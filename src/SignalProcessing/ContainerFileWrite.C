@@ -184,7 +184,7 @@ uint64_t spip::ContainerFileWrite::write_data (uint64_t start_idat, uint64_t nda
   if ((order != spip::Ordering::TSPF) && (order != spip::Ordering::TFPS) &&
       (order != spip::Ordering::TSPFB))
   {
-    throw Error (InvalidState, "spip::ContainerFileWrite::write_data", "unsupport container order");
+    throw Error (InvalidState, "spip::ContainerFileWrite::write_data", "unsupported container order");
   }
 
 #ifdef _DEBUG

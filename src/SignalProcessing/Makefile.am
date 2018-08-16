@@ -22,6 +22,7 @@ libspipdsp_headers = \
 	spip/Integration.h spip/IntegrationRAM.h \
 	spip/IntegrationBinned.h spip/IntegrationBinnedRAM.h \
   spip/PBSCalibrationPipeline.h \
+  spip/PolCombine.h spip/PolCombineRAM.h \
   spip/PolSelect.h spip/PolSelectRAM.h \
 	spip/RAMtoRAMTransfer.h \
 	spip/ReverseFrequency.h spip/ReverseFrequencyRAM.h \
@@ -54,6 +55,7 @@ libspipdsp_la_SOURCES = \
   ForwardFFT.C \
   BackwardFFT.C \
   PBSCalibrationPipeline.C \
+  PolCombine.C PolCombineRAM.C \
   PolSelect.C PolSelectRAM.C \
   RAMtoRAMTransfer.C \
   ReverseFrequency.C ReverseFrequencyRAM.C \
