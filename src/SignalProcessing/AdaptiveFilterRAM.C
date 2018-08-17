@@ -162,7 +162,9 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
             normalized_factor = (0.999 * previous_factor) + (0.001 * current_factor);
           else
             normalized_factor = current_factor;
+
           previous_factor = current_factor;
+          processed_first_block = true;
 
           // reset the sum for this block
           sum_real = 0;
