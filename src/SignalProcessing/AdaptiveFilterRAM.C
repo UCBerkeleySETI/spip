@@ -17,6 +17,7 @@ using namespace std;
 
 spip::AdaptiveFilterRAM::AdaptiveFilterRAM (string dir) : AdaptiveFilter (dir)
 {
+  processed_first_block = false;
 }
 
 spip::AdaptiveFilterRAM::~AdaptiveFilterRAM ()
@@ -24,6 +25,10 @@ spip::AdaptiveFilterRAM::~AdaptiveFilterRAM ()
   if (gains)
     delete gains;
   gains = NULL;
+
+  if (norms)
+    delete norms;
+  norms = NULL;
 }
 
 // configure the pipeline prior to runtime
@@ -32,17 +37,14 @@ void spip::AdaptiveFilterRAM::configure (spip::Ordering output_order)
   if (!gains)
     gains = new spip::ContainerFileWrite (output_dir);
 
+  if (!norms)
+    norms = new spip::ContainerRAM ();
+
   int64_t gains_size = nchan * out_npol * ndim * sizeof(float);
   gains_file_write = dynamic_cast<spip::ContainerFileWrite *>(gains);
   gains_file_write->set_file_length_bytes (gains_size);
 
   spip::AdaptiveFilter::configure (output_order);
-
-  float * gains_buf = (float *) gains->get_buffer();
-  for (unsigned ipol=0; ipol<out_npol; ipol++)
-    for (unsigned ichan=0; ichan<nchan; ichan++)
-      for (unsigned idim=0; idim<ndim; idim++)
-         gains_buf[ndim*(ipol*nchan+ichan) + idim] = 0.0f;
 }
 
 //! no special action required
@@ -67,6 +69,7 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
   float * in = (float *) input->get_buffer();
   float * out = (float *) output->get_buffer();
   float * gains_buf = (float *) gains->get_buffer();
+  float * norms_buf = (float *) norms->get_buffer();
 
   float re, im;
   float f_real, f_imag, af_real, af_imag, corr_real, corr_imag;
@@ -74,7 +77,7 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
   float ast_real, ast_imag, ref_real, ref_imag;
 
   float ast_sum, ref_sum;
-  float normalized_power, current_factor, previous_factor, normalized_factor;
+  float normalized_power, current_factor, normalized_factor;
   uint64_t idat, nval;
 
   // segregation into blocks of length filter_update_time
@@ -110,9 +113,16 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
         const uint64_t in_ref_offset = in_chan_offset + ref_pol * pol_stride;
         const uint64_t out_sfp_offset = out_chan_offset + ipol * pol_stride;
 
+        // gains are stored in TSPF [ndat==1]
+        const unsigned gain_ndim = 2;
+        const uint64_t gain_offset = (isig * out_npol * nchan * gain_ndim) + (ipol * nchan * gain_ndim) + (ichan * gain_ndim);
+
         // read previous gain values
-        g_real = gains_buf[2*((ipol * nchan) + ichan) + 0];
-        g_imag = gains_buf[2*((ipol * nchan) + ichan) + 1];
+        g_real = gains_buf[gain_offset + 0];
+        g_imag = gains_buf[gain_offset + 1];
+
+        const uint64_t norms_offset = (isig * out_npol * nchan) + (ipol * nchan) + ichan;
+        previous_factor = norms_buf[norms_offset];
 
         // offset pointers for this signal, channel and polarisation
         float * in_ptr  = in + in_sfp_offset;
@@ -148,15 +158,10 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
           normalized_power = (ast_sum / nval) + (ref_sum/ nval);
           current_factor   = normalized_power;
 
-          if (iblock == 0)
-          {
-            normalized_factor = (0.999 * current_factor) + (0.001 * current_factor);
-          }
-          else
-          {
+          if (processed_first_block)
             normalized_factor = (0.999 * previous_factor) + (0.001 * current_factor);
-          }
-
+          else
+            normalized_factor = current_factor;
           previous_factor = current_factor;
 
           // reset the sum for this block
@@ -231,13 +236,18 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
             // write af to output
             out_ptr[re_idat] = af_real;
             out_ptr[im_idat] = af_imag;
+
             idat++;
           }
+
         }
 
         // save the gain for this pol/chan
-        gains_buf[2*((ipol * nchan) + ichan) + 0] = g_real;
-        gains_buf[2*((ipol * nchan) + ichan) + 1] = g_imag;
+        gains_buf[gain_offset + 0] = g_real;
+        gains_buf[gain_offset + 1] = g_imag;
+
+        // save the normalization for this sig/pol/chan
+        norms_buf[norms_offset] = current_factor;
       }
     }
   }

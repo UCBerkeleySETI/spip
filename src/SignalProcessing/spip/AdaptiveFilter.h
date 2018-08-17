@@ -62,6 +62,9 @@ namespace spip {
       // generic container to store the gains
       Container * gains;
 
+      // generic container to store the normalization factor
+      Container * norms;
+
       // from Nuer's simulation and Adaptive Filter paper
       float epsilon;
 

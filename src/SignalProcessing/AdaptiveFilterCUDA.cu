@@ -52,8 +52,8 @@ cuFloatComplex blockReduceSumFC(cuFloatComplex val)
 
 
 // SFPT implementation of adaptive filter algorithm
-__global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex * out, cuFloatComplex * gains,
-                                           uint64_t nloops, 
+__global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex * out, cuFloatComplex * gains, float * norms,
+                                           uint64_t nloops, bool processed_first_block,
                                            uint64_t in_sig_stride, uint64_t in_chan_stride, 
                                            uint64_t out_sig_stride, uint64_t out_chan_stride,
                                            uint64_t pol_stride, unsigned ref_pol)
@@ -81,7 +81,6 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
   //  printf ("[%d][%d] ichanpol=%u idx=%lu\n", blockIdx.x, threadIdx.x, ichanpol, idx);
 
   __shared__ float normalized_factor;
-  float previos_factor;
 
   for (unsigned iloop=0; iloop<nloops; iloop++)
   {
@@ -99,24 +98,15 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
 
     if (threadIdx.x == 0)
     {
-      // normalise
-      float pn = pa.x / blockDim.x + pr.x / blockDim.x;
-      //normalized_power.y = pa.y / blockDim.y + pr.y / blockDim.y;
+      // normalise by the number of values used
+      float current_factor = pa.x / blockDim.x + pr.x / blockDim.x;
 
-    float current_factor = pn;
+      if (processed_first_block)
+        normalized_factor = (0.999 * norms[ichanpol]) + (0.001 * current_factor);
+      else
+        normalized_factor = (0.999 * current_factor) + (0.001 * current_factor);
 
-
-    if(iloop == 0)
-    {
-      normalized_factor = 0.999 * current_factor + 0.001 *current_factor;
-    }
-    else
-    {
-      normalized_factor = 0.999 * previos_factor + 0.001 *current_factor;
-    }
-
-    previos_factor = current_factor;
-
+      norms[ichanpol] = current_factor;
     }
 
     // ensure pn are common across the block
@@ -181,6 +171,7 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
 spip::AdaptiveFilterCUDA::AdaptiveFilterCUDA (cudaStream_t _stream, string dir) : AdaptiveFilter (dir)
 {
   stream = _stream;
+  processed_first_block = false;
 }
 
 spip::AdaptiveFilterCUDA::~AdaptiveFilterCUDA ()
@@ -193,6 +184,9 @@ void spip::AdaptiveFilterCUDA::configure (spip::Ordering output_order)
   // TODO implement a ContainerCUDADeviceFileWrite class [Nuer]
   if (!gains)
     gains = new spip::ContainerCUDADevice ();
+
+  if (!norms)
+    norms = new spip::ContainerCUDADevice ();
 
   spip::AdaptiveFilter::configure (output_order);
 }
@@ -214,6 +208,7 @@ void spip::AdaptiveFilterCUDA::transform_SFPT()
   cuFloatComplex * in = (cuFloatComplex *) input->get_buffer();
   cuFloatComplex * out = (cuFloatComplex *) output->get_buffer();
   cuFloatComplex * gai = (cuFloatComplex *) gains->get_buffer();
+  float * nor = (float *) norms->get_buffer();
 
   dim3 blocks (nsignal, nchan, npol);
   unsigned nthread = 1024;
@@ -237,10 +232,11 @@ void spip::AdaptiveFilterCUDA::transform_SFPT()
   uint64_t out_chan_stride = out_npol * pol_stride;
   uint64_t out_sig_stride  = nchan * out_chan_stride;
 
-  AdaptiveFilterKernel_SFPT<<<blocks, nthread, 0, stream>>>(in, out, gai, nloops, in_sig_stride, in_chan_stride, out_sig_stride, out_chan_stride, pol_stride, ref_pol);
+  AdaptiveFilterKernel_SFPT<<<blocks, nthread, 0, stream>>>(in, out, gai, nor, nloops, processed_first_block, in_sig_stride, in_chan_stride, out_sig_stride, out_chan_stride, pol_stride, ref_pol);
 
   if (verbose)
     cerr << "spip::AdaptiveFilterCUDA::transform_SFPT kernels complete" << endl;
+  processed_first_block = true;
 }
 
 void spip::AdaptiveFilterCUDA::write_gains ()

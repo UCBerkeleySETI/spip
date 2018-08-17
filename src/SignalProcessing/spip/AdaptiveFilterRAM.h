@@ -51,6 +51,11 @@ namespace spip {
       size_t buffer_size;
 
       ContainerFileWrite * gains_file_write;
+
+      float previous_factor;
+
+      bool processed_first_block;
+
   };
 }
 

@@ -38,6 +38,8 @@ namespace spip {
     private:
 
       cudaStream_t stream;
+
+      bool processed_first_block;
   };
 }
 

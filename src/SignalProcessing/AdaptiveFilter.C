@@ -108,6 +108,23 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   // allocate memory of the gains
   gains->resize();
   gains->zero();
+
+  // prepare the normalization container
+  norms->clone_header (input->get_header());
+  norms->read_header ();
+
+  // update the parameters that this transformation will affect
+  norms->set_nbit (32);
+  norms->set_ndim (1);
+  norms->set_npol (out_npol);
+  norms->set_order (spip::Ordering::TSPF);
+
+  norms->write_header();
+  norms->set_ndat (1);
+
+  // allocate memory and initialize to zero
+  norms->resize();
+  norms->zero();
 }
 
 //! prepare prior to each transformation call
