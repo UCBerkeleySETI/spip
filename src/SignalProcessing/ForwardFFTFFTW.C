@@ -89,12 +89,8 @@ void spip::ForwardFFTFFTW::fft_shift()
   for (uint64_t i=0; i<nval; i++)
   {
     const int a = int(1) - (2 * (i & 1));
-    //if (i < 4)
-    //  cerr << "before in[" << i << "] = (" << in[i][0] << "," << in[i][1] << ") i&1=" << (i&1) << " (2*i&1)=" << (2*(i&1)) << " a=" << a << endl;
     in[i][0] *= a;
     in[i][1] *= a;
-    //if (i < 4)
-    //  cerr << "after  in[" << i << "] = (" << in[i][0] << "," << in[i][1] << ")" << endl;
   }
 }
 

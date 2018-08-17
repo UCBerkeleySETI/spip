@@ -60,25 +60,33 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
 {
   // there is one complex gain per block
   __shared__ cuFloatComplex g;
+  float previous_factor;
 
-  const unsigned ichanpol = (blockIdx.z * gridDim.y) + blockIdx.y;
+  // Block X = Signal
+  // Block Y = Channel
+  // Block Z = Polarisation
+  // Gains are nominally stored in TSPF where T == 1, so SPF
+  const unsigned isigchanpol = (blockIdx.x * gridDim.y * gridDim.z) + 
+                               (blockIdx.z * gridDim.y) + 
+                               blockIdx.y;
 
   // get the first thread to read the previously computed complex gain
   if (threadIdx.x == 0)
   {
-    g = gains[ichanpol];
+    g = gains[isigchanpol];
+    previous_factor = norms[isigchanpol];
   }
 
   // ensure all threads have the complex gain
   __syncthreads();
 
-  // offsets for input, reference and output
-  uint64_t idx = (blockIdx.x * in_sig_stride)  + (blockIdx.y * in_chan_stride)  + (blockIdx.z * pol_stride) + threadIdx.x;
+  // the reference polarisation could be (unfortunately) not the final ones
+  unsigned ast_pol = (blockIdx.z < ref_pol) ? blockIdx.z : blockIdx.z + 1;
+
+  // offsets for input, reference and output, stored in SFPT
+  uint64_t idx = (blockIdx.x * in_sig_stride)  + (blockIdx.y * in_chan_stride)  + (ast_pol * pol_stride)    + threadIdx.x;
   uint64_t rdx = (blockIdx.x * in_sig_stride)  + (blockIdx.y * in_chan_stride)  + (ref_pol * pol_stride)    + threadIdx.x;
   uint64_t odx = (blockIdx.x * out_sig_stride) + (blockIdx.y * out_chan_stride) + (blockIdx.z * pol_stride) + threadIdx.x;
-
-  //if (threadIdx.x == 0 || threadIdx.x == 1023)
-  //  printf ("[%d][%d] ichanpol=%u idx=%lu\n", blockIdx.x, threadIdx.x, ichanpol, idx);
 
   __shared__ float normalized_factor;
 
@@ -86,6 +94,7 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
   {
     // read the reference antenna value
     cuFloatComplex r = in[rdx];
+
     // read the astronomy antenna value
     cuFloatComplex a = in[idx];
 
@@ -99,20 +108,17 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
     if (threadIdx.x == 0)
     {
       // normalise by the number of values used
-      float current_factor = pa.x / blockDim.x + pr.x / blockDim.x;
+      float current_factor = (pa.x / blockDim.x) + (pr.x / blockDim.x);
 
-      if (processed_first_block)
-        normalized_factor = (0.999 * norms[ichanpol]) + (0.001 * current_factor);
+      if (processed_first_block || iloop > 0)
+        normalized_factor = (0.999 * previous_factor) + (0.001 * current_factor);
       else
-        normalized_factor = (0.999 * current_factor) + (0.001 * current_factor);
-
-      norms[ichanpol] = current_factor;
+        normalized_factor = current_factor;
+      previous_factor = current_factor;
     }
 
-    // ensure pn are common across the block
+    // ensure normalized factor is shared across the block
     __syncthreads();
-
-//////////////////////////////////
 
     // compute complex conjugate f = [gain * ref]
     cuFloatComplex f = cuCmulf(g, r);
@@ -137,7 +143,7 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
       corr.y /= blockDim.x;
 
       // compute new gain
-      const float epsilon = 0.1;
+      const float epsilon = 0.4;
       g.x = (corr.x * epsilon) + g.x;
       g.y = (corr.y * epsilon) + g.y;
     }
@@ -163,7 +169,8 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
   // update the gains
   if (threadIdx.x == 0)
   {
-    gains[ichanpol] = g;
+    gains[isigchanpol] = g;
+    norms[isigchanpol] = previous_factor;
   }
 }
 
@@ -210,7 +217,7 @@ void spip::AdaptiveFilterCUDA::transform_SFPT()
   cuFloatComplex * gai = (cuFloatComplex *) gains->get_buffer();
   float * nor = (float *) norms->get_buffer();
 
-  dim3 blocks (nsignal, nchan, npol);
+  dim3 blocks (nsignal, nchan, out_npol);
   unsigned nthread = 1024;
   if (nthread > filter_update_time)
     nthread = filter_update_time;
@@ -221,9 +228,10 @@ void spip::AdaptiveFilterCUDA::transform_SFPT()
 
   if (verbose)
   {
-    cerr << "spip::AdaptiveFilterCUDA::transform_SFPT nsignal=" << nsignal << " nchan=" << nchan << " npol=" << npol
-<< endl;
-    cerr << "spip::AdaptiveFilterCUDA::transform_SFPT ndat=" << ndat << " nthread=" << nthread << " nloops=" << nloops << " kernels" << endl;
+    cerr << "spip::AdaptiveFilterCUDA::transform_SFPT nsignal=" << nsignal 
+         << " nchan=" << nchan << " npol=" << npol << " out_npol=" << out_npol << " ref_pol=" << ref_pol << endl;
+    cerr << "spip::AdaptiveFilterCUDA::transform_SFPT ndat=" << ndat 
+          << " nthread=" << nthread << " nloops=" << nloops << " kernels" << endl;
   }
 
   uint64_t pol_stride = ndat;
@@ -232,10 +240,15 @@ void spip::AdaptiveFilterCUDA::transform_SFPT()
   uint64_t out_chan_stride = out_npol * pol_stride;
   uint64_t out_sig_stride  = nchan * out_chan_stride;
 
+  if (verbose)
+    cerr << "spip::AdaptiveFilterCUDA::transform_SFPT blocks=" << blocks.x 
+         << "," << blocks.y << "," << blocks.z << " nthread=" << nthread << endl;
+
   AdaptiveFilterKernel_SFPT<<<blocks, nthread, 0, stream>>>(in, out, gai, nor, nloops, processed_first_block, in_sig_stride, in_chan_stride, out_sig_stride, out_chan_stride, pol_stride, ref_pol);
 
   if (verbose)
     cerr << "spip::AdaptiveFilterCUDA::transform_SFPT kernels complete" << endl;
+
   processed_first_block = true;
 }
 
