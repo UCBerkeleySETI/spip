@@ -162,8 +162,7 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
             normalized_factor = (0.999 * previous_factor) + (0.001 * current_factor);
           else
             normalized_factor = current_factor;
-
-          previous_factor = current_factor;
+          previous_factor = normalized_factor;
           processed_first_block = true;
 
           // reset the sum for this block
@@ -238,10 +237,8 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
             // write af to output
             out_ptr[re_idat] = af_real;
             out_ptr[im_idat] = af_imag;
-
             idat++;
           }
-
         }
 
         // save the gain for this pol/chan
@@ -250,6 +247,7 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
 
         // save the normalization for this sig/pol/chan
         norms_buf[norms_offset] = current_factor;
+
       }
     }
   }

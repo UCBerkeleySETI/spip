@@ -114,7 +114,7 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
         normalized_factor = (0.999 * previous_factor) + (0.001 * current_factor);
       else
         normalized_factor = current_factor;
-      previous_factor = current_factor;
+      previous_factor = normalized_factor;
     }
 
     // ensure normalized factor is shared across the block
