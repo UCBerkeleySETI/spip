@@ -38,6 +38,8 @@ namespace spip {
 
       void close_file ();
 
+      void discard_file ();
+
       void write_header ();
 
       uint64_t write_data (uint64_t, uint64_t);

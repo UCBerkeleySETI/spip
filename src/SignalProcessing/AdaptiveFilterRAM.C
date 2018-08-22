@@ -18,10 +18,15 @@ using namespace std;
 spip::AdaptiveFilterRAM::AdaptiveFilterRAM (string dir) : AdaptiveFilter (dir)
 {
   processed_first_block = false;
+  gains_file_write = NULL;
 }
 
 spip::AdaptiveFilterRAM::~AdaptiveFilterRAM ()
 {
+  // ensure the file is closed
+  if (gains_file_write)
+    gains_file_write->close_file();
+
   if (gains)
     delete gains;
   gains = NULL;
@@ -40,11 +45,13 @@ void spip::AdaptiveFilterRAM::configure (spip::Ordering output_order)
   if (!norms)
     norms = new spip::ContainerRAM ();
 
+  spip::AdaptiveFilter::configure (output_order);
+
   int64_t gains_size = nchan * out_npol * ndim * sizeof(float);
+
   gains_file_write = dynamic_cast<spip::ContainerFileWrite *>(gains);
   gains_file_write->set_file_length_bytes (gains_size);
-
-  spip::AdaptiveFilter::configure (output_order);
+  gains_file_write->process_header ();  
 }
 
 //! no special action required
@@ -256,5 +263,7 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
 void spip::AdaptiveFilterRAM::write_gains ()
 {
   // write the current values of the gains (for each polarisation and channel) to file
+  if (verbose)
+    cerr << "spip::AdaptiveFilterRAM::write_gains" << endl;
   gains_file_write->write();
 }

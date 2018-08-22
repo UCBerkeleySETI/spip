@@ -36,14 +36,24 @@ spip::ContainerFileWrite::ContainerFileWrite (std::string _dir)
 
 spip::ContainerFileWrite::~ContainerFileWrite ()
 {
-  // if the file is still open, write out the remainder
+  // if the file is still open
   if (fd > -1)
-    close_file();
+  {
+    // if the required amount of data has been written to the file, close it
+    if (idat_written >= ndat_per_file)
+      close_file();
+    else
+      discard_file();
+  }
 }
 
 //! write data stored in the buffer to disk
 void spip::ContainerFileWrite::process_header ()
 {
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerFileWrite::process_header desired_secs=" << desired_secs 
+         << " desired_bytes=" << desired_bytes << " file_size=" << file_size << endl;
+
   uint64_t bytes;
   if (desired_secs >= 0)
   {
@@ -63,7 +73,7 @@ void spip::ContainerFileWrite::process_header ()
   }
 
   ndat_per_file = (bytes * 8) / bits_per_sample;
-  if (verbose)
+  if (spip::Container::verbose)
     cerr << "spip::ContainerFileWrite::process_header desired_secs=" << desired_secs 
          << " bytes= " << bytes << " bits_per_sample=" << bits_per_sample 
          << " ndat_per_file=" << ndat_per_file << endl;
@@ -234,8 +244,21 @@ void spip::ContainerFileWrite::open_file()
 
 void spip::ContainerFileWrite::close_file()
 {
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerFileWrite::close_file" << endl;
   spip::ContainerFile::close_file();
 
   // rename temporary file to actual filename
   rename (temporary_filename.c_str(), filename.c_str());
 }
+
+void spip::ContainerFileWrite::discard_file()
+{
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerFileWrite::discard_file" << endl;
+  spip::ContainerFile::close_file();
+
+  // delete the temporary file
+  remove(temporary_filename.c_str());
+}
+
