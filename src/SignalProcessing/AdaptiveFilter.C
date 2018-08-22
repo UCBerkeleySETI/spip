@@ -165,7 +165,13 @@ void spip::AdaptiveFilter::transformation ()
   if (ndat == 0)
   {
     cerr << "spip::AdaptiveFilter::transformation ndat==0, ignoring" << endl;
+    gains->set_ndat (0);
     return;
+  }
+  else
+  {
+    gains->set_ndat(1);
+    gains->resize();
   }
 
   // apply data transformation
