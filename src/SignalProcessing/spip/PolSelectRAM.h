@@ -24,6 +24,8 @@ namespace spip {
       
       ~PolSelectRAM ();
 
+      void bypass ();
+
       void transform_TSPF ();
 
       void transform_SFPT ();

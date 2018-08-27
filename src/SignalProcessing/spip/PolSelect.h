@@ -22,7 +22,7 @@ namespace spip {
 
       ~PolSelect ();
 
-      void set_pol_reduction ();
+      void set_pol_reduction (unsigned);
 
       void configure (Ordering output_order);
 
@@ -34,6 +34,8 @@ namespace spip {
       void transformation ();
 
       //! Required data transformations 
+      virtual void bypass () = 0;
+
       virtual void transform_TSPF () = 0;
 
       virtual void transform_SFPT () = 0;

@@ -117,6 +117,7 @@ int main(int argc, char *argv[]) try
 
       case 'v':
         verbose++;
+        spip::Container::verbose = true;
         break;
 
       default:

@@ -23,9 +23,9 @@ spip::PolSelect::~PolSelect ()
 }
 
 //! set the number of polarisations to retain
-void spip::PolSelect::set_pol_reduction ()
+void spip::PolSelect::set_pol_reduction (unsigned delta)
 {
-  delta_npol = 1;
+  delta_npol = delta;
 }
 
 //! configure parameters at the start of a data stream
@@ -112,13 +112,19 @@ void spip::PolSelect::transformation ()
     return;
   }
 
-  // apply data transformation
-  if ((input->get_order() == TSPF) && (output->get_order() == TSPF))
+  // if no polarisations are to be removed
+  if (delta_npol == 0)
+  {
+    bypass ();
+  } 
+  // TSPF transformation
+  else if ((input->get_order() == TSPF) && (output->get_order() == TSPF))
   {
     if (verbose)
       cerr << "spip::PolSelect::transformation transform_TSPF()" << endl;
     transform_TSPF ();
   }
+  // SFPT transformation
   else if ((input->get_order() == SFPT) && (output->get_order() == SFPT))
   {
     transform_SFPT ();

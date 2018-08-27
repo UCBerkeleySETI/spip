@@ -50,6 +50,24 @@ spip::PolSelectCUDA::~PolSelectCUDA ()
 {
 }
 
+void spip::PolSelectCUDA::bypass ()
+{ 
+  if (verbose)
+    cerr << "spip::PolSelectCUDA::bypass()" << endl;
+  
+  size_t nbytes = input->get_size();
+  void * in = (void *) input->get_buffer();
+  void * out = (void *) output->get_buffer();
+  
+  if (verbose)
+    cerr << "spip::PolSelectCUDA::bypass cudaMemcpyAsync(" << (void *) out << ", "
+         << (void *) in << "," << nbytes << " cudaMemcpyDeviceToDevice)" << endl;
+  cudaError_t err = cudaMemcpyAsync (out, in, nbytes, cudaMemcpyDeviceToDevice, stream);
+  if (err != cudaSuccess)
+    throw Error(InvalidState, "spip::PolSelectCUDA::bypass", cudaGetErrorString (err));
+}
+
+
 // convert to antenna minor order
 void spip::PolSelectCUDA::transform_TSPF()
 {

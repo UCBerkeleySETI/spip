@@ -23,6 +23,18 @@ spip::PolSelectRAM::~PolSelectRAM ()
 {
 }
 
+void spip::PolSelectRAM::bypass ()
+{
+  if (verbose)
+    cerr << "spip::PolSelectRAM::bypass()" << endl;
+
+  size_t nbytes = input->get_size();
+  void * in = (void *) input->get_buffer();
+  void * out = (void *) output->get_buffer();
+
+  memcpy (out, in, nbytes);
+}
+
 void spip::PolSelectRAM::transform_TSPF()
 {
   if (verbose)

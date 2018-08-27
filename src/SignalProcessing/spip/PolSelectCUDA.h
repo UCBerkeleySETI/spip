@@ -25,6 +25,8 @@ namespace spip {
       
       ~PolSelectCUDA ();
 
+      void bypass ();
+
       void transform_TSPF ();
 
       void transform_SFPT ();

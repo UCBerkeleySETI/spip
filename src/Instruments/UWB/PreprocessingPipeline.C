@@ -203,7 +203,7 @@ void spip::PreprocessingPipeline::configure (spip::UnpackFloat * unpacker)
     // Pol Select 
     pol_sel = new spip::PolSelectRAM();
     if (ref_pol > 0)
-      pol_sel->set_pol_reduction ();
+      pol_sel->set_pol_reduction (1);
     pol_sel->set_input (unpacked);
     pol_sel->set_output (output);
     pol_sel->set_verbose (verbose);
@@ -392,11 +392,11 @@ void spip::PreprocessingPipeline::configure_cuda (spip::UnpackFloat * unpacker)
   if (!filter)
   {
     if (verbose)
-      cerr << "spip::PreprocessingPipeline::configure_cuda configuring PolSelectCUDA" << endl;
+      cerr << "spip::PreprocessingPipeline::configure_cuda configuring PolSelectCUDA ref_pol=" << ref_pol << endl;
     // Poln Select
     pol_sel = new spip::PolSelectCUDA(stream);
     if (ref_pol > 0)
-      pol_sel->set_pol_reduction ();
+      pol_sel->set_pol_reduction (1);
     pol_sel->set_input (unpacked);
     pol_sel->set_output (d_output);
     pol_sel->set_verbose (verbose);
