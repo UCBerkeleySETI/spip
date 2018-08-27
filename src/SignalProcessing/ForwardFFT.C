@@ -66,7 +66,8 @@ void spip::ForwardFFT::configure (spip::Ordering output_order)
   int dsb = input->get_dual_sideband ();
 
   if (verbose)
-    cerr << "spip::ForwardFFT::configure ndat=" << ndat << " nfft=" << nfft << endl;
+    cerr << "spip::ForwardFFT::configure ndat=" << ndat << " nfft=" << nfft 
+         << " nchan=" << nchan << " npol=" << npol << " dsb=" << dsb << endl;
 
   if (ndim != 2)
     throw invalid_argument ("ForwardFFT::configure input ndim != 2");

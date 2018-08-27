@@ -41,6 +41,12 @@ spip::Container::~Container ()
 
 void spip::Container::read_header()
 {
+  if (header.get ("HDR_SIZE", "%u", &hdr_size) != 1)
+    throw invalid_argument ("HDR_SIZE did not exist in header");
+
+  if (header.get ("HDR_VERSION", "%f", &hdr_version) != 1)
+    throw invalid_argument ("HDR_VERSION did not exist in header");
+
   if (header.get ("NANT", "%u", &nsignal) != 1)
   {
     if (spip::Container::verbose)
@@ -180,6 +186,12 @@ void spip::Container::write_header ()
 {
   typedef std::numeric_limits< double > dbl;
   cerr.precision(dbl::max_digits10);
+
+  if (header.set ("HDR_SIZE", "%u", hdr_size) < 0)
+    throw invalid_argument ("Could not write HDR_SIZE to header");
+
+  if (header.set ("HDR_VERSION", "%d", hdr_version) < 0)
+    throw invalid_argument ("Could not write HDR_VERSION to header");
 
   if (header.set ("NANT", "%u", nsignal) < 0)
     throw invalid_argument ("Could not write NANT to header");
@@ -344,6 +356,24 @@ double spip::Container::calculate_bytes_per_second ()
 #endif
   return bytes_ps;
 }
+
+double spip::Container::calculate_bytes_per_second () const
+{
+  typedef std::numeric_limits< double > dbl;
+  cerr.precision(dbl::max_digits10);
+  double nbit_per_samp = double(calculate_nbits_per_sample());
+  double nsamp_per_second = double(1000000) / tsamp;
+  double nbit_per_second = nbit_per_samp * nsamp_per_second;
+  double bytes_ps = nbit_per_second / 8.0;
+#ifdef _DEBUG
+  cerr << "spip::Container::calculate_bytes_per_second nbit_per_samp=" << nbit_per_samp << endl;
+  cerr << "spip::Container::calculate_bytes_per_second tsamp=" << tsamp << "us nsamp_per_second=" << nsamp_per_second << endl;
+  cerr << "spip::Container::calculate_bytes_per_second nbit_per_second=" << nbit_per_second<< endl;
+  cerr << "spip::Container::calculate_bytes_per_second bytes_per_second= " << bytes_ps << endl;
+#endif
+  return bytes_ps;
+}
+
 
 void spip::Container::recalculate ()
 {
