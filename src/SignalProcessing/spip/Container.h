@@ -91,7 +91,10 @@ namespace spip {
       int64_t get_file_size () const { return file_size; } 
 
       unsigned calculate_nbits_per_sample () { return unsigned (nsignal * nchan * nbit * npol * nbin * ndim); };
+      unsigned calculate_nbits_per_sample () const { return unsigned (nsignal * nchan * nbit * npol * nbin * ndim); };
+
       double calculate_bytes_per_second ();
+      double calculate_bytes_per_second () const;
 
       size_t get_size () { return size; };
       size_t get_size () const { return size; };
@@ -194,6 +197,12 @@ namespace spip {
 
       //! The metadata that describes the buffer
       AsciiHeader header;
+    
+      //! Size in bytes of the char header
+      unsigned hdr_size;
+
+      //! version number of the header [1.0 only supported]
+      float hdr_version;
 
       //! Size of the data buffer (in bytes)
       uint64_t size;

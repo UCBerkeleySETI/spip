@@ -33,13 +33,13 @@ namespace spip {
 
     protected:
 
+      //! stream upon which memory access should be used 
+      cudaStream_t stream;
+
     private:
 
       //! device upon which memory is to be allocated
       int device;
-
-      //! stream upon which memory access should be used 
-      cudaStream_t stream;
   };
 
   class ContainerCUDAPinned : public Container
