@@ -33,7 +33,7 @@ void spip::ContainerRAMFileWrite::process_header ()
 //! write data stored in the buffer to disk
 void spip::ContainerRAMFileWrite::write (uint64_t ndat)
 {
-  if (spip::File::verbose)
+  if (spip::Container::verbose)
     cerr << "spip::FileWrite::write ndat=" << ndat << endl;
 
   for (uint64_t idat=0; idat<ndat; idat++)
@@ -42,7 +42,7 @@ void spip::ContainerRAMFileWrite::write (uint64_t ndat)
     if (fd == -1)
     {
       std::string utc_start_str = utc_start->get_gmtime();
-      if (spip::File::verbose)
+      if (spip::Container::verbose)
         cerr << "spip::FileWrite::write_ndat open_file (" << utc_start 
              << ", " << obs_offset << ") for idat=" << idat << endl;
       spip::FileWrite::open_file (utc_start_str.c_str(), obs_offset);
@@ -71,7 +71,7 @@ void spip::ContainerRAMFileWrite::write_header ()
                  "failed to write OBS_OFFSET to header");
 
   file_size = (ndat_per_file * bits_per_sample) / 8;
-  if (spip::File::verbose)
+  if (spip::Container::verbose)
     cerr << "spip::FileWrite::write_header ndat_per_file=" << ndat_per_file 
          << " file_size=" << file_size << endl;
   if (header.set ("FILE_SIZE", "%lu", file_size) < 0)

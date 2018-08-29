@@ -59,10 +59,11 @@ void spip::FileWrite::configure (const spip::Container * input)
   unsigned bits_per_sample = input->calculate_nbits_per_sample ();
   int64_t file_size = input->get_file_size ();
 
-  if (spip::File::verbose)
+#ifdef _DEBUG
     cerr << "spip::FileWrite::configure desired_secs=" << desired_secs 
          << " desired_bytes=" << desired_bytes << " bytes_per_second=" 
          << bytes_per_second << " file_size=" << file_size << endl;
+#endif
 
   uint64_t bytes;
   if (desired_secs >= 0)
@@ -83,10 +84,11 @@ void spip::FileWrite::configure (const spip::Container * input)
   }
 
   ndat_per_file = (bytes * 8) / bits_per_sample;
-  if (spip::File::verbose)
-    cerr << "spip::FileWrite::configure desired_secs=" << desired_secs 
-         << " bytes= " << bytes << " bits_per_sample=" << bits_per_sample 
-         << " ndat_per_file=" << ndat_per_file << endl;
+#ifdef _DEBUG
+  cerr << "spip::FileWrite::configure desired_secs=" << desired_secs 
+       << " bytes= " << bytes << " bits_per_sample=" << bits_per_sample 
+       << " ndat_per_file=" << ndat_per_file << endl;
+#endif
 
   // number of dat processed from the current buffer
   idat_written = 0;
@@ -106,25 +108,29 @@ void spip::FileWrite::set_filename_suffix (std::string suffix)
 void spip::FileWrite::set_file_length_bytes (int64_t bytes)
 {
   desired_bytes = bytes;
-  if (spip::File::verbose)
-    cerr << "spip::FileWrite::set_file_length_bytes bytes=" << bytes << endl;
+#ifdef _DEBUG
+  cerr << "spip::FileWrite::set_file_length_bytes bytes=" << bytes << endl;
+#endif
 }
 
 void spip::FileWrite::set_file_length_seconds (float secs)
 {
   desired_secs = secs;
-  if (spip::File::verbose)
-    cerr << "spip::FileWrite::set_file_length_seconds desired_secs=" << secs << endl;
+#ifdef _DEBUG
+  cerr << "spip::FileWrite::set_file_length_seconds desired_secs=" << secs << endl;
+#endif
 }
 
 void spip::FileWrite::resize_hdr_buf (unsigned required_size)
 {
-  if (spip::File::verbose)
-    cerr << "spip::FileWrite::resize_hdr_buf required_size=" << required_size << endl;
+#ifdef _DEBUG
+  cerr << "spip::FileWrite::resize_hdr_buf required_size=" << required_size << endl;
+#endif
   if (required_size > hdr_bufsz)
   {
-    if (spip::File::verbose)
-      cerr << "spip::FileWrite::resize_hdr_buf resizing from " << hdr_bufsz << endl;
+#ifdef _DEBUG
+    cerr << "spip::FileWrite::resize_hdr_buf resizing from " << hdr_bufsz << endl;
+#endif
     if (hdr_buf) 
       free (hdr_buf);
     hdr_buf = (char *) malloc (required_size);
@@ -168,8 +174,9 @@ void spip::FileWrite::open_file (const char * utc_start_str, uint64_t obs_offset
               utc_start_str, obs_offset, file_number, filename_suffix.c_str());
     filename = dir + "/" + string(filename_buf);
     temporary_filename = dir + "/." + string(filename_buf) + ".tmp";
-    if (verbose)
-      cerr << "Creating " << filename_buf << endl;
+#ifdef _DEBUG
+    cerr << "Creating " << filename_buf << endl;
+#endif
   }
   else
   {
@@ -193,8 +200,9 @@ uint64_t spip::FileWrite::write_data_bytes (int fd, void * data, uint64_t bytes_
 
 void spip::FileWrite::close_file()
 {
-  if (spip::File::verbose)
-    cerr << "spip::FileWrite::close_file" << endl;
+#ifdef _DEBUG
+  cerr << "spip::FileWrite::close_file" << endl;
+#endif
   spip::File::close_file();
 
   // rename temporary file to actual filename
@@ -203,8 +211,9 @@ void spip::FileWrite::close_file()
 
 void spip::FileWrite::discard_file()
 {
-  if (spip::File::verbose)
-    cerr << "spip::FileWrite::discard_file" << endl;
+#ifdef _DEBUG
+  cerr << "spip::FileWrite::discard_file" << endl;
+#endif
   spip::File::close_file();
 
   // delete the temporary file

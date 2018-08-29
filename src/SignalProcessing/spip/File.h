@@ -18,8 +18,6 @@ namespace spip {
   {
     public:
 
-      static bool verbose;
-
       //! 
       File ();
 
@@ -38,7 +36,7 @@ namespace spip {
       int fd;
 
     private:
-
+  
   };
 }
 

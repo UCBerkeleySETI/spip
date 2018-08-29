@@ -13,6 +13,7 @@
 
 #include "spip/AdaptiveFilter.h"
 #include "spip/ContainerCUDA.h"
+#include "spip/ContainerCUDAFileWrite.h"
 #include <cuda_runtime.h>
 
 namespace spip {
@@ -40,6 +41,8 @@ namespace spip {
       cudaStream_t stream;
 
       bool processed_first_block;
+
+      ContainerCUDAFileWrite * gains_file_write;
   };
 }
 

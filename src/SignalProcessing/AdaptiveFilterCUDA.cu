@@ -179,23 +179,41 @@ spip::AdaptiveFilterCUDA::AdaptiveFilterCUDA (cudaStream_t _stream, string dir) 
 {
   stream = _stream;
   processed_first_block = false;
+  gains_file_write = NULL;
 }
 
 spip::AdaptiveFilterCUDA::~AdaptiveFilterCUDA ()
 {
+  // ensure the file is closed
+  if (gains_file_write)
+    gains_file_write->close_file();
+
+  if (gains)
+    delete gains;
+  gains = NULL;
+
+  if (norms)
+    delete norms;
+  norms = NULL;
 }
 
 // configure the pipeline prior to runtime
 void spip::AdaptiveFilterCUDA::configure (spip::Ordering output_order)
 {
-  // TODO implement a ContainerCUDADeviceFileWrite class [Nuer]
+  std::string output_dir(".");
   if (!gains)
-    gains = new spip::ContainerCUDADevice ();
+    gains = new spip::ContainerCUDAFileWrite(output_dir);
 
   if (!norms)
     norms = new spip::ContainerCUDADevice ();
 
   spip::AdaptiveFilter::configure (output_order);
+
+  int64_t gains_size = nchan * out_npol * ndim * sizeof(float);
+
+  gains_file_write = dynamic_cast<spip::ContainerCUDAFileWrite *>(gains);
+  gains_file_write->set_file_length_bytes (gains_size);
+  gains_file_write->process_header ();
 }
 
 // convert to antenna minor order
