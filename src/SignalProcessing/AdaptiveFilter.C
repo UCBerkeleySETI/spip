@@ -99,6 +99,7 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   // update the parameters that this transformation will affect
   gains->set_nbit (32);
   gains->set_ndim (2);
+  gains->set_tsamp (tsamp * ndat);
   gains->set_npol (out_npol);
   gains->set_order (spip::Ordering::TSPF);
 
@@ -117,6 +118,7 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   norms->set_nbit (32);
   norms->set_ndim (1);
   norms->set_npol (out_npol);
+  gains->set_tsamp (tsamp * ndat);
   norms->set_order (spip::Ordering::TSPF);
 
   norms->write_header();
