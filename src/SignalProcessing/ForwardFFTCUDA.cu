@@ -26,6 +26,18 @@ spip::ForwardFFTCUDA::~ForwardFFTCUDA ()
   plan = 0;
 }
 
+// configure the pipeline prior to runtime
+void spip::ForwardFFTCUDA::configure (spip::Ordering output_order)
+{
+  if (nfft == 0)
+    throw runtime_error ("ForwardFFTCUDA::configure nfft not set");
+
+  spip::ForwardFFT::configure (output_order);
+
+  // build the FFT plan, with ordering SFPT -> TFPS
+  configure_plan();
+}
+
 void spip::ForwardFFTCUDA::configure_plan ()
 {
   if (plan)
@@ -38,7 +50,9 @@ void spip::ForwardFFTCUDA::configure_plan ()
                       "cufftCreate(plan)");
 
   // disable auto-allocation
-  cufftSetAutoAllocation(plan, 0);
+  result = cufftSetAutoAllocation(plan, 0);
+  if (result != CUFFT_SUCCESS)
+    throw CUFFTError (result, "ForwardFFTCUDA::prepare_plan", "cufftSetAutoAllocation");
 
   // configure the dimensions for the plan
   configure_plan_dimensions();
@@ -66,11 +80,6 @@ void spip::ForwardFFTCUDA::configure_plan ()
 
   if (verbose)
     cerr << "ForwardFFTCUDA::configure_plan work_area_size=" << work_area_size << endl;
-  auto_allocate = work_area_size > 0;
-
-  if (verbose)
-    cerr << "ForwardFFTCUDA::configure_plan auto_allocate=" << auto_allocate << endl;
-
   if (work_area_size > 0)
   {
     cudaError_t error;

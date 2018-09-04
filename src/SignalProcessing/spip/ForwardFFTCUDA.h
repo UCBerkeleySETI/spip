@@ -26,6 +26,8 @@ namespace spip {
       
       ~ForwardFFTCUDA ();
       
+      void configure (Ordering);
+
       void configure_plan ();
       
       void fft_shift ();
