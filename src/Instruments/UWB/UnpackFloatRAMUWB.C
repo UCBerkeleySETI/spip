@@ -16,6 +16,7 @@ using namespace std;
 
 spip::UnpackFloatRAMUWB::UnpackFloatRAMUWB ()
 {
+  scale = 1e-4;
 }
 
 spip::UnpackFloatRAMUWB::~UnpackFloatRAMUWB ()
@@ -42,7 +43,8 @@ void spip::UnpackFloatRAMUWB::prepare ()
 void spip::UnpackFloatRAMUWB::transform_custom_to_SFPT ()
 {
   if (verbose)
-    cerr << "spip::UnpackFloatRAMUWB::transform_custom_to_SFPT" << endl;
+    cerr << "spip::UnpackFloatRAMUWB::transform_custom_to_SFPT offset="
+         << offset << " scale=" << scale << endl;
 
   // in/out
   float * out  = (float *) output->get_buffer();

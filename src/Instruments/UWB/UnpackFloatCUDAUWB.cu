@@ -16,6 +16,7 @@ using namespace std;
 
 spip::UnpackFloatCUDAUWB::UnpackFloatCUDAUWB ()
 {
+  scale = 1e-4;
 }
 
 spip::UnpackFloatCUDAUWB::~UnpackFloatCUDAUWB ()
@@ -177,7 +178,8 @@ __global__ void unpack_uwb_1pol_2dim_2val (const __restrict__ int32_t* input, fl
 void spip::UnpackFloatCUDAUWB::transform_custom_to_SFPT ()
 {
   if (verbose)
-    cerr << "spip::UnpackFloatCUDAUWB::transform_custom_to_SFPT" << endl;
+    cerr << "spip::UnpackFloatCUDAUWB::transform_custom_to_SFPT offset=" 
+         << offset << " scale=" << scale << endl;
 
   // in/out
   float2 * out = (float2 *) output->get_buffer();
