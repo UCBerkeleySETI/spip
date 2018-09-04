@@ -101,6 +101,7 @@ void spip::AdaptiveFilterPipeline::configure (spip::UnpackFloat * unpacker)
   fwd_fft->set_input (unpacked);
   fwd_fft->set_output (channelised);
   fwd_fft->set_nfft (nfft);
+  fwd_fft->set_normalization (false);
   fwd_fft->set_verbose (verbose);
 
   // cleaned data
@@ -130,6 +131,7 @@ void spip::AdaptiveFilterPipeline::configure (spip::UnpackFloat * unpacker)
   bwd_fft->set_input (cleaned);
   bwd_fft->set_output (output);
   bwd_fft->set_nfft (nfft);
+  bwd_fft->set_normalization (false);
   bwd_fft->set_verbose (verbose);
 }
 
@@ -204,6 +206,7 @@ void spip::AdaptiveFilterPipeline::configure_cuda (spip::UnpackFloat * unpacker)
   fwd_fft = new spip::ForwardFFTCUDA(stream);
   fwd_fft->set_input (unpacked);
   fwd_fft->set_output (channelised);
+  fwd_fft->set_normalization (false);
   fwd_fft->set_nfft (nfft);
   fwd_fft->set_verbose (verbose);
 
@@ -229,6 +232,7 @@ void spip::AdaptiveFilterPipeline::configure_cuda (spip::UnpackFloat * unpacker)
   bwd_fft = new spip::BackwardFFTCUDA(stream);
   bwd_fft->set_input (cleaned);
   bwd_fft->set_output (d_output);
+  bwd_fft->set_normalization (false);
   bwd_fft->set_nfft (nfft);
   bwd_fft->set_verbose (verbose);
 
