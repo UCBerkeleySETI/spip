@@ -12,7 +12,7 @@
 #include "config.h"
 
 #include "spip/AdaptiveFilter.h"
-#include "spip/ContainerFileWrite.h"
+#include "spip/ContainerRAMFileWrite.h"
 
 #include <string.h>
 
@@ -40,6 +40,10 @@ namespace spip {
 
       void write_gains ();
 
+      void write_dirty ();
+
+      void write_cleaned ();
+
     protected:
     
     private:
@@ -50,7 +54,11 @@ namespace spip {
 
       size_t buffer_size;
 
-      ContainerFileWrite * gains_file_write;
+      ContainerRAMFileWrite * gains_file_write;
+
+      ContainerRAMFileWrite * dirty_file_write;
+
+      ContainerRAMFileWrite * cleaned_file_write;
 
       float previous_factor;
 

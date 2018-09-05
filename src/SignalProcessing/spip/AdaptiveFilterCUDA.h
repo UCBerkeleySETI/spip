@@ -34,6 +34,10 @@ namespace spip {
 
       void write_gains ();
 
+      void write_dirty ();
+
+      void write_cleaned ();
+
     protected:
     
     private:
@@ -43,6 +47,10 @@ namespace spip {
       bool processed_first_block;
 
       ContainerCUDAFileWrite * gains_file_write;
+
+      ContainerCUDAFileWrite * dirty_file_write;
+
+      ContainerCUDAFileWrite * cleaned_file_write;
   };
 }
 

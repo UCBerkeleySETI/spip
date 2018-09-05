@@ -19,6 +19,8 @@ spip::AdaptiveFilterRAM::AdaptiveFilterRAM (string dir) : AdaptiveFilter (dir)
 {
   processed_first_block = false;
   gains_file_write = NULL;
+  dirty_file_write = NULL;
+  cleaned_file_write = NULL;
 }
 
 spip::AdaptiveFilterRAM::~AdaptiveFilterRAM ()
@@ -27,9 +29,23 @@ spip::AdaptiveFilterRAM::~AdaptiveFilterRAM ()
   if (gains_file_write)
     gains_file_write->close_file();
 
+  if (dirty_file_write)
+    dirty_file_write->close_file();
+
+  if (cleaned_file_write)
+    cleaned_file_write->close_file();
+
   if (gains)
     delete gains;
   gains = NULL;
+ 
+  if (dirty)
+    delete dirty;
+  dirty = NULL;
+
+  if (cleaned)
+    delete cleaned;
+  cleaned = NULL;
 
   if (norms)
     delete norms;
@@ -40,7 +56,13 @@ spip::AdaptiveFilterRAM::~AdaptiveFilterRAM ()
 void spip::AdaptiveFilterRAM::configure (spip::Ordering output_order)
 {
   if (!gains)
-    gains = new spip::ContainerFileWrite (output_dir);
+    gains = new spip::ContainerRAMFileWrite (output_dir);
+
+  if (!dirty)
+    dirty = new spip::ContainerRAMFileWrite (output_dir);
+
+  if (!cleaned)
+    cleaned = new spip::ContainerRAMFileWrite (output_dir);
 
   if (!norms)
     norms = new spip::ContainerRAM ();
@@ -48,10 +70,23 @@ void spip::AdaptiveFilterRAM::configure (spip::Ordering output_order)
   spip::AdaptiveFilter::configure (output_order);
 
   int64_t gains_size = nchan * out_npol * ndim * sizeof(float);
+  int64_t dirty_size = nchan * out_npol * sizeof(float);
+  int64_t cleaned_size = nchan * out_npol * sizeof(float);
 
-  gains_file_write = dynamic_cast<spip::ContainerFileWrite *>(gains);
+  gains_file_write = dynamic_cast<spip::ContainerRAMFileWrite *>(gains);
   gains_file_write->set_file_length_bytes (gains_size);
-  gains_file_write->process_header ();  
+  gains_file_write->process_header ();
+  gains_file_write->set_filename_suffix ("gains");
+
+  dirty_file_write = dynamic_cast<spip::ContainerRAMFileWrite *>(dirty);
+  dirty_file_write->set_file_length_bytes (dirty_size);
+  dirty_file_write->process_header ();
+  dirty_file_write->set_filename_suffix ("dirty");
+
+  cleaned_file_write = dynamic_cast<spip::ContainerRAMFileWrite *>(cleaned);
+  cleaned_file_write->set_file_length_bytes (cleaned_size);
+  cleaned_file_write->process_header ();
+  cleaned_file_write->set_filename_suffix ("cleaned");
 }
 
 //! no special action required
@@ -76,6 +111,8 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
   float * in = (float *) input->get_buffer();
   float * out = (float *) output->get_buffer();
   float * gains_buf = (float *) gains->get_buffer();
+  float * dirty_buf = (float *) dirty->get_buffer();
+  float * cleaned_buf = (float *) cleaned->get_buffer();
   float * norms_buf = (float *) norms->get_buffer();
 
   float re, im;
@@ -84,6 +121,7 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
   float ast_real, ast_imag, ref_real, ref_imag;
 
   float ast_sum, ref_sum;
+  float cleaned_sum, dirty_power, cleaned_power;
   float normalized_power, current_factor, normalized_factor;
   uint64_t idat, nval;
 
@@ -123,6 +161,12 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
         // gains are stored in TSPF [ndat==1]
         const unsigned gain_ndim = 2;
         const uint64_t gain_offset = (isig * out_npol * nchan * gain_ndim) + (ipol * nchan * gain_ndim) + (ichan * gain_ndim);
+        
+        // dirty are stored in TSPF
+        const uint64_t dirty_offset = (isig * out_npol * nchan) + (ipol * nchan) + ichan;
+
+        // cleaned are stored in TSPF
+        const uint64_t cleaned_offset = (isig * out_npol * nchan) + (ipol * nchan) + ichan;
 
         // read previous gain values
         g_real = gains_buf[gain_offset + 0];
@@ -143,6 +187,7 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
           ast_sum = 0;
           ref_sum = 0;
           nval = 0;
+          cleaned_sum = 0;
 
           idat = (iblock * filter_update_time);
 
@@ -187,6 +232,9 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
 
             ast_real = in_ptr[re_idat];
             ast_imag = in_ptr[im_idat];
+
+	    if (iblock == 0 && ichan == 0 && ival < 10)
+	     cerr << ival << " " << ast_real << " " << ast_imag << endl;
 
             ref_real = ref_ptr[re_idat];
             ref_imag = ref_ptr[im_idat];
@@ -244,13 +292,27 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
             // write af to output
             out_ptr[re_idat] = af_real;
             out_ptr[im_idat] = af_imag;
+
+            // integrate one block cleaned
+            cleaned_sum += af_real * af_real + af_imag * af_imag;
+
             idat++;
           }
+
+          // average power
+          dirty_power = ast_sum / nval;
+          cleaned_power = cleaned_sum / nval;
         }
 
         // save the gain for this pol/chan
         gains_buf[gain_offset + 0] = g_real;
         gains_buf[gain_offset + 1] = g_imag;
+
+        // save the dirty for this pol/chan
+        dirty_buf[dirty_offset] = dirty_power;
+
+        // save the cleaned for this pol/chan
+        cleaned_buf[cleaned_offset] = cleaned_power;
 
         // save the normalization for this sig/pol/chan
         norms_buf[norms_offset] = current_factor;
@@ -260,10 +322,38 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
   }
 }
 
+// write gains
 void spip::AdaptiveFilterRAM::write_gains ()
 {
   // write the current values of the gains (for each polarisation and channel) to file
+  uint64_t gains_to_write = (ndat > 0);
+
+  spip::Container::verbose = true;
+
   if (verbose)
-    cerr << "spip::AdaptiveFilterRAM::write_gains" << endl;
-  gains_file_write->write();
+    cerr << "spip::AdaptiveFilterRAM::write_gains(" << gains_to_write << ")" << endl;
+  gains_file_write->write(gains_to_write);
+  spip::Container::verbose = false;
+}
+
+// write dirty
+void spip::AdaptiveFilterRAM::write_dirty ()
+{
+  // write the current values of the dirty (for each polarisation and channel) to file
+  uint64_t dirty_to_write = (ndat > 0);  
+
+  if (verbose)
+    cerr << "spip::AdaptiveFilterRAM::write_dirty" << endl;
+  dirty_file_write->write(dirty_to_write);
+}
+
+// write cleaned
+void spip::AdaptiveFilterRAM::write_cleaned ()
+{
+  // write the current values of the cleaned (for each polarisation and channel) to file
+  uint64_t cleaned_to_write = (ndat > 0);
+
+  if (verbose)
+    cerr << "spip::AdaptiveFilterRAM::write_cleaned" << endl;
+  cleaned_file_write->write(cleaned_to_write);
 }
