@@ -52,7 +52,8 @@ cuFloatComplex blockReduceSumFC(cuFloatComplex val)
 
 
 // SFPT implementation of adaptive filter algorithm
-__global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex * out, cuFloatComplex * gains, float * norms,
+__global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex * out, cuFloatComplex * gains, 
+                                           float * dirty, float * cleaned, float * norms,
                                            uint64_t nloops, bool processed_first_block,
                                            uint64_t in_sig_stride, uint64_t in_chan_stride, 
                                            uint64_t out_sig_stride, uint64_t out_chan_stride,
@@ -61,6 +62,9 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
   // there is one complex gain per block
   __shared__ cuFloatComplex g;
   float previous_factor;
+  cuFloatComplex cleaned_power_sum;
+  
+  cuFloatComplex pa, pr;
 
   // Block X = Signal
   // Block Y = Channel
@@ -99,8 +103,8 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
     cuFloatComplex a = in[idx];
 
     ///////////////////////////////////
-    cuFloatComplex pa = cuCmulf(a, cuConjf(a));
-    cuFloatComplex pr = cuCmulf(r, cuConjf(r));
+    pa = cuCmulf(a, cuConjf(a));
+    pr = cuCmulf(r, cuConjf(r));
 
     pa = blockReduceSumFC(pa);
     pr = blockReduceSumFC(pr);
@@ -143,7 +147,7 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
       corr.y /= blockDim.x;
 
       // compute new gain
-      const float epsilon = 0.4;
+      const float epsilon = 0.1;
       g.x = (corr.x * epsilon) + g.x;
       g.y = (corr.y * epsilon) + g.y;
     }
@@ -159,6 +163,10 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
 
     // write the output global memory
     out[odx] = af;
+
+    // cleaned power integration
+    cleaned_power_sum = cuCmulf(af, cuConjf(af));
+    cleaned_power_sum = blockReduceSumFC(cleaned_power_sum);
   
     // increment to the next filter
     idx += blockDim.x;
@@ -170,6 +178,8 @@ __global__ void AdaptiveFilterKernel_SFPT (cuFloatComplex * in, cuFloatComplex *
   if (threadIdx.x == 0)
   {
     gains[isigchanpol] = g;
+    dirty[isigchanpol] = pa.x / blockDim.x;
+    cleaned[isigchanpol] = cleaned_power_sum.x / blockDim.x;
     norms[isigchanpol] = previous_factor;
   }
 }
@@ -180,6 +190,8 @@ spip::AdaptiveFilterCUDA::AdaptiveFilterCUDA (cudaStream_t _stream, string dir) 
   stream = _stream;
   processed_first_block = false;
   gains_file_write = NULL;
+  dirty_file_write = NULL;
+  cleaned_file_write = NULL;
 }
 
 spip::AdaptiveFilterCUDA::~AdaptiveFilterCUDA ()
@@ -188,9 +200,23 @@ spip::AdaptiveFilterCUDA::~AdaptiveFilterCUDA ()
   if (gains_file_write)
     gains_file_write->close_file();
 
+  if (dirty_file_write)
+    dirty_file_write->close_file();
+
+  if (cleaned_file_write)
+    cleaned_file_write->close_file();
+
   if (gains)
     delete gains;
   gains = NULL;
+
+  if (dirty)
+    delete dirty;
+  dirty = NULL;
+
+  if (cleaned)
+    delete cleaned;
+  cleaned = NULL;
 
   if (norms)
     delete norms;
@@ -204,16 +230,35 @@ void spip::AdaptiveFilterCUDA::configure (spip::Ordering output_order)
   if (!gains)
     gains = new spip::ContainerCUDAFileWrite(output_dir);
 
+  if (!dirty)
+    dirty = new spip::ContainerCUDAFileWrite(output_dir);
+
+  if (!cleaned)
+    cleaned = new spip::ContainerCUDAFileWrite(output_dir);
+
   if (!norms)
     norms = new spip::ContainerCUDADevice ();
 
   spip::AdaptiveFilter::configure (output_order);
 
   int64_t gains_size = nchan * out_npol * ndim * sizeof(float);
+  int64_t dirty_size = nchan * out_npol * sizeof(float);
+  int64_t cleaned_size = nchan * out_npol * sizeof(float);
 
   gains_file_write = dynamic_cast<spip::ContainerCUDAFileWrite *>(gains);
   gains_file_write->set_file_length_bytes (gains_size);
   gains_file_write->process_header ();
+  gains_file_write->set_filename_suffix ("gains");
+
+  dirty_file_write = dynamic_cast<spip::ContainerCUDAFileWrite *>(dirty);
+  dirty_file_write->set_file_length_bytes (dirty_size);
+  dirty_file_write->process_header ();
+  dirty_file_write->set_filename_suffix ("dirty");
+
+  cleaned_file_write = dynamic_cast<spip::ContainerCUDAFileWrite *>(cleaned);
+  cleaned_file_write->set_file_length_bytes (cleaned_size);
+  cleaned_file_write->process_header ();
+  cleaned_file_write->set_filename_suffix ("cleaned");
 }
 
 // convert to antenna minor order
@@ -233,6 +278,8 @@ void spip::AdaptiveFilterCUDA::transform_SFPT()
   cuFloatComplex * in = (cuFloatComplex *) input->get_buffer();
   cuFloatComplex * out = (cuFloatComplex *) output->get_buffer();
   cuFloatComplex * gai = (cuFloatComplex *) gains->get_buffer();
+  float * dirt = (float *) dirty->get_buffer();
+  float * clean = (float *) cleaned->get_buffer();
   float * nor = (float *) norms->get_buffer();
 
   dim3 blocks (nsignal, nchan, out_npol);
@@ -262,7 +309,7 @@ void spip::AdaptiveFilterCUDA::transform_SFPT()
     cerr << "spip::AdaptiveFilterCUDA::transform_SFPT blocks=" << blocks.x 
          << "," << blocks.y << "," << blocks.z << " nthread=" << nthread << endl;
 
-  AdaptiveFilterKernel_SFPT<<<blocks, nthread, 0, stream>>>(in, out, gai, nor, nloops, processed_first_block, in_sig_stride, in_chan_stride, out_sig_stride, out_chan_stride, pol_stride, ref_pol);
+  AdaptiveFilterKernel_SFPT<<<blocks, nthread, 0, stream>>>(in, out, gai, dirt, clean, nor, nloops, processed_first_block, in_sig_stride, in_chan_stride, out_sig_stride, out_chan_stride, pol_stride, ref_pol);
 
   if (verbose)
     cerr << "spip::AdaptiveFilterCUDA::transform_SFPT kernels complete" << endl;
@@ -270,7 +317,30 @@ void spip::AdaptiveFilterCUDA::transform_SFPT()
   processed_first_block = true;
 }
 
+// write gains
 void spip::AdaptiveFilterCUDA::write_gains ()
 {
-  throw Error (InvalidState, "spip::AdaptiveFilterCUDA::write_gains", "not implemented");
+  uint64_t gains_to_write = (ndat > 0);
+  if (verbose)
+    cerr << "spip::AdaptiveFilterCUDA::write_gains(" << gains_to_write << ")" << endl;
+  gains_file_write->write (gains_to_write);
 }
+
+// write dirty
+void spip::AdaptiveFilterCUDA::write_dirty ()
+{
+  uint64_t dirty_to_write = (ndat > 0);
+  if (verbose)
+    cerr << "spip::AdaptiveFilterCUDA::write_dirty(" << dirty_to_write << ")" << endl;
+  dirty_file_write->write (dirty_to_write);
+}
+
+// write cleaned
+void spip::AdaptiveFilterCUDA::write_cleaned ()
+{
+  uint64_t cleaned_to_write = (ndat > 0);
+  if (verbose)
+    cerr << "spip::AdaptiveFilterCUDA::write_cleaned(" << cleaned_to_write << ")" << endl;
+  cleaned_file_write->write (cleaned_to_write);
+}
+

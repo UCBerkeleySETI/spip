@@ -19,8 +19,11 @@ spip::AdaptiveFilter::AdaptiveFilter (std::string dir) :
   // default, should be configured [TODO]
   perform_filtering = false;
   filter_update_time = 1024;
-  epsilon = 1e-4;
+  epsilon = 0.1;
   gains = NULL;
+  dirty = NULL;
+  cleaned = NULL;
+  norms = NULL;
   ref_pol = 0;
 }
 
@@ -72,6 +75,12 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   if (!gains)
     throw invalid_argument ("AdaptiveFilter::configure gains has not been allocated");
 
+  if (!dirty)
+    throw invalid_argument ("AdaptiveFilter::configure dirty has not been allocated");
+
+  if (!cleaned)
+    throw invalid_argument ("AdaptiveFilter::configure cleaned has not been allocated");
+
   // copy input header to output
   output->clone_header (input->get_header());
 
@@ -118,7 +127,6 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   norms->set_nbit (32);
   norms->set_ndim (1);
   norms->set_npol (out_npol);
-  gains->set_tsamp (tsamp * ndat);
   norms->set_order (spip::Ordering::TSPF);
 
   norms->write_header();
@@ -127,6 +135,43 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   // allocate memory and initialize to zero
   norms->resize();
   norms->zero();
+  
+  // prepare the dirty container
+  dirty->clone_header (input->get_header());
+  dirty->read_header();
+
+  // update the parameters that this transformation will affect
+  dirty->set_nbit (32);
+  dirty->set_ndim (1);
+  dirty->set_tsamp (tsamp * ndat);
+  dirty->set_npol (out_npol);
+  dirty->set_order (spip::Ordering::TSPF);
+
+  dirty->write_header();
+  dirty->set_ndat (1);
+
+  // allocate memory and initialize to zero
+  dirty->resize();
+  dirty->zero();
+
+  // prepare the cleaned container
+  cleaned->clone_header (input->get_header());
+  cleaned->read_header();
+
+  // update the parameters that this transformation will affect 
+  cleaned->set_nbit (32);
+  cleaned->set_ndim (1);
+  cleaned->set_tsamp (tsamp * ndat);
+  cleaned->set_npol (out_npol);
+  cleaned->set_tsamp (tsamp * ndat);
+  cleaned->set_order (spip::Ordering::TSPF);
+
+  cleaned->write_header();
+  cleaned->set_ndat (1);
+
+  // allocate memory of the gains
+  cleaned->resize();
+  cleaned->zero();
 }
 
 //! prepare prior to each transformation call
@@ -168,12 +213,19 @@ void spip::AdaptiveFilter::transformation ()
   {
     cerr << "spip::AdaptiveFilter::transformation ndat==0, ignoring" << endl;
     gains->set_ndat (0);
+    dirty->set_ndat (0);
+    cleaned->set_ndat (0);
     return;
   }
   else
   {
     gains->set_ndat(1);
+    dirty->set_ndat(1);
+    cleaned->set_ndat(1);
+
     gains->resize();
+    dirty->resize();
+    cleaned->resize();
   }
 
   // apply data transformation

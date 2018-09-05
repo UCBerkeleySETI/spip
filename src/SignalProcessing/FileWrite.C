@@ -193,7 +193,6 @@ uint64_t spip::FileWrite::write_data_bytes (int fd, void * data, uint64_t bytes_
     throw Error(InvalidState, "spip::FileWrite::write_data_bytes", 
                 "bytes_to_write=%lu but bytes_written=%lu",
                 bytes_to_write, bytes_written);
-  idat_written += ndat;
   return bytes_written;
 }
 

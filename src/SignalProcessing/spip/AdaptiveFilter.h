@@ -43,6 +43,10 @@ namespace spip {
       //! Required transformation to write gain values to disk
       virtual void write_gains () = 0;
 
+      virtual void write_dirty () = 0;
+
+      virtual void write_cleaned () = 0;
+
     protected:
 
       unsigned nchan;
@@ -61,6 +65,12 @@ namespace spip {
 
       // generic container to store the gains
       Container * gains;
+
+      // generic container to store the dirty
+      Container * dirty;
+
+      // generic container to store the cleaned
+      Container * cleaned;
 
       // generic container to store the normalization factor
       Container * norms;

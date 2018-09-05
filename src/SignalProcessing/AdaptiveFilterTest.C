@@ -310,6 +310,8 @@ bool spip::AdaptiveFilterTest::process ()
     filter->prepare();
     filter->transformation();
     filter->write_gains();
+    filter->write_dirty();
+    filter->write_cleaned();
 
 #ifdef HAVE_CUDA
     if (device >= 0)

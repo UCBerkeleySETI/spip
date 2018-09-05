@@ -190,7 +190,7 @@ void spip::Container::write_header ()
   if (header.set ("HDR_SIZE", "%u", hdr_size) < 0)
     throw invalid_argument ("Could not write HDR_SIZE to header");
 
-  if (header.set ("HDR_VERSION", "%d", hdr_version) < 0)
+  if (header.set ("HDR_VERSION", "%f", hdr_version) < 0)
     throw invalid_argument ("Could not write HDR_VERSION to header");
 
   if (header.set ("NANT", "%u", nsignal) < 0)

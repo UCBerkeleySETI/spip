@@ -153,7 +153,7 @@ void usage()
 #ifdef HAVE_CUDA
   cout << " -d gpu    use GPU" << endl;
 #endif
-  cout << " -n nfft   FFT length for filtering" << endl;
+  cout << " -n nfft   FFT length for filtering [default 128]" << endl;
   cout << " -r ipol   polarisation containing RFI reference [default 0]" << endl;
   cout << " -h        display usage" << endl;
   cout << " -v        verbose output" << endl;
