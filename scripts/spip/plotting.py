@@ -389,3 +389,51 @@ def set_backgroundcolor(ax, color):
      if lh != None:
          lh.legendPatch.set_facecolor(color)
 
+class GainsPlot (InlinePlot):
+
+  def __init__(self):
+    super(GainsPlot, self).__init__()
+    self.setLabels ('Filter Gain', 'Frequency (MHz)', 'Amplitude')
+    self.nchan = 1
+    self.xvals = numpy.arange (0, 1, self.nchan, dtype=float)
+    self.configure (False, False, False)
+
+  def configure (self, log, zap, transpose):
+    self.log = log
+    self.zap = zap
+    self.transpose = transpose
+
+  def plot (self, xres, yres, plain, nchan, freq, bw, gains):
+
+    self.xmin = freq-(bw/2)
+    self.xmax = freq+(bw/2)
+    self.xstep = bw/nchan
+
+    if (self.nchan != nchan):
+      self.nchan = nchan
+      self.xvals = numpy.arange (self.xmin, self.xmax, \
+                                 self.xstep, dtype=float)
+
+    self.openPlot (xres, yres, plain)
+    if self.log:
+      self.ax.set_yscale ('log', nonposy='clip')
+    else:
+      self.ax.set_yscale ('linear')
+    if self.zap:
+      spectrum[0] = 0
+    if self.transpose:
+      self.ax.plot(gains, self.xvals, c=self.fgcolor)
+      self.ax.set_ylim((0, nchan))
+    else:
+      ymin = numpy.amin(gains)
+      ymax = numpy.amax(gains)
+
+      if ymax == ymin:
+        ymax = ymin + 1
+        gains[0] = 1
+      self.ax.plot(self.xvals, gains, color=self.fgcolor)
+      self.ax.set_xlim((self.xmin, self.xmax))
+      self.ax.set_ylim((ymin, ymax))
+
+    self.closePlot()
+
