@@ -12,6 +12,7 @@ libinstuwb_la_SOURCES = \
 bin_PROGRAMS = uwb_adaptive_filter_pipeline \
   uwb_adaptive_filter_combine \
   uwb_adaptive_filter_test \
+  uwb_adaptive_filter_tappend \
   uwb_calibration_pipeline \
   uwb_continuum_pipeline \
   uwb_continuum_scrunch \
@@ -37,6 +38,7 @@ LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @FFTW_LIBS@
 
 uwb_adaptive_filter_combine_SOURCES = uwb_adaptive_filter_combine.C
 uwb_adaptive_filter_test_SOURCES = uwb_adaptive_filter_test.C
+uwb_adaptive_filter_tappend_SOURCES = uwb_adaptive_filter_tappend.C
 uwb_adaptive_filter_pipeline_SOURCES = uwb_adaptive_filter_pipeline.C
 uwb_continuum_pipeline_SOURCES = uwb_continuum_pipeline.C
 uwb_calibration_pipeline_SOURCES = uwb_calibration_pipeline.C

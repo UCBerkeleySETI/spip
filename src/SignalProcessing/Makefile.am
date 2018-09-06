@@ -3,7 +3,7 @@ noinst_LTLIBRARIES = libspipdsp.la
 
 libspipdsp_headers = \
   spip/Add.h spip/AddTime.h spip/AddTimeRAM.h \
-  spip/Append.h spip/AppendFrequency.h \
+  spip/Append.h spip/AppendFrequency.h spip/AppendTime.h spip/AppendTimeRAM.h\
   spip/CalibrationPipeline.h \
   spip/Combination.h \
   spip/ContinuumPipeline.h \
@@ -33,7 +33,7 @@ libspipdsp_headers = \
 
 libspipdsp_la_SOURCES = \
   Add.C AddTime.C AddTimeRAM.C \
-  Append.C AppendFrequency.C \
+  Append.C AppendFrequency.C AppendTime.C AppendTimeRAM.C \
   CalibrationPipeline.C \
   ContinuumPipeline.C \
   Container.C \

@@ -82,6 +82,7 @@ src/Instruments/UWB/uwb_adaptive_filter_combine
 src/Instruments/UWB/uwb_adaptive_filter_pipeline
 src/Instruments/UWB/uwb_adaptive_filter_test
 src/Instruments/UWB/uwb_calibration_pipeline
+src/Instruments/UWB/uwb_adaptive_filter_tappend
 src/Instruments/UWB/uwb_continuum_pipeline
 src/Instruments/UWB/uwb_continuum_scrunch
 src/Instruments/UWB/uwb_continuum_tadd
