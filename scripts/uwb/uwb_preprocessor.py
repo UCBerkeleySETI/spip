@@ -16,7 +16,7 @@ from spip.threads.reporting_thread import ReportingThread
 from spip.log_socket import LogSocket
 from spip.utils import times,sockets
 from spip.utils.core import system_piped
-from spip.plotting import HistogramPlot,FreqTimePlot,BandpassPlot,TimeseriesPlot
+from spip.plotting import HistogramPlot,FreqTimePlot,BandpassPlot,TimeseriesPlot,GainsPlot
 
 from spip_smrb import SMRBDaemon
 
@@ -185,9 +185,9 @@ class PreprocessorDaemon(Daemon,StreamBased):
 
     self.dirty_plot = BandpassPlot()
     self.clean_plot = BandpassPlot()
-    self.gains_plot = TimeSeriesPlot()
+    self.gains_plot = GainsPlot()
 
-    self.valid_plots = ["dirty", "clean", "gainstime"]
+    self.valid_plots = ["dirty", "cleaned", "gainstime"]
 
     # stats files are stored in flat directory structure
     # stats_dir / beam / cfreq
@@ -334,32 +334,36 @@ class PreprocessorDaemon(Daemon,StreamBased):
         self.error("stat thread failed")
         self.quit_event.set()
 
-  def process_clean (self, preproc_dir):
+  def process_dirty (self, preproc_dir):
 
     # find the most recent HG stats file
-    files = [file for file in os.listdir(preproc_dir) if file.lower().endswith(".clean")]
+    files = [file for file in os.listdir(preproc_dir) if file.lower().endswith(".dirty")]
     self.trace ("files=" + str(files))
 
     if len(files) > 0:
       # process only the most recent file
-      clean_file = files[-1]
+      dirty_file = files[-1]
 
-      # read the data from file into a numpy array as per example
-
+      # read the data from file into a numpy array
+      dirty_file = open (files, "rb")
+      dirty_header = np.fromfile (dirty_file, dtype=np.int8, count=4096)
+      dirty_data = np.fromfile (dirty_file, dtype=np.float32, count=nfreq)
+      dirty_file.close()
+      
       # acquire the results lock
       self.results["lock"].acquire()
 
       # generate plots for each polarisation
       for ipol in range(npol):
 
-        prefix = "bandpass_" + str(ipol) + "_none"
+        prefix = "dirty_" + str(ipol) + "_none"
   
-        self.clean_plot.plot (160, 120, True, nfreq, freq, bw, bp_data[ipol])
-        self.results[prefix] = self.clean_plot.getRawImage()
-        self.clean_plot.plot (1024, 768, False, nfreq, freq, bw, bp_data[ipol])
-        self.results[prefix + "_hires"] = self.clean_plot.getRawImage()
+        self.dirty_plot.plot (160, 120, True, nfreq, freq, bw, dirty_data[ipol])
+        self.results[prefix] = self.dirty_plot.getRawImage()
+        self.dirty_plot.plot (1024, 768, False, nfreq, freq, bw, dirty_data[ipol])
+        self.results[prefix + "_hires"] = self.dirty_plot.getRawImage()
   
-      self.clean_valid = True
+      self.dirty_valid = True
   
       self.results["lock"].release()
   
@@ -369,11 +373,147 @@ class PreprocessorDaemon(Daemon,StreamBased):
         os.remove (preproc_dir + "/" + file)
 
 
-  def process_dirty (self, preproc_dir):
-    # nuer to write
+  def process_cleaned (self, preproc_dir):
+       
+    files = [file for file in os.listdir(preproc_dir) if file.lower().endswith(".cleaned")]
+    self.trace ("files=" + str(files))
+
+    if len(files) > 0:
+      # process only the most recent file
+      cleaned_file = files[-1]
+
+      # read the data from file into a numpy array
+      cleaned_file = open (files, "rb")
+      cleaned_header = np.fromfile (cleaned_file, dtype=np.int8, count=4096)
+      cleaned_data = np.fromfile (cleaned_file, dtype=np.float32, count=nfreq)
+      cleaned_file.close()
+
+      # acquire the results lock
+      self.results["lock"].acquire()
+
+      # generate plots for each polarisation
+      for ipol in range(npol):
+
+        prefix = "cleaned_" + str(ipol) + "_none"
+
+        self.cleaned_plot.plot (160, 120, True, nfreq, freq, bw, cleaned_data[ipol])
+        self.results[prefix] = self.cleaned_plot.getRawImage()
+        self.cleaned_plot.plot (1024, 768, False, nfreq, freq, bw, cleaned_data[ipol])
+        self.results[prefix + "_hires"] = self.cleaned_plot.getRawImage()
+
+      self.cleaned_valid = True
+
+      self.results["lock"].release()
+
+      # maybe keep these files? or move them to the observation output directory
+      # need to think about this
+      for file in files:
+        os.remove (preproc_dir + "/" + file)
  
   def process_gains (self, preproc_dir):
-    # nuer to write
+    
+    # find the most recent gains file
+    files = [file for file in os.listdir(preproc_dir) if file.lower().endswith(".gains")]
+    self.trace ("files=" + str(files))
+
+    if len(files) > 0:
+
+      gains_time_file = preproc_dir + "/gains.time"
+      cmd = ""
+
+      # combine all the gains files together
+      if os.path.exists(gains_time_file):
+        cmd = "uwb_adaptive_filter_tappend " + gains_time_file
+        for file in files:
+          cmd = cmd + " " + file
+        cmd = " " + gains_time_file
+      else:
+        if len(files) == 1:
+          cmd = "cp " + preproc_dir + "/" + files[0] + " " + gains_time_file
+        else:
+          cmd = "uwb_adaptive_filter_tappend"
+          for file in files:
+            cmd = cmd + " " + file
+          cmd += " " + gains_time_file
+      
+      self.debug(cmd)
+      rval, lines = self.system (cmd, 2)
+      if not rval == 0:
+        self.warn("failed to tappend fains files")
+        return
+
+      # read the data from file into a numpy array
+      file_size = os.path.getsize(gains_time_file)
+      header_size = 4096
+      data_size = file_size - header_size
+
+      gains_file = open (gains_time_file, "rb")
+      header_str = gains_file.read(header_size)
+      header = Config.readDictFromString(header_str)
+
+      npol = int(header["NPOL"])
+      ndim = int(header["NDIM"])
+      nchan = int(header["NCHAN"])
+      nsignal = int(header["NSIGNAL"])
+      nbit = int(header["NCHAN"])
+      freq = float(header["FREQ"])
+      bw = float(header["BW"])
+      tsamp = float(header["TSAMP"])
+
+      # check that the nbit is 32
+      bytes_per_sample = (npol * ndim * nchan * nsignal * nbit) / 8
+      ndat = data_size / bytes_per_sample
+      nval = ndat*nsignal*nchan*npol*ndim
+
+      raw = np.fromfile (gains_file, dtype=np.float32, count=nval)
+      gains_file.close()
+
+      # reshape the raw data into a numpy array with specified dimensions
+      data = raw.reshape ((ndat, nsignal, npol, nchan))
+
+      # acquire the results lock
+      self.results["lock"].acquire()
+
+      # generate an empty numpy array with ndat values
+      gains_time = np.zeros(ndat)
+      gains_chan = np.zeros(nchan)
+
+      # generate plots for each polarisation
+      for ipol in range(npol):
+
+        # generate data to plot, that is max filter value for a polarisation
+        for idat in range(ndat):
+          max_gain = 0
+          for isig in range(nsignal):
+            for ichan in range (nchan):
+              v = data[idat][isig][ipol][ichan]
+              if v > max_gain:
+                max_gain = v
+              if idat == ndat-1:
+                gains_chan[ichan] = v
+          gains_time[idat] = max_gain
+
+        prefix = "gainstime_" + str(ipol) + "_none"
+        self.gains_time_plot.plot (160, 120, True, ndat, tsamp, gains_time)
+        self.results[prefix] = self.gains_time_plot.getRawImage()
+        self.gains_plot.plot (1024, 768, False, ndat, tsamp, gains_time)
+        self.results[prefix + "_hires"] = self.gains_plot.getRawImage()
+
+        prefix = "gainsfreq_" + str(ipol) + "_none"
+        self.gains_freq_plot.plot (160, 120, True, nchan, freq, bw, gains_freq)
+        self.results[prefix] = self.gains_freq_plot.getRawImage()
+        self.gains_freq_plot.plot (1024, 768, False, nchan, freq, bw, gains_freq)
+        self.results[prefix + "_hires"] = self.gains_freq_plot.getRawImage()
+
+      self.gains_valid = True
+
+      self.results["lock"].release()
+
+      # maybe keep these files? or move them to the observation output directory
+      # need to think about this
+      for file in files:
+        os.remove (preproc_dir + "/" + file)
+
 
   # wait for the SMRB to be created
   def waitForSMRB (self):
