@@ -108,9 +108,8 @@ class HistogramPlot (InlinePlot):
 
   def __init__(self):
     super(HistogramPlot, self).__init__()
-    self.configure (-1)
+    self.configure (-1, 128)
     self.setLabels ('Histogram', '', '')
-    self.abs_xmax = 128
 
   def configure (self, channel, abs_xmax):
     self.abs_xmax = abs_xmax
