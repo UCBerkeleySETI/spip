@@ -11,8 +11,10 @@
 #include "spip/HardwareAffinity.h"
 
 #include "spip/KeckRTCDefs.h"
+#include "spip/stopwatch.h"
 
 #include <unistd.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <pthread.h>
 
@@ -22,6 +24,7 @@
 #include <stdexcept>
 
 #include <sys/time.h>
+#include <float.h>
 
 void usage();
 void signal_handler (int signal_value);
@@ -44,21 +47,45 @@ int main(int argc, char *argv[]) try
 
   int core = -1;
 
+  unsigned frame_size = KeckRTC_HEAP_SIZE;
+
+  unsigned frame_rate = 2000; // hertz
+
+  unsigned duration = 10; // seconds
+
+  int network_rate = -1;
+
   opterr = 0;
   int c;
 
-  while ((c = getopt(argc, argv, "b:hv")) != EOF) 
+  while ((c = getopt(argc, argv, "b:d:f:hn:r:v")) != EOF) 
   {
     switch(c) 
     {
       case 'b':
         core = atoi(optarg);
         break;
+
+      case 'd':
+        duration = atoi(optarg);
+        break;
+
+      case 'f':
+        frame_size = atoi(optarg);
+        break;
   
       case 'h':
         cerr << "Usage: " << endl;
         usage();
         exit(EXIT_SUCCESS);
+        break;
+
+      case 'n':
+        network_rate = atoi(optarg);
+        break;
+
+      case 'r':
+        frame_rate = atoi(optarg);
         break;
 
       case 'v':
@@ -114,24 +141,60 @@ int main(int argc, char *argv[]) try
   sock_recv.resize (bufsz);
   sock_recv.set_block ();
 
+  stopwatch_t wait_sw;
+  double sleep_time = 0;
+  if (network_rate > 0)
+  {
+    //                                      Gb/s           b/s  B/us
+    double bytes_per_microsecond = double(network_rate) * (1e9 / 8);
+    sleep_time = bufsz / bytes_per_microsecond;
+    cerr << "sleep_time=" << sleep_time *1e6 << " seconds" << endl;
+  }
+
   struct timeval start_time;
+  struct timeval start_frame;
+  struct timeval end_frame;
+  struct timeval curr_time;
   struct timeval end_time;
-  double time_taken = 0;
+
   double time_sum = 0;
   uint64_t packets_sent = 0;
 
-  while (!quit_threads)
+  uint64_t frames_to_send = frame_rate * duration;
+  uint64_t iframe = 0;
+
+  double * times = (double *) malloc (frames_to_send * sizeof(double));
+
+  // warm up phase
+  for (iframe=0; iframe < frames_to_send; iframe++)
   {
-    gettimeofday (&start_time, 0);
+    times[iframe] = double(iframe);
+  }
+
+  iframe = 0;
+
+  // start of the data transfer
+  gettimeofday(&start_time, 0);
+
+  // transmit phase
+  while (iframe < frames_to_send && !quit_threads)
+  {
+    gettimeofday (&start_frame, 0);
 
     uint64_t bytes_sent = 0;
-    while (bytes_sent < KeckRTC_HEAP_SIZE)
+    while (bytes_sent < frame_size)
     {
+      if (network_rate > 0)
+        StartTimer(&wait_sw);
+
       // send a packet
       if (verbose)
         cerr << "Sending " << bufsz << " bytes" << endl;
       sock_send.send (bufsz);
       bytes_sent += bufsz;
+
+      if (network_rate > 0)
+        DelayTimer(&wait_sw, sleep_time);
     }
 
     // receive a reply
@@ -140,23 +203,32 @@ int main(int argc, char *argv[]) try
     size_t reply_size = sock_recv.recv_from();
     sock_recv.consume_packet();
 
-    gettimeofday (&end_time, 0);
+    gettimeofday (&end_frame, 0);
     if (verbose)
       cerr << "Received " << reply_size << " bytes" << endl;
 
-    time_taken = diff_time (start_time, end_time);
+    double frame_time = diff_time (start_frame, end_frame);
+    times[iframe] = frame_time;
+    time_sum += frame_time;
 
-    time_sum += time_taken;
     packets_sent++;
+    iframe++;
 
-    if (packets_sent % 10000 == 0)
+    // now get the current time 
+    gettimeofday (&curr_time, 0);
+    double curr_offset = diff_time(start_time, curr_time);
+    double next_frame_offset = iframe * (double(1e6) / frame_rate);
+    while (curr_offset < next_frame_offset)
     {
-      time_taken = time_sum / double(packets_sent);
-      fprintf (stderr, "Time %10.6lf microseconds\n", time_taken);
-      packets_sent = 0;
-      time_sum = 0;
+      gettimeofday (&curr_time, 0);
+      curr_offset = diff_time(start_time, curr_time);
     }
   }
+
+  // start of the data transfer
+  gettimeofday(&end_time, 0);
+
+  double total_time = diff_time(start_time, end_time);
 
   cerr << "Sending " << bufsz-1 << " bytes" << endl;
   sock_send.send (bufsz-1);
@@ -164,6 +236,54 @@ int main(int argc, char *argv[]) try
   sock_send.close_me();
   sock_recv.close_me();
 
+  uint64_t discard_frames = 100;
+
+  if (iframe > 0)
+  {
+    uint64_t frames_sent = iframe - 1;
+    uint64_t frames_counted = frames_sent - discard_frames;
+  
+    double duration_min = DBL_MAX;
+    double duration_max = -DBL_MAX;
+    double duration_sum = 0;
+
+    int flags = O_WRONLY | O_CREAT | O_TRUNC;
+    int perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+    int fd = open ("timing.dat", flags, perms);
+    ::write (fd, times+discard_frames, frames_counted * sizeof(double));
+    ::close (fd);
+
+    time_sum = 0;
+
+    for (iframe=discard_frames; iframe<frames_sent; iframe++)
+    {
+      double duration = times[iframe];
+      
+      if (duration < duration_min)
+        duration_min = duration;
+      if (duration > duration_max)
+        duration_max = duration;
+      duration_sum += duration;
+
+      time_sum += duration;
+    }
+
+
+    double duration_mean = duration_sum / double(frames_counted);
+    cerr << "duration timing:" << endl;
+    cerr << "  minimum=" << duration_min << " us" << endl;
+    cerr << "  mean="    << duration_mean << " us" << endl;
+    cerr << "  maximum=" << duration_max << " us" << endl;
+
+    double bytes_per_microsecond = (frames_counted * frame_size) / time_sum;
+    double gb_per_second = (bytes_per_microsecond * 1000000) / 1000000000;
+
+    double frames_per_microsecond = frames_sent / total_time;
+    double frames_per_second = frames_per_microsecond *1e6;
+
+    cerr << "  data_rate=" << gb_per_second << " Gb/s" << endl;
+    cerr << "  frame_rate=" << frames_per_second << endl;
+  }
   return 0;
 }
 catch (std::exception& exc)
@@ -186,6 +306,10 @@ void usage()
     "  port        port for send and receiver\n"
     "  client      client hostname/IP address\n"
     "  -b core     bind computation to specified CPU core\n"
+    "  -d num      run test for num seconds [default 10]\n"
+    "  -f bytes    size of a frame in bytes [default "<< KeckRTC_HEAP_SIZE << "]\n"
+    "  -n rate     limit data transmission to rate Gb/s [default no limit]\n"
+    "  -r rate     run test at frame rate [default 2000Hz]\n"
     "  -h          print this help text\n"
     "  -v          verbose output\n"
     << endl;
@@ -204,10 +328,3 @@ void signal_handler(int signalValue)
   }
   quit_threads = 1;
 }
-
-double diff_time ( struct timeval time1, struct timeval time2 )
-{
-  return ( double(time2.tv_sec - time1.tv_sec) * 1000000 + 
-           double(time2.tv_usec - time1.tv_usec ) );
-}
-

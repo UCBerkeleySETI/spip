@@ -3,10 +3,12 @@ noinst_LTLIBRARIES = libinstkeckrtc.la
 
 libinstkeckrtc_headers = \
   spip/KeckRTCDefs.h \
-  spip/KeckRTCUtil.h
+  spip/KeckRTCUtil.h \
+  spip/stopwatch.h
 
 libinstkeckrtc_la_SOURCES = \
-  KeckRTCUtil.C
+  KeckRTCUtil.C \
+	stopwatch.c
 
 bin_PROGRAMS = keckrtc_server keckrtc_client
 
