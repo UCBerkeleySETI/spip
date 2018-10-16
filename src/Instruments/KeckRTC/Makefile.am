@@ -10,7 +10,8 @@ libinstkeckrtc_la_SOURCES = \
   KeckRTCUtil.C \
 	stopwatch.c
 
-bin_PROGRAMS = keckrtc_server keckrtc_client
+bin_PROGRAMS = keckrtc_server \ 
+	keckrtc_client
 
 AM_CXXFLAGS = -I .\
   -I$(top_builddir)/src/Affinity \
@@ -28,6 +29,15 @@ keckrtc_server_SOURCES = keckrtc_server.C
 
 AM_CXXFLAGS += @HWLOC_CFLAGS@
 LDADD += @HWLOC_LIBS@
+
+if HAVE_SPEAD2
+
+bin_PROGRAMS += keckrtc_server_ibv
+keckrtc_server_ibv_SOURCES = keckrtc_server_ibv.C
+keckrtc_server_ibv_CXXFLAGS = $(AM_CXXFLAGS) @SPEAD2_CFLAGS@
+LDADD += @SPEAD2_LIBS@ -lrdmacm -libverbs
+
+endif
 
 if HAVE_CUDA
 

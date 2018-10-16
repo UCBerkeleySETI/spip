@@ -9,12 +9,10 @@
 
 #include <spead2/common_ibv.h>
 #include <spead2/common_memory_allocator.h>
+#include <spead2/common_raw_packet.h>
 
 #include <boost/asio.hpp>
 #include <boost/noncopyable.hpp>
-
-//#include <infiniband/verbs.h>
-//#include <rdma/rdma_cma.h>
 
 #include <string>
 
@@ -24,7 +22,10 @@ namespace spip {
 
     public:
 
-      IBVQueue ();
+      //! Global flag to cease receiving
+      static bool keep_receiving;
+
+      IBVQueue (boost::asio::io_service& io_service);
 
       ~IBVQueue ();
 
@@ -40,6 +41,12 @@ namespace spip {
       void open_multicast (std::string ip_address, std::string group, int port);
 
       void poll_once ();
+
+      int open_packet ();
+
+      void close_packet ();
+       
+      uint8_t * buf_ptr;
 
     protected:
 
@@ -62,6 +69,8 @@ namespace spip {
 
       size_t header_size;
 
+      size_t max_raw_size;
+
       size_t n_slots;
 
       size_t num_multicast;
@@ -80,11 +89,11 @@ namespace spip {
       spead2::ibv_pd_t pd;
       spead2::ibv_comp_channel_t comp_channel;
       
-      spead2::ibv_cq_t send_cq;
-      spead2::ibv_cq_t recv_cq;
       spead2::ibv_qp_t qp;
       std::vector<spead2::ibv_flow_t> flows;
       spead2::ibv_mr_t mr;
+
+      spead2::ibv_cq_t cq;
 
       // array of @ref n_slots slots for work requests
       std::unique_ptr<slot[]> slots;
@@ -92,10 +101,18 @@ namespace spip {
       // array of @ref n_slots work completions
       std::unique_ptr<ibv_wc[]> wc;
 
+      int islot;
+
+      int ipacket;
+
+      int npackets;
+
+      spead2::packet_buffer payload;
+
       // Utility functions to create the data structures
       static spead2::ibv_qp_t
-      create_qp(const spead2::ibv_pd_t &pd, const spead2::ibv_cq_t &send_cq, 
-                const spead2::ibv_cq_t &recv_cq, std::size_t n_slots);
+      create_qp(const spead2::ibv_pd_t &pd, const spead2::ibv_cq_t &cq,
+                std::size_t n_slots);
 
       static spead2::ibv_flow_t
       create_flow(const spead2::ibv_qp_t &qp, const boost::asio::ip::udp::endpoint &endpoint,

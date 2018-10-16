@@ -21,6 +21,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <new>
+#include <boost/asio.hpp>
 
 using namespace std;
 
@@ -30,6 +31,9 @@ spip::IBVReceiver::IBVReceiver()
   have_utc_start = false;
   format = NULL;
   verbose = 1;
+
+  boost::asio::io_service io;
+  queue = new IBVQueue(io);
 }
 
 spip::IBVReceiver::~IBVReceiver()
@@ -88,7 +92,10 @@ void spip::IBVReceiver::configure (const char * config_str)
   format->configure (header, "");
 
   // configure the queue
-  queue->configure (1048676, format->get_packet_size());
+  buffer_size = 1048576;
+  packet_size = format->get_packet_size();
+  header_size = format->get_header_size();
+  queue->configure (buffer_size, packet_size, header_size);
 
   // open the IBV Queue 
   if (data_mcast.size() > 0)
@@ -150,20 +157,16 @@ void spip::IBVReceiver::receive ()
   if (verbose)
     cerr << "spip::IBVReceiver::receive()" << endl;
 
-  ssize_t got;
-  uint64_t nsleeps = 0;
-
   // virtual block, make about 128 MB
-  size_t data_bufsz = nchan * ndim * npol;
+  data_bufsz = nchan * ndim * npol;
   while (data_bufsz < 128*1024*1024)
     data_bufsz *= 2;
 
-  char * block = (char *) malloc (data_bufsz);
-  bool need_next_block = false;
+  block = (char *) malloc (data_bufsz);
 
   // block accounting 
-  int64_t curr_byte_offset = 0;
-  int64_t next_byte_offset = data_bufsz;
+  curr_byte_offset = 0;
+  next_byte_offset = data_bufsz;
 
 #ifdef _DEBUG
   cerr << "spip::IBVReceiver::receive [" << curr_byte_offset << " - "
@@ -172,63 +175,102 @@ void spip::IBVReceiver::receive ()
 
   // configure the overflow buffer
   overflow = new UDPOverflow();
-  uint64_t overflow_bufsz = resolution * 2;
+  overflow_bufsz = format->get_resolution() * 2;
   while (overflow_bufsz <= 65536)
     overflow_bufsz *= 2;
   overflow->resize (overflow_bufsz);
   overflow_block = (char *) overflow->get_buffer();
 
+  int64_t byte_offset;
+  unsigned bytes_received;
+
   if (verbose)
     cerr << "spip::IBVReceiver::receive starting main loop" << endl;
 
-  //
   spip::IBVQueue::keep_receiving = true;
   while (spip::IBVQueue::keep_receiving)
   {
-    // TODO abstract this better
-    int received = queue.recv_cq.poll(n_slots, wc.get());
+    int got = queue->open_packet ();
 
-    for (int i=0; i<received; i++)
+    if (got > 0)
     {
-      int index = queue.wc[i].wr_id;
-      if (queue.wc[i].status != IBV_WC_SUCCESS)
+      if (need_next_block)
       {
-        cerr << "Work Request failed with code " << queue.wc[i].status << endl;
+#ifdef _DEBUG
+        cerr << "spip::IBVReceiver::receive open_block()" << endl;
+#endif
+        open_block();
       }
+
+      // decode the header so that the format knows what to do with the packet
+      byte_offset = format->decode_packet ((char *) queue->buf_ptr, &bytes_received);
+  
+      // if we do not yet have a UTC start, get it from the format
+      if (!have_utc_start)
+      { 
+        Time utc_start = format->get_utc_start ();
+        //uint64_t pico_seconds = format->get_pico_seconds();
+        have_utc_start = true;
+      }
+  
+      // ignore if negative
+      if (byte_offset < 0)
+      { 
+        // data stream is finished
+        if (byte_offset == -2)
+        { 
+          //set_control_cmd(Stop);
+        }
+      }
+      // packet is part of this observation
       else
-      {
-        const void *ptr = reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(slots[index].sge.addr));
-        std::size_t len = wc[i].byte_len;
-
-        // Sanity checks
-        try
-        {
-          packet_buffer payload = udp_from_ethernet(const_cast<void *>(ptr), len);
-
-          if (payload.size() < packet_size) 
-          {
-            cerr << "Received UDP packet of " << got << " bytes, expected " << packet_size << endl;
-            spip::IBVQueue::keep_receiving = false;
-
-            bool stopped = process_packet(payload.data(), payload.size());
-            if (stopped)
-              return -2;
-          }
+      { 
+        // packet belongs in current buffer
+        if ((byte_offset >= curr_byte_offset) && (byte_offset < next_byte_offset))
+        { 
+          bytes_this_buf += bytes_received;
+          stats->increment_bytes (bytes_received);
+          format->insert_last_packet (block + (byte_offset - curr_byte_offset));
+          queue->close_packet();
         }
-        catch (packet_type_error &e)
+        // packet belongs in overflow buffer
+        else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
         {
-          cerr << "packet_type_error " << e.what() << endl;
+          format->insert_last_packet (overflow_block + (byte_offset - next_byte_offset));
+          overflow->copied_from (byte_offset - next_byte_offset, bytes_received);
+          queue->close_packet();
+        } 
+        // ignore packets that preceed this buffer
+        else if (byte_offset < curr_byte_offset)
+        { 
+          queue->close_packet();
         }
-        catch (std::length_error &e)
-        {
-          cerr << "length error " << e.what() << endl;
+        else
+        { 
+          filled_this_block = true;
         }
       }
-      qp.post_recv(&slots[index].wr);
+  
+      // close open data block buffer if is is now full
+      if (bytes_this_buf >= data_bufsz || filled_this_block)
+      {
+#ifdef _DEBUG
+        cerr << "spip::IBVReceiver::process_packet close_block()" << endl;
+#endif
+        close_block();
+        stats->dropped_bytes (data_bufsz - bytes_this_buf);
+      }
+    }
+    else if (got == 0)
+    {
+      cerr << "spip::IBVReceiver::receive no packets in queue" << endl;
+    }
+    else
+    {
+      cerr << "spip::IBVReceiver::receive queue->open_packet returned " << got << endl;
     }
   }
 }
-
 
 void spip::IBVReceiver::open_block ()
 {
@@ -254,79 +296,9 @@ void spip::IBVReceiver::open_block ()
   filled_this_block = false;
 }
 
-void spip::IBVReciver::close_block ()
+void spip::IBVReceiver::close_block ()
 {
-  filled_this_block = true;
-}
-
-bool spip::IBVReceiver::process_packet (const std::uint8_t *data, std::size_t length)
-{
-  if (length < packet_size)
-  {
-    cerr << "Received packet of " << length << " bytes, expected " << packet_size << endl;
-    return false;
-  }
-
-  if (need_next_block)
-  {
-    open_block();
-  }
-
-  // decode the header so that the format knows what to do with the packet
-  byte_offset = format->decode_packet (data, &bytes_received);
-
-  // if we do not yet have a UTC start, get it from the format
-  if (!have_utc_start)
-  {
-    Time utc_start = format->get_utc_start ();
-    uint64_t pico_seconds = format->get_pico_seconds();
-    have_utc_start = true;
-  }
-
-  // ignore if negative
-  if (byte_offset < 0)
-  {
-    // data stream is finished
-    if (byte_offset == -2)
-    {
-      set_control_cmd(Stop);
-    }
-  }
-  // packet is part of this observation
-  else
-  {
-    // packet belongs in current buffer
-    if ((byte_offset >= curr_byte_offset) && (byte_offset < next_byte_offset))
-    {
-      bytes_this_buf += bytes_received;
-      stats->increment_bytes (bytes_received);
-      format->insert_last_packet (block + (byte_offset - curr_byte_offset));
-      queue->consume_packet();
-    }
-    // packet belongs in overflow buffer
-    else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
-    {
-      format->insert_last_packet (overflow + (byte_offset - next_byte_offset));
-      overflow->copied_from (byte_offset - next_byte_offset, bytes_received);
-      queue->consume_packet();
-    } 
-    // ignore packets that preceed this buffer
-    else if (byte_offset < curr_byte_offset)
-    {
-      queue->consume_packet();
-    }
-    else
-    {
-      filled_this_block = true;
-    }
-  }
-
-  // close open data block buffer if is is now full
-  if (bytes_this_buf >= int64_t(data_block_bufsz) || filled_this_block)
-  {
-    close_block();
-    stats->dropped_bytes (data_block_bufsz - bytes_this_buf);
-  }
+  need_next_block = true;
 }
 
 void spip::IBVReceiver::stop_receiving ()

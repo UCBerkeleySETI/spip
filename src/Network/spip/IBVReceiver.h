@@ -37,6 +37,14 @@ namespace spip {
 
     protected:
 
+      void open_block ();
+
+      bool process_packet (const std::uint8_t *data, std::size_t length);
+
+      void close_block ();
+
+      IBVQueue * queue;
+
       UDPFormat * format;
 
       UDPStats * stats;
@@ -75,6 +83,10 @@ namespace spip {
 
     private:
 
+      bool need_next_block;
+
+      bool filled_this_block;
+
       int64_t curr_byte_offset;
 
       int64_t next_byte_offset;
@@ -83,7 +95,19 @@ namespace spip {
 
       char * block;
 
+      uint64_t data_bufsz;
+
       char * overflow_block;
+
+      uint64_t overflow_bufsz;
+
+      size_t packet_size;
+
+      size_t header_size;
+
+      size_t buffer_size;
+
+      uint64_t bytes_this_buf;
 
   };
 
