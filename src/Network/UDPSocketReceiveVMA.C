@@ -33,6 +33,12 @@ spip::UDPSocketReceiveVMA::UDPSocketReceiveVMA ()
 
 spip::UDPSocketReceiveVMA::~UDPSocketReceiveVMA ()
 {
+  if (vma_pkts)
+  {
+    if (vma_pkts->n_packet_num == 1)
+      vma_api->free_packets(fd, vma_pkts->pkts, vma_pkts->n_packet_num);
+    vma_pkts = NULL;
+  }
 }
 
 void spip::UDPSocketReceiveVMA::open (string ip_address, int port)
@@ -78,6 +84,7 @@ size_t spip::UDPSocketReceiveVMA::recv_from()
         if (vma_pkts->n_packet_num == 1)
           vma_api->free_packets(fd, vma_pkts->pkts, vma_pkts->n_packet_num);
         vma_pkts = NULL;
+        buf_ptr = NULL;
       }
 
       int flags = 0;

@@ -14,10 +14,13 @@
 
 #ifdef HAVE_CUDA
 #include "spip/keckrtc_kernels.h"
+#ifdef HAVE_GDR
+#include "gdrapi.h"
 #endif
-
+#endif
 #include "spip/KeckRTCDefs.h"
 #include "spip/KeckRTCUtil.h"
+
 
 #include <float.h>
 #include <unistd.h>
@@ -63,6 +66,10 @@ int main(int argc, char *argv[]) try
 
 #ifdef HAVE_CUDA
   int device_id = 0;
+
+#ifdef HAVE_GDR
+  bool use_gdr = false;
+#endif
 #endif
 
   int core = -1;
@@ -71,7 +78,11 @@ int main(int argc, char *argv[]) try
   int c;
 
 #ifdef HAVE_CUDA
+#ifdef HAVE_GDR
+  while ((c = getopt(argc, argv, "b:d:f:g:hijr:v")) != EOF) 
+#else
   while ((c = getopt(argc, argv, "b:d:f:g:hir:v")) != EOF) 
+#endif // ! HAVE_GDR
 #else
   while ((c = getopt(argc, argv, "b:d:f:hir:v")) != EOF) 
 #endif
@@ -86,15 +97,21 @@ int main(int argc, char *argv[]) try
         duration = atoi(optarg);
         break;
 
+      case 'f':
+        frame_size = atoi(optarg);
+        break;
+
 #ifdef HAVE_CUDA
       case 'g':
         device_id = atoi(optarg);
         break;
-#endif
 
-      case 'f':
-        frame_size = atoi(optarg);
+#ifdef HAVE_GDR
+      case 'j':
+	use_gdr = true;
         break;
+#endif
+#endif
 
       case 'h':
         cerr << "Usage: " << endl;
@@ -161,8 +178,8 @@ int main(int argc, char *argv[]) try
   client = std::string(argv[optind+2]);
 
   // configure the queue
-  size_t buffer_size = 1048576;
   size_t packet_size = 8242;
+  size_t buffer_size = packet_size * 64;
   size_t header_size = 0;
   queue->configure (buffer_size, packet_size, header_size);
 
@@ -177,13 +194,13 @@ int main(int argc, char *argv[]) try
 
   port++;
 
-  spip::UDPSocketSend sock_send;
-  cerr << "opening send socket to " << client << ":" << port 
-       << " from  " << server << endl;
-  sock_send.open (client, port, server);
-  sock_send.resize (bufsz);
+  spip::UDPSocketSend * sock_send = new spip::UDPSocketSend();
+  cerr << "opening send socket to " << client << ":" << port << " from  " << server << endl;
+  sock_send->open (client, port, server);
+  sock_send->resize (bufsz);
 
-  void * send_buf_ptr = (void *) sock_send.get_buf();
+  void * send_buf_ptr = (void *) sock_send->get_buf();
+  void * host_buf;
 
 #ifdef HAVE_CUDA
   unsigned int flags = 0;
@@ -194,48 +211,103 @@ int main(int argc, char *argv[]) try
   if (rval != cudaSuccess)
     cerr << "cudaHostRegister failed on sock_send" << endl;
 
-  // allocat host memory
-  void * host_buf, * dev_buf;
+  // allocate host memory
+  void * dev_buf;
   rval = cudaMallocHost (&host_buf, frame_size);
   if (rval != cudaSuccess)
-    cerr << "cudaMallocHost failed on host_buf" << endl;
+    cerr << "cudaMallocHost (&host_buf, " << frame_size << ")" << endl;
 
-  // allocate device memory
-  rval = cudaMalloc (&dev_buf, frame_size);
-  if (rval != cudaSuccess)
-    cerr << "cudaMalloc failed on dev_buf" << endl;
-#else
-  void * host_buf = malloc (frame_size);
+#ifdef HAVE_GDR
+  CUdeviceptr d_A;
+  unsigned int flag = 1;
+  gdr_t g;
+  gdr_mh_t mh;
+  gdr_info_t info;
+
+  void * bar_ptr  = NULL;
+  int off = 0;
+  uint32_t * buf_ptr = NULL;
+
+  if (use_gdr)
+  {
+    // allocate device memory
+    cuMemAlloc(&d_A, frame_size);
+    cuPointerSetAttribute (&flag, CU_POINTER_ATTRIBUTE_SYNC_MEMOPS, d_A);
+
+    // open the GDR context
+    g = gdr_open();
+
+    // pin the buffer
+    gdr_pin_buffer (g, d_A, frame_size, 0, 0, &mh);
+
+    // pointer to the bar
+    gdr_map(g, mh, &bar_ptr, frame_size);
+
+    // determine any offset in the virtual address
+    gdr_get_info(g, mh, &info);
+    off = info.va - d_A;
+
+    // virtual address pointer
+    buf_ptr = (uint32_t *)((char *) bar_ptr + off);
+
+    // gpu device pointer
+    dev_buf = (void *) (uintptr_t) d_A;
+  }
+  else
 #endif
-
-  size_t reply_size = KeckRTC_UDP_SIZE;
-  bool keep_receiving = true;
-
+  // NO GDR
+  {
+    // allocate device memory
+    rval = cudaMalloc (&dev_buf, frame_size);
+    if (rval != cudaSuccess)
+      cerr << "cudaMalloc failed on dev_buf" << endl;
+  }
+#else
+  // no CUDA/GDR
+  host_buf = malloc (frame_size);
+#endif
   char * host_ptr = (char *) host_buf;
+
   struct timeval start_frame;
   struct timeval end_frame;
 
+  std::vector<double> times;
   uint64_t frames_to_receive = frame_rate * duration;
-  double * times = (double *) malloc (frames_to_receive * sizeof(double));
+  times.resize(frames_to_receive + 1);
 
-  cerr << "Ready to receive" << endl;
   uint64_t iframe = 0;
 
-  while (keep_receiving)
+  cerr << "ready to receive" << endl;
+
+  // main transfer loop
+  bool keep_receiving = true;
+  while (keep_receiving && iframe < frames_to_receive)
   {
+    // receive a whole frame, consisting multiple packets
     uint64_t bytes_received = 0;
     while (keep_receiving && bytes_received < frame_size)
     {
-      // receive the packet, may return 0 if no packet at socket
-      if (verbose > 1)
-        cerr << "Receiving " << KeckRTC_UDP_SIZE << " bytes" << endl;
+      // receive a packet
       int got = queue->open_packet ();
       if (got == KeckRTC_UDP_SIZE)
       {
-        if (process_data)
-          memcpy (host_ptr + bytes_received, queue->buf_ptr, got);
+        if (process_data) 
+	{
+#ifdef HAVE_CUDA
+#ifdef HAVE_GDR
+	  if (use_gdr)
+          {
+            gdr_copy_to_bar (buf_ptr + bytes_received/4, queue->buf_ptr, got);
+          }
+	  else
+#endif
+#endif
+	  {
+            memcpy (host_ptr + bytes_received, queue->buf_ptr, got);
+          }
+        }
         queue->close_packet();
-        bytes_received += got;
+      	bytes_received += got;
       }
       else if (got == 0)
       {
@@ -254,14 +326,21 @@ int main(int argc, char *argv[]) try
       }
     }
 
+    // 
     gettimeofday (&start_frame, 0);
 
 #ifdef HAVE_CUDA
     if (process_data) 
     {
-      rval = cudaMemcpyAsync (dev_buf, host_ptr, frame_size, cudaMemcpyHostToDevice, stream);
-      if (rval != cudaSuccess)
-        cerr << "cudaMemcpyAsync failed on sock_recv" << endl;
+#ifdef HAVE_GDR
+      // GDR path already has copied the data to GPU
+      if (!use_gdr)
+#endif
+      {
+        rval = cudaMemcpyAsync (dev_buf, host_ptr, frame_size, cudaMemcpyHostToDevice, stream);
+        if (rval != cudaSuccess)
+          cerr << "cudaMemcpyAsync failed on sock_recv" << endl;
+      }
 
       // perform some sort of operation 
       keckrtc_dummy (dev_buf, bufsz, stream);
@@ -278,73 +357,56 @@ int main(int argc, char *argv[]) try
 
     gettimeofday (&end_frame, 0);
 
+    // determine the time taken to perform GPU H2D, kernel and D2H
     double frame_time = diff_time (start_frame, end_frame);
     times[iframe] = frame_time;
     iframe++;
 
-    if (verbose > 1)
-      cerr << "Sending reply of " << bufsz << " bytes" << endl;
-
-    // send a reply
-    sock_send.send (bufsz);
+    if (keep_receiving)
+    {
+      if (verbose)
+        cerr << "Sending reply of " << bufsz << " bytes" << endl;
+      // send a reply
+      sock_send->send (bufsz);
+    }
   }
 
   if (iframe > 0)
   { 
     uint64_t frames_sent = iframe - 1;
-    
-    double duration_min = DBL_MAX;
-    double duration_max = -DBL_MAX;
-    double duration_sum = 0;
-      
-    int flags = O_WRONLY | O_CREAT | O_TRUNC; 
-    int perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-    int fd = open ("recv_timing.dat", flags, perms);
-    ::write (fd, times, frames_sent * sizeof(double));
-    ::close (fd);
-     
-    double time_sum = 0;
-      
-    for (iframe=0; iframe<frames_sent; iframe++)
-    { 
-      double duration = times[iframe];
-        
-      if (duration < duration_min)
-        duration_min = duration;
-      if (duration > duration_max)
-        duration_max = duration;
-      duration_sum += duration;
-       
-      time_sum += duration;
-    }
-      
-    double duration_mean = duration_sum / double(frames_sent);
-    cerr << "duration timing:" << endl;
-    cerr << "  minimum=" << duration_min << " us" << endl;
-    cerr << "  mean="    << duration_mean << " us" << endl;
-    cerr << "  maximum=" << duration_max << " us" << endl;
-     
-    double bytes_per_microsecond = (frames_sent * frame_size) / time_sum;
-    double gb_per_second = (bytes_per_microsecond * 1000000) / 1000000000;
-      
-    double frames_per_microsecond = frames_sent / time_sum;
-    double frames_per_second = frames_per_microsecond *1e6;
-      
-    cerr << "  data_rate=" << gb_per_second << " Gb/s" << endl;
-    cerr << "  frame_rate=" << frames_per_second << endl;
+    write_timing_data ("recv_timing.dat", times, frames_sent);
+    print_timing_data (times, frames_sent, frame_size);
   }
 
+  sock_send->close_me();
+
+  delete sock_send;
+
 #ifdef HAVE_CUDA
+#ifdef HAVE_GDR
+  if (use_gdr)
+  {
+    gdr_unmap(g, mh, bar_ptr, frame_size);
+    gdr_unpin_buffer(g, mh);
+    gdr_close(g);
+    cuMemFree(d_A);
+  }
+  else
+#endif
+  {
+    cudaFree (dev_buf);
+  }
+
   rval = cudaHostUnregister (send_buf_ptr);
   if (rval != cudaSuccess)
     cerr << "cudaHostUnregister failed on sock_send" << endl;
 
-  cudaFree (dev_buf);
   cudaFreeHost (host_buf);
+  cudaStreamDestroy(stream);
 
+#else
+  free (host_buf);
 #endif
-
-  sock_send.close_me();
 
   return 0;
 }
@@ -360,10 +422,9 @@ catch (Error& error)
   return -1;
 }
 
-
 void usage() 
 {
-  cout << "keckrtc_server [options] server port server\n"
+  cout << "keckrtc_server_ibv [options] server port server\n"
     "  server      server hostname/IP address\n"
     "  port        port for send and receiver\n"
     "  server      server hostname/IP address\n"
@@ -372,6 +433,9 @@ void usage()
     "  -f bytes    size of a frame in bytes [default "<< KeckRTC_HEAP_SIZE << "]\n"
 #ifdef HAVE_CUDA
     "  -g id       use CUDA device id\n"
+#ifdef HAVE_GDR
+    "  -j          use NVIDIA GDR Copy\n"
+#endif
 #endif
     "  -h          print this help text\n"
     "  -i          ignore data processing\n"
