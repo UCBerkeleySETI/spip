@@ -21,6 +21,7 @@
 #include <spead2/common_raw_packet.h>
 
 //#define _DEBUG
+//#define _TRACE
 
 using namespace std;
 using namespace spead2;
@@ -91,18 +92,30 @@ void spip::IBVQueue::build (const boost::asio::ip::address_v4 interface_address)
   qp.modify (IBV_QPS_INIT, cm_id->port_num);
 }
 
-void spip::IBVQueue::configure (size_t _buffer_size, size_t _packet_size, size_t _header_size)
+void spip::IBVQueue::configure (size_t _npackets, size_t _packet_size, size_t _header_size)
 {
 #ifdef _DEBUG
-  cerr << "spip::IBVQueue::configure buffer_size=" << _buffer_size 
+  cerr << "spip::IBVQueue::configure npackets=" << _npackets
        << " packet_size=" << _packet_size << " header_size=" << _header_size 
        << endl;
 #endif
   if (n_slots != 0)
     throw runtime_error ("Queue cannot be configured after building"); 
-  buffer_size = _buffer_size;
   packet_size = _packet_size;
   header_size = _header_size;
+
+  size_t ethernet_size = 6 + 6 + 4;
+  size_t ipv4_size = 20;
+  size_t udp_size = 8;
+  size_t vlan_size = 4;
+  size_t packet_headers = ethernet_size + ipv4_size + udp_size + vlan_size;
+
+  max_raw_size = packet_headers + header_size + packet_size;
+  buffer_size = _npackets * max_raw_size;
+#ifdef _DEBUG
+  cerr << "spip::IBVQueue::allocate slot_size=" << max_raw_size << endl;
+  cerr << "spip::IBVQueue::allocate buffer_size=" << buffer_size << endl;
+#endif
 }
 
 void spip::IBVQueue::allocate ()
@@ -118,7 +131,6 @@ void spip::IBVQueue::allocate ()
 #endif
   slots.reset(new slot[n_slots]);
   wc.reset(new ibv_wc[n_slots]);
-  max_raw_size = packet_size + header_size;
   for (std::size_t i = 0; i < n_slots; i++)
   {
     std::memset(&slots[i], 0, sizeof(slots[i]));
@@ -229,7 +241,7 @@ int spip::IBVQueue::open_packet ()
     npackets = cq.poll (n_slots, wc.get());
 #ifdef _TRACE
     if (npackets > 0)
-    cerr << "spip::IBVQueue::open_packet recv_cq.poll returned " << npackets << " packets" << endl;
+      cerr << "spip::IBVQueue::open_packet recv_cq.poll returned " << npackets << " packets" << endl;
 #endif
     ipacket = 0;
     islot = -1;

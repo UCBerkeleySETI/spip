@@ -91,11 +91,21 @@ void spip::IBVReceiver::configure (const char * config_str)
     throw runtime_error ("format was not allocated");
   format->configure (header, "");
 
+  // determine the resolution of the format 
+  uint64_t resolution = format->get_resolution();
+  uint64_t buffer_size = resolution;
+  while (buffer_size < 128*1024)
+    buffer_size *= 2;
+  while (buffer_size > 256*1024)
+    buffer_size /= 2;
+
+  size_t npackets = 2 * (buffer_size / format->get_packet_size());
   // configure the queue
-  buffer_size = 1048576;
   packet_size = format->get_packet_size();
   header_size = format->get_header_size();
-  queue->configure (buffer_size, packet_size, header_size);
+  if (verbose)
+    cerr << "spip::IBVReceiver::configure queue->configure()" << endl;
+  queue->configure (npackets, packet_size, header_size);
 
   // open the IBV Queue 
   if (data_mcast.size() > 0)
@@ -111,6 +121,8 @@ void spip::IBVReceiver::configure (const char * config_str)
   }
 
   // allocate requirement memory resources
+  if (verbose)
+    cerr << "spip::IBVReceiver::configure queue->allocate()" << endl;
   queue->allocate ();
 
 }
@@ -166,7 +178,8 @@ void spip::IBVReceiver::receive ()
 
   // block accounting 
   curr_byte_offset = 0;
-  next_byte_offset = data_bufsz;
+  next_byte_offset = 0;
+  overflow_maxbyte = 0;
 
 #ifdef _DEBUG
   cerr << "spip::IBVReceiver::receive [" << curr_byte_offset << " - "
@@ -188,10 +201,11 @@ void spip::IBVReceiver::receive ()
     cerr << "spip::IBVReceiver::receive starting main loop" << endl;
 
   spip::IBVQueue::keep_receiving = true;
+  need_next_block = true;
+
   while (spip::IBVQueue::keep_receiving)
   {
     int got = queue->open_packet ();
-
     if (got > 0)
     {
       if (need_next_block)
@@ -221,6 +235,7 @@ void spip::IBVReceiver::receive ()
         { 
           //set_control_cmd(Stop);
         }
+        queue->close_packet();
       }
       // packet is part of this observation
       else
@@ -255,7 +270,7 @@ void spip::IBVReceiver::receive ()
       if (bytes_this_buf >= data_bufsz || filled_this_block)
       {
 #ifdef _DEBUG
-        cerr << "spip::IBVReceiver::process_packet close_block()" << endl;
+        cerr << "spip::IBVReceiver::process_packet close_block() " << data_bufsz - bytes_this_buf << endl;
 #endif
         close_block();
         stats->dropped_bytes (data_bufsz - bytes_this_buf);
@@ -263,7 +278,9 @@ void spip::IBVReceiver::receive ()
     }
     else if (got == 0)
     {
+#ifdef _TRACE
       cerr << "spip::IBVReceiver::receive no packets in queue" << endl;
+#endif
     }
     else
     {

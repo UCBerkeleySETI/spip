@@ -34,7 +34,7 @@ namespace spip {
 
       void allocate ();
 
-      void configure (size_t buffer_size, size_t packet_size, size_t header_size);
+      void configure (size_t npackets, size_t packet_size, size_t header_size);
 
       void open (std::string ip_address, int port);
 
