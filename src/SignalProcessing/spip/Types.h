@@ -41,5 +41,12 @@ namespace spip {
       //! Fourth moment of the electric field (covariance of Stokes parameters)
       FourthMoment
     };
+
+    enum Sideband
+    {
+      None,
+      Upper,
+      Lower
+    };
   }
 }

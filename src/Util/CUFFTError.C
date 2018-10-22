@@ -7,6 +7,7 @@
 
 #include "spip/CUFFTError.h"
 
+#include <cuda.h>
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -39,7 +40,7 @@ const char* cufftResult_to_string (cufftResult result)
       return "User specified an invalid transform size";
     case CUFFT_UNALIGNED_DATA :
       return "No longer used";
-#if CUDA_VERSION >= 5050
+#if (CUDA_VERSION >= 5050)
     case CUFFT_INCOMPLETE_PARAMETER_LIST :
       return "Missing parameters in call";
     case CUFFT_INVALID_DEVICE :
@@ -49,7 +50,7 @@ const char* cufftResult_to_string (cufftResult result)
     case CUFFT_NO_WORKSPACE :
       return "No workspace has been provided prior to plan execution";
 #endif
-#if CUDA_VERSION >= 6050
+#if (CUDA_VERSION >= 6050)
     case CUFFT_NOT_IMPLEMENTED:
       return "Not Implemented";
     case CUFFT_LICENSE_ERROR:

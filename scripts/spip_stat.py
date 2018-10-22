@@ -16,7 +16,7 @@ from spip.threads.reporting_thread import ReportingThread
 from spip.log_socket import LogSocket
 from spip.utils import times,sockets
 from spip.utils.core import system_piped
-from spip.plotting import HistogramPlot,FreqTimePlot,BandpassPlot
+from spip.plotting import HistogramPlot,FreqTimePlot,BandpassPlot,TimeseriesPlot
 
 from spip_smrb import SMRBDaemon
 
@@ -77,7 +77,7 @@ class StatReportingThread(ReportingThread):
             xml += "</dimension>"
 
           xml += "<dimension name='none'>"
-          xml += "<plot type='freq_vs_time' timestamp='" + str(self.script.results["timestamp"]) + "'/>"
+          xml += "<plot type='timeseries' timestamp='" + str(self.script.results["timestamp"]) + "'/>"
           xml += "<plot type='bandpass' timestamp='" + str(self.script.results["timestamp"]) + "'/>"
           xml += "<plot type='histogram' timestamp='" + str(self.script.results["timestamp"]) + "'/>"
           xml += "</dimension>"
@@ -111,7 +111,7 @@ class StatReportingThread(ReportingThread):
           if plot in self.script.results.keys():
             if len (self.script.results[plot]) > 64:
               bin_data = copy.deepcopy(self.script.results[plot])
-              self.script.log (2, "StatReportingThread::parse_message: valid, image len=" + str(len(bin_data)))
+              self.script.log (3, "StatReportingThread::parse_message: " + plot + " valid, image len=" + str(len(bin_data)))
               self.script.results["lock"].release()
               return False, bin_data
             else:
@@ -161,33 +161,53 @@ class StatDaemon(Daemon,StreamBased):
     StreamBased.__init__(self, id, self.cfg)
 
     self.processing_dir = self.cfg["CLIENT_STATS_DIR"]
-    self.valid_plots = ["histogram", "freq_vs_time", "bandpass"]
+    self.valid_plots = []
     self.results = {}
 
     self.results["lock"] = threading.Lock()
-    self.results["valid"] = False;
+    self.results["valid"] = False
 
     (host, beam_id, subband_id) = self.cfg["STREAM_" + id].split(":")
-    self.beam_name = self.cfg["BEAM_" + beam_id] 
-  
+    self.beam_name = self.cfg["BEAM_" + beam_id]
+
     (cfreq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + subband_id].split(":")
     self.cfreq = cfreq
 
-    self.hg_plot = HistogramPlot()
-    self.ft_plot = FreqTimePlot()
-    self.bp_plot = BandpassPlot()
+    self.gen_timeseries = False
+    self.gen_freqtime = True
+    self.gen_bandpass = True
+    self.gen_histogram = True
 
     self.hg_valid = False
     self.ft_valid = False
+    self.bp_valid = False
     self.ms_valid = False
+    self.ts_valid = False
 
     self.pref_freq = 0
+    self.histogram_abs_xmax = 128
 
   #################################################################
   # main
   #       id >= 0   process folded archives from a stream
   #       id == -1  process folded archives from all streams
   def main (self):
+
+    if self.gen_histogram:
+      self.hg_plot = HistogramPlot()
+      self.valid_plots.appen("histogram")
+
+    if self.gen_bandpass:
+      self.bp_plot = BandpassPlot()
+      self.valid_plots.appen("bandpass")
+
+    if self.gen_timeseries:
+      self.ts_plot = TimeseriesPlot()
+      self.valid_plots.appen("timeseries")
+
+    if self.gen_freqtime:
+      self.ft_plot = FreqTimePlot()
+      self.valid_plots.appen("freqtime")
 
     # stats files are stored in flat directory structure
     # stats_dir / beam / cfreq
@@ -211,16 +231,19 @@ class StatDaemon(Daemon,StreamBased):
       os.makedirs(stat_dir, 0755)
 
     # configure the histogram plot with all channels included
-    self.hg_plot.configure (-1)
+    self.hg_plot.configure (-1, self.histogram_abs_xmax)
 
-    # configure the freq v time plot
     log = False
     zap = False
     transpose = False
-    self.ft_plot.configure (log, zap, transpose)
+    # configure the freq v time plot
+    if self.gen_freqtime:
+      self.ft_plot.configure (log, zap, transpose)
 
     # configure the bandpass plot
-    self.bp_plot.configure (log, zap, transpose)
+    log = True
+    if self.gen_bandpass:
+      self.bp_plot.configure (log, zap, transpose)
 
     log_host = self.cfg["SERVER_HOST"]
     log_port = int(self.cfg["SERVER_LOG_PORT"])
@@ -271,7 +294,7 @@ class StatDaemon(Daemon,StreamBased):
       self.log (2, "StatDaemon::main stat thread started")
 
       pref_freq = 0
-     
+
       while stat_thread.is_alive() and not self.quit_event.isSet():
 
         # get a list of all the files in stat_dir
@@ -281,16 +304,29 @@ class StatDaemon(Daemon,StreamBased):
 
         # if stat files exist in the directory
         if len(files) > 0:
-
-          self.process_hg (stat_dir, pref_freq)
-          self.process_ft (stat_dir, pref_freq)
+          if self.gen_histogram:
+            self.process_hg (stat_dir, pref_freq)
+          if self.gen_bandpass:
+            self.process_bp (stat_dir, pref_freq)
+          if self.gen_freqtime:
+            self.process_ft (stat_dir, pref_freq)
+          if self.gen_timeseries:
+            self.process_ts (stat_dir)
           self.process_ms (stat_dir)
 
           self.results["lock"].acquire()
 
           pref_freq = self.pref_freq
           self.results["timestamp"] = times.getCurrentTime()
-          self.results["valid"] = self.hg_valid and self.ft_valid and self.ms_valid
+          self.results["valid"] = self.ms_valid
+          if self.gen_histogram:
+            self.results["valid"] |= self.hg_valid
+          if self.gen_timeseries:
+            self.results["valid"] |= self.ts_valid
+          if self.gen_freqtime:
+            self.results["valid"] |= self.ft_valid
+          if self.gen_bandpass:
+            self.results["valid"] |= self.bp_valid
 
           self.results["lock"].release()
 
@@ -397,9 +433,60 @@ class StatDaemon(Daemon,StreamBased):
 
     return smrb_exists
 
+  #############################################################################
+  # StatDaemon::process_bp
+  def process_bp (self, stat_dir, ifreq=-1):
+    """ Process Bandpass stats files. """
+    self.log (2, "StatDaemon::process_bp("+stat_dir+")")
 
+    # read the most recent freq_vs_time stats file
+    files = [file for file in os.listdir(stat_dir) if file.lower().endswith(".bp.stats")]
+    if len(files) > 0:
+
+      self.log (3, "StatDaemon::process_bp files=" + str(files))
+      bp_file = files[-1]
+      self.log (2, "StatDaemon::process_bp bp_file=" + str(bp_file))
+
+      bp_fptr = open (stat_dir + "/" + str(bp_file), "rb")
+      npol = np.fromfile(bp_fptr, dtype=np.uint32, count=1)[0]
+      nfreq = np.fromfile(bp_fptr, dtype=np.uint32, count=1)[0]
+      freq = np.fromfile(bp_fptr, dtype=np.float64, count=1)[0]
+      bw = np.fromfile(bp_fptr, dtype=np.float64, count=1)[0]
+      self.log (3, "StatDaemon::process_bp npol=" + str(npol) + " nfreq=" + \
+                str(nfreq) + " freq=" + str(freq) + " bw=" + str(bw))
+
+      bp_data = {}
+      for ipol in range(npol):
+        bp_data[ipol] = np.fromfile (bp_fptr, dtype=np.float32, count=nfreq)
+      bp_fptr.close()
+
+      self.log (3, "StatDaemon::process_bp plotting")
+      self.results["lock"].acquire()
+
+      self.results["bp_npol"] = npol
+
+      # also configure the bandpass plot
+      for ipol in range(npol):
+
+        prefix = "bandpass_" + str(ipol) + "_none"
+
+        self.bp_plot.plot (160, 120, True, nfreq, freq, bw, bp_data[ipol])
+        self.results[prefix] = self.bp_plot.getRawImage()
+        self.bp_plot.plot (1024, 768, False, nfreq, freq, bw, bp_data[ipol])
+        self.results[prefix + "_hires"] = self.bp_plot.getRawImage()
+
+      self.bp_valid = True
+
+      self.results["lock"].release()
+
+      for file in files:
+        os.remove (stat_dir + "/" + file)
+
+
+  #############################################################################
+  # StatDaemon::process_ft
   def process_ft (self, stat_dir, ifreq=-1):
-    
+    """ Process Freq vs Time stats files. """ 
     self.log (2, "StatDaemon::process_ft("+stat_dir+")")
 
     # read the most recent freq_vs_time stats file
@@ -419,8 +506,7 @@ class StatDaemon(Daemon,StreamBased):
       bw = np.fromfile(ft_fptr, dtype=np.float64, count=1)[0]
       tsamp = np.fromfile(ft_fptr, dtype=np.float64, count=1)[0]
       self.log (3, "StatDaemon::process_ft npol=" + str(npol) + " nfreq=" + \
-                str(nfreq) + " ntime=" + str(ntime) + " freq=" + str(freq) + " bw=" + str(bw) + " tsamp="
-+ str(tsamp))
+                str(nfreq) + " ntime=" + str(ntime) + " freq=" + str(freq) + " bw=" + str(bw) + " tsamp=" + str(tsamp))
 
       ft_data = {}
       for ipol in range(npol):
@@ -454,28 +540,64 @@ class StatDaemon(Daemon,StreamBased):
       
       self.ft_valid = True
 
-      # also configure the bandpass plot
-      for ipol in range(npol):
-
-        prefix = "bandpass_" + str(ipol) + "_none"
-
-        # compress time dimension
-        spectrum = ft_data[ipol].sum(axis=1) / ntime
-
-        self.bp_plot.plot (160, 120, True, nfreq, freq, bw, spectrum)
-        self.results[prefix] = self.bp_plot.getRawImage()
-        self.bp_plot.plot (1024, 768, False, nfreq, freq, bw, spectrum)
-        self.results[prefix + "_hires"] = self.bp_plot.getRawImage()
-
-      self.bp_valid = True
-
       self.results["lock"].release()
 
       for file in files:
         os.remove (stat_dir + "/" + file)
 
-  def process_ms (self, stat_dir):
+  #############################################################################
+  # StatDaemon::process_ts
+  def process_ts (self, stat_dir):
+    """ Process Timeseries stats files. """
+    self.log (2, "StatDaemon::process_ts("+stat_dir+")")
 
+    # read the most recent time series stats file
+    files = [file for file in os.listdir(stat_dir) if file.lower().endswith(".ts.stats")]
+    self.log (2, "StatDaemon::process_ts files=" + str(files))
+    if len(files) > 0:
+
+      ts_file = files[-1]
+      self.log (3, "StatDaemon::process_ts ts_file=" + str(ts_file))
+
+      ts_fptr = open (stat_dir + "/" + str(ts_file), "rb")
+      npol = np.fromfile(ts_fptr, dtype=np.uint32, count=1)[0]
+      ntime = np.fromfile(ts_fptr, dtype=np.uint32, count=1)[0]
+      tsamp = np.fromfile(ts_fptr, dtype=np.float64, count=1)[0]
+      self.log (3, "StatDaemon::process_ts npol=" + str(npol) + " ntime=" + str(ntime) + " tsamp=" + str(tsamp))
+
+      xvals = np.arange (0, ntime*tsamp, tsamp, dtype=float)
+      ts_data = {}
+      ntype = 3
+      labels = ["min", "mean", "max"]
+      colors = ["green", "black", "red"]
+      for ipol in range(npol):
+        ts_data[ipol] = np.fromfile (ts_fptr, dtype=np.float32, count=ntype*ntime)
+        ts_data[ipol].shape = (ntype, ntime)
+      ts_fptr.close()
+
+      self.log (3, "StatDaemon::process_ts plotting")
+      self.results["lock"].acquire()
+
+      self.results["ts_npol"] = npol
+      self.results["ts_ntype"] = ntype
+
+      for ipol in range(npol):
+        prefix = "timeseries_" + str(ipol) + "_none"
+        self.ts_plot.plot (160, 120, True, xvals, ts_data[ipol], labels, colors)
+        self.results[prefix] = self.ts_plot.getRawImage()
+        self.ts_plot.plot (1024, 768, False, xvals, ts_data[ipol], labels, colors)
+        self.results[prefix + "_hires"] = self.ts_plot.getRawImage()
+
+      for file in files:
+        os.remove (stat_dir + "/" + file)
+
+      self.ts_valid = True
+      self.results["lock"].release()
+    
+  #############################################################################
+  # StatDaemon::process_ms
+  def process_ms (self, stat_dir):
+    """ Process Mean and Standard Deviation stats files. """
     self.log (2, "StatDaemon::process_ms("+stat_dir+")")
 
     # find the most recent Mean/Stddev stats files
@@ -525,7 +647,7 @@ if __name__ == "__main__":
   script = []
   script = StatDaemon ("spip_stat", stream_id)
 
-  state = script.configure (DAEMONIZE, DL, "stat", "stat") 
+  state = script.configure (DAEMONIZE, DL, "stat", "stat")
 
   if state != 0:
     sys.exit(state)

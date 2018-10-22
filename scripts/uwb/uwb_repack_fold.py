@@ -61,8 +61,8 @@ class RepackFoldDaemon(Daemon):
       os.makedirs(self.processing_dir, 0755) 
     if not os.path.exists(self.finished_dir):
       os.makedirs(self.finished_dir, 0755) 
-    if not os.path.exists(self.archived_dir):
-      os.makedirs(self.archived_dir, 0755) 
+    if not os.path.exists(self.send_dir):
+      os.makedirs(self.send_dir, 0755) 
 
     self.log (2, "main: stream_id=" + str(self.id))
 
@@ -148,9 +148,15 @@ class RepackFoldDaemon(Daemon):
           time.sleep(1)
           to_sleep -= 1
 
-# 
-# patch missing information into the PSRFITS header 
-#
+  # 
+  # convert a UTC in ????-??-??-??:??:?? to ????-??-??-??-??-??
+  #  
+  def atnf_utc (self, instr):
+    return instr.replace(":","-")
+
+  # 
+  # patch missing information into the PSRFITS header 
+  #
   def patch_psrfits_header (self, input_dir, input_file):
 
     header_file = input_dir + "/obs.header"
@@ -162,9 +168,10 @@ class RepackFoldDaemon(Daemon):
     new["obs:observer"] = header["OBSERVER"] 
     new["obs:projid"]   = header["PID"]
     new["be:nrcvr"]     = "2"
+    new["be:phase"]     = header["BACKEND_PHASE"] # Phase convention of backend
 
     # need to know what these mean!
-    new["be:phase"]     = "+1"    # Phase convention of backend
+    new["rcvr:sa"]      = "0"     # Advised by D.Manchester
     new["be:tcycle"]    = "8"     # Correlator cycle time
     new["be:dcc"]       = "0"     # Downconversion conjugation corrected
     new["sub:nsblk"]    = "1"     # Samples/row (SEARCH mode, else 1)
@@ -202,7 +209,7 @@ class RepackFoldDaemon(Daemon):
 
     # use a local control file to know if remote directory exists
     if not os.path.exists(ctrl_file):
-      cmd = "ssh " + self.rsync_user + "@" + self.rsync_server + " 'mkdir -p " + rem_dir + "'";
+      cmd = "ssh " + self.rsync_user + "@" + self.rsync_server + " 'mkdir -p " + rem_dir + " -m 0755'";
       rval, lines = self.system(cmd, 2)
       if rval:
         return (rval, "failed to create remote dir " + str(lines[0]))
@@ -221,17 +228,17 @@ class RepackFoldDaemon(Daemon):
   #
   def process_archive (self, utc, source, file): 
 
+    utc_out = self.atnf_utc(utc)
     in_dir = self.processing_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
-    out_dir = self.archived_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
+    out_dir = self.send_dir + "/" + self.beam + "/" + utc_out +  "/" + source + "/" + self.cfreq
 
     # ensure required directories exist
-    out_source_dir = os.path.dirname(out_dir)
-    out_utc_dir = os.path.dirname(out_source_dir)
-    required_dirs = [out_utc_dir, out_source_dir, out_dir]
+    required_dirs = [out_dir]
     for dir in required_dirs:
       if not os.path.exists(dir):
         os.makedirs(dir, 0755)
 
+    # create a remote directory on the server [should no longer be necessary]
     rval, message = self.create_remote_dir (utc, source)
     if rval:
       self.log (-2, "RepackFoldDaemon::process_archive create_remote_dir failed: " + message)
@@ -247,11 +254,19 @@ class RepackFoldDaemon(Daemon):
       if rval:
         return (rval, "failed to copy obs.header to out_dir: " + str(lines[0]))
 
+    # convert all upper sideband archives to lower sideband
+    if float(self.bw) > 0:
+      cmd = "pam --reverse_freqs -m " + input_file
+      rval, lines = self.system (cmd, 2)
+      if rval:
+        self.log (-1, "RepackFoldDaemon::process_archive " + cmd + " failed: " + str(lines))
+        return (rval, "failed to convert upper sideband to lower sideband")
+
     # convert the timer archive file to psrfits in the output directory
     cmd = "psrconv " + input_file + " -O " + out_dir
     rval, lines = self.system (cmd, 2)
     if rval:
-      return (rval, "failed to copy processed file to archived dir")
+      return (rval, "failed to copy processed file to send dir")
     psrfits_file = out_dir + "/" + os.path.basename (input_file)
     self.log (2, "process_archive() psrfits_file=" + psrfits_file)
 
@@ -260,8 +275,16 @@ class RepackFoldDaemon(Daemon):
     if rval:
       return (rval, "failed to convert psrfits file")
 
+    # rename the psrfits file to match ATNF standards
+    atnf_psrfits_file = out_dir + "/" + self.atnf_utc(os.path.basename (input_file))
+    try:
+      os.rename (psrfits_file, atnf_psrfits_file)
+    except OSError, e:
+      self.log (0, "fail_observation: failed to rename " + psrfits_file + " to " + atnf_psrfits_file)
+      return (1, "failed to rename psrfits file")
+
     # auto-zap bad channels
-    cmd = "zap.psh -m " + input_file
+    cmd = "zap_uwl.psh -m " + input_file
     rval, lines = self.system (cmd, 2)
     if rval:
       return (rval, "failed to zap known bad channels")
@@ -295,22 +318,22 @@ class RepackFoldDaemon(Daemon):
 
   def fail_observation (self, utc, source):
 
+    utc_out = self.atnf_utc (utc)
     in_dir = self.processing_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
     fail_dir = self.failed_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
-    arch_dir = self.archived_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
+    send_dir = self.send_dir + "/" + self.beam + "/" + utc_out + "/" + source + "/" + self.cfreq
 
     # ensure required directories exist
-    fail_source_dir = os.path.dirname(fail_dir)
-    fail_utc_dir = os.path.dirname(fail_source_dir)
-    required_dirs = [fail_utc_dir, fail_source_dir, arch_dir]
+    required_dirs = [fail_dir, send_dir]
     for dir in required_dirs:
       if not os.path.exists(dir):
         os.makedirs(dir, 0755)
 
-    # touch obs.failed file in the archival directory
-    cmd = "touch " + arch_dir + "/obs.failed"
+    # touch obs.failed file in the send directory
+    cmd = "touch " + send_dir + "/obs.failed"
     rval, lines = self.system (cmd, 3)
 
+    # create remote directory on the server [this should no longer be required]
     self.log (3, "RepackFoldDaemon::fail_observation create_remote_dir(" + utc + ", " + source + ")")
     (rval, message) = self.create_remote_dir (utc, source)
     if rval:
@@ -336,37 +359,38 @@ class RepackFoldDaemon(Daemon):
       return (1, "failed to rename in_dir to fail_dir")
 
     # count the number of other sub-band directories
-    parent_dir = os.path.dirname (in_dir)
-    self.log (2, "RepackFoldDaemon::fail_observation parent_dir=" + parent_dir)
-    subdir_count = len(os.listdir(parent_dir))
-    self.log (2, "RepackFoldDaemon::fail_observation parent_dir subdir_count=" + str(subdir_count))
+    src_dir = os.path.dirname (in_dir)
+    self.log (2, "RepackFoldDaemon::fail_observation src_dir=" + src_dir)
+    subdir_count = len(os.listdir(src_dir))
+    self.log (2, "RepackFoldDaemon::fail_observation src_dir subdir_count=" + str(subdir_count))
     if subdir_count == 0:
-      os.rmdir(parent_dir)
+      os.rmdir(src_dir)
+      utc_dir = os.path.dirname (src_dir)
+      os.rmdir(utc_dir)
 
     return (0, "")
-
 
   # transition observation from processing to finished
   def finalise_observation (self, utc, source):
 
+    utc_out = self.atnf_utc (utc)
     in_dir = self.processing_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
     fin_dir = self.finished_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
-    arch_dir = self.archived_dir + "/" + self.beam + "/" + utc + "/" + source + "/" + self.cfreq
+    send_dir = self.send_dir + "/" + self.beam + "/" + utc_out + "/" + source + "/" + self.cfreq
 
     # ensure required directories exist
-    fin_source_dir = os.path.dirname(fin_dir)
-    fin_utc_dir = os.path.dirname(fin_source_dir)
-    required_dirs = [fin_utc_dir, fin_source_dir, arch_dir]
+    required_dirs = [fin_dir, send_dir]
     for dir in required_dirs:
       if not os.path.exists(dir):
         os.makedirs(dir, 0755)
 
     # touch and obs.finished file in the archival directory
-    cmd = "touch " + arch_dir + "/obs.finished"
+    cmd = "touch " + send_dir + "/obs.finished"
     rval, lines = self.system (cmd, 3)
     if rval:
-      return (1, "finalise_observation: failed to create " + arch_dir + "/obs.finished")
+      return (1, "finalise_observation: failed to create " + send_dir + "/obs.finished")
 
+    # create remote directory on server
     self.log (3, "RepackFoldDaemon::finalise_observation create_remote_dir(" + utc + ", " + source + ")")
     (rval, message) = self.create_remote_dir (utc, source)
     if rval:
@@ -389,12 +413,23 @@ class RepackFoldDaemon(Daemon):
       return (1, "finalise_observation failed to rename in_dir to fin_dir")
 
     # count the number of other sub-band directories
-    parent_dir = os.path.dirname (in_dir)
-    self.log (2, "RepackFoldDaemon::finalise_observation parent_dir=" + parent_dir)
-    subdir_count = len(os.listdir(parent_dir))
-    self.log (2, "RepackFoldDaemon::finalise_observation parent_dir subdir_count=" + str(subdir_count))
+    src_dir = os.path.dirname (in_dir)
+    self.log (2, "RepackFoldDaemon::finalise_observation src_dir=" + src_dir)
+    subdir_count = len(os.listdir(src_dir))
+    self.log (2, "RepackFoldDaemon::finalise_observation src_dir subdir_count=" + str(subdir_count))
     if subdir_count == 0:
-      os.rmdir(parent_dir)
+      try:
+        os.rmdir(src_dir)
+      except OSError, e:
+        self.log (1, "finalise_observation: could not remove src_dir [" + src_dir + "]: " + str(e))
+        return (0, "")
+
+      utc_dir = os.path.dirname (src_dir)
+      try:
+        os.rmdir(utc_dir)
+      except OSError, e:
+        self.log (1, "finalise_observation: could not remove utc_dir [" + src_dir + "]: " + str(e))
+        return (0, "")
 
     return (0, "")
 
@@ -419,7 +454,7 @@ class RepackFoldStreamDaemon (RepackFoldDaemon, StreamBased):
     # base directories for fold data products
     self.processing_dir = self.cfg["CLIENT_FOLD_DIR"] + "/processing"
     self.finished_dir   = self.cfg["CLIENT_FOLD_DIR"] + "/finished"
-    self.archived_dir   = self.cfg["CLIENT_FOLD_DIR"] + "/archived"
+    self.send_dir       = self.cfg["CLIENT_FOLD_DIR"] + "/send"
     self.failed_dir     = self.cfg["CLIENT_FOLD_DIR"] + "/failed"
 
     # get the properties for this subband

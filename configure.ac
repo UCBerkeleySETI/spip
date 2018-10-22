@@ -33,6 +33,7 @@ BOOST_REQUIRE([1.48],[AC_MSG_NOTICE([Could not find BOOST]])
 BOOST_SYSTEM([mt])
 SWIN_LIB_SPEAD2
 SWIN_LIB_VDIFIO
+SWIN_LIB_GDR
 SWIN_LIB_VMA
 
 # Checks for header files.
@@ -53,6 +54,7 @@ AC_CONFIG_FILES([Makefile
   src/Formats/VDIF/Makefile
   src/Dada/Makefile
   src/Instruments/Makefile
+  src/Instruments/KeckRTC/Makefile
   src/Instruments/MeerKAT/Makefile
   src/Instruments/UWB/Makefile
   src/SignalProcessing/Makefile
@@ -66,6 +68,7 @@ AC_CONFIG_FILES([Makefile
   scripts/spip/daemons/Makefile
   scripts/uwb/Makefile
   web/Makefile
+  web/continuum/Makefile
   web/controls/Makefile
   web/images/Makefile
   web/js/Makefile

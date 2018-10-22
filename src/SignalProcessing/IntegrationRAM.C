@@ -118,6 +118,10 @@ void spip::IntegrationRAM::transform_TSPF_to_TSPF ()
     // we have completed a time-sample sub-integration
     if (buffer_idat == dat_dec)
     {
+      if (verbose)
+        cerr << "spip::IntegrationRAM::transform_TSPF_to_TSPF memcpy("
+             << (void *) out << "," << (void *) buf << ","
+             << out_dat_stride * sizeof(float) << ")" << endl;
       // TODO remove memcpy
       memcpy (out, buf, out_dat_stride * sizeof(float));
       buffer->zero();

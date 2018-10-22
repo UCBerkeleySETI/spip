@@ -13,6 +13,7 @@
 
 #include "spip/AdaptiveFilter.h"
 #include "spip/ContainerCUDA.h"
+#include "spip/ContainerCUDAFileWrite.h"
 #include <cuda_runtime.h>
 
 namespace spip {
@@ -21,26 +22,35 @@ namespace spip {
   {
     public:
     
-      AdaptiveFilterCUDA ();
+      AdaptiveFilterCUDA (cudaStream_t, std::string);
       
       ~AdaptiveFilterCUDA ();
 
-      void set_input_ref (Container *);
-      
       void configure (Ordering output_order);
 
-      void prepare ();
-      
-      void reserve ();
-      
       void transform_TSPF ();
 
       void transform_SFPT ();
+
+      void write_gains ();
+
+      void write_dirty ();
+
+      void write_cleaned ();
 
     protected:
     
     private:
 
+      cudaStream_t stream;
+
+      bool processed_first_block;
+
+      ContainerCUDAFileWrite * gains_file_write;
+
+      ContainerCUDAFileWrite * dirty_file_write;
+
+      ContainerCUDAFileWrite * cleaned_file_write;
   };
 }
 

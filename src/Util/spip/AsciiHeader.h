@@ -58,6 +58,8 @@ namespace spip {
 
       static long filesize (const char* filename);
 
+      static long header_read (const char* filename, char* buffer, unsigned bufsz);
+
       static const char* whitespace;
 
     private:

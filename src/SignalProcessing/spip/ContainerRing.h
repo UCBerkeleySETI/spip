@@ -30,7 +30,7 @@ namespace spip {
       void resize ();
 
       //! zero the buffer 
-      void zero ();
+      virtual void zero ();
 
       //! set change the buffer pointer
       void set_buffer (unsigned char * buf);

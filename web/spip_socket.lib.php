@@ -12,6 +12,7 @@ class spip_socket
 
   function __construct ()
   {
+    $this->sock = 0;
     $this->errno = 0;
     $this->is_open = 0;
 
@@ -56,11 +57,16 @@ class spip_socket
     $connected = false;
 
     # ensure the socket is created
-    $this->create();
+    if ($this->sock == 0)
+    {
+      $this->create();
+    }
 
     while (!$connected)
     {
+      # echo "spip::socket::open socket_connect(".$host.":".$port.")<br/>\n";
       $connected = @socket_connect ($this->sock, $host, $port);
+      # echo "spip::socket::open connected=".$connected."<br/>\n";
       if (!$connected)
       {
         if ($timeout > 0)
@@ -92,6 +98,7 @@ class spip_socket
   {
     if ($this->is_open)
     {
+      socket_set_option($this->sock, SOL_SOCKET, SO_RCVTIMEO, array('sec'=>2,'usec'=>000000));
       $response = @socket_read ($this->sock, 262144, PHP_NORMAL_READ);
       if ($response === FALSE)
       {
@@ -141,6 +148,7 @@ class spip_socket
     if ($this->is_open)
     {
       $bytes_to_write = strlen($string);
+      socket_set_option($this->sock, SOL_SOCKET, SO_SNDTIMEO, array('sec'=>2,'usec'=>0));
       $bytes_written = @socket_write($this->sock, $string, $bytes_to_write);
 
       if ($bytes_written === FALSE)
@@ -166,6 +174,17 @@ class spip_socket
       socket_close($this->sock);
       $this->sock = 0;
       $this->is_open = 0; 
+    }
+  }
+
+  public function shutdown()
+  {
+    if ($this->is_open)
+    {
+      socket_shutdown($this->sock);
+      socket_close($this->sock);
+      $this->sock = 0;
+      $this->is_open = 0;
     }
   }
 }

@@ -38,6 +38,9 @@ namespace spip {
       //! Perform a forward FFT on input block
       void transformation ();
 
+      //! Required operation
+      virtual void fft_shift () = 0;
+
       //! Required data transformation
       virtual void transform_SFPT_to_TFPS () = 0 ;
 
@@ -78,6 +81,8 @@ namespace spip {
       double tsamp;
 
       bool normalize;
+
+      bool apply_fft_shift;
 
       float scale_fac;
 

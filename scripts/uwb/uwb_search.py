@@ -60,43 +60,43 @@ class UWBSearchDaemon (UWBProcDaemon):
       db_key_file.write("key " +  self.db_key + "\n")
       db_key_file.close()
 
-    outnstokes = -1
-    outtsubint = -1
-    outtdec = -1
+    out_npol = -1
+    out_tsubint = -1
+    out_tsamp = -1
     dm = -1
-    innchan = int(self.header["NCHAN"])
-    outnchan = innchan
-    outnstokes = 1
-    outnbit = 8
+    in_nchan = int(self.header["NCHAN"])
+    out_nchan = in_nchan
+    out_npol = 1
+    out_nbit = 8
 
     try:
-      outtsubint = int(self.header["OUTTSUBINT"])
+      out_tsubint = int(self.header["SEARCH_OUTTSUBINT"])
     except:
-      outtsubint = 10
+      out_tsubint = 10
 
     try:
-      outnstokes = int(self.header["OUTNSTOKES"])
+      out_npol = int(self.header["SEARCH_OUTNPOL"])
     except:
-      outnstokes = 1
+      out_npol = 1
 
     try:
-      outnbit = int(self.header["OUTNBIT"])
+      out_nbit = int(self.header["SEARCH_OUTNBIT"])
     except:
-      outnbit = 8
+      out_nbit = 8
 
     try:
-      outtdec = int(self.header["OUTTDEC"])
+      out_tsamp = int(self.header["SEARCH_OUTTSAMP"])
     except:
-      outtdec = 32
+      out_tsamp = 64
 
     try:
-      outnchan = int(self.header["OUTNCHAN"])
+      out_nchan = int(self.header["SEARCH_OUTNCHAN"])
     except:
-      outnchan = 0
-      innchan = 0
+      out_nchan = 0
+      in_nchan = 0
 
     try:
-      dm = float(self.header["DM"])
+      dm = float(self.header["SEARCH_DM"])
     except:
       dm = -1
 
@@ -106,33 +106,33 @@ class UWBSearchDaemon (UWBProcDaemon):
     self.cmd = "digifits -Q " + db_key_filename + " -cuda " + self.gpu_id + " -nsblk " + str(nsblk)
 
     # handle detection options
-    if outnstokes == 1 or outnstokes == 2 or outnstokes == 4:
+    if out_npol == 1 or out_npol == 2 or out_npol == 4:
       # hack for NPOL==1
       if self.header["NPOL"] == "1":
         self.cmd = self.cmd + " -p 1"
       else:
-        self.cmd = self.cmd + " -p " + str(outnstokes)
+        self.cmd = self.cmd + " -p " + str(out_npol)
     else:
-      self.log(-1, "ignoring invalid outnstokes of " + str(outnstokes))
+      self.log(-1, "ignoring invalid out_npol of " + str(out_npol))
 
     # handle channelisation
-    if outnchan > innchan:
-      if outnchan % innchan == 0:
-        self.cmd = self.cmd + " -F " + str(outnchan) + ":D"
+    if out_nchan > in_nchan:
+      if out_nchan % in_nchan == 0:
+        self.cmd = self.cmd + " -F " + str(out_nchan) + ":1024"
       else:
         self.log(-1, "Invalid output channelisation")
 
     # handle output digitization
-    if outnbit == 1 or outnbit == 2 or outnbit == 4 or outnbit == 8:
-      self.cmd = self.cmd + " -b " + str(outnbit)
+    if out_nbit == 1 or out_nbit == 2 or out_nbit == 4 or out_nbit == 8:
+      self.cmd = self.cmd + " -b " + str(out_nbit)
 
     # handle temporal integration
-    out_tsamp = (float(self.header["TSAMP"]) * (outnchan / innchan) * outtdec) / 1000000
-    self.cmd = self.cmd +  " -t " + str(out_tsamp)
+    out_tsamp_secs = float(out_tsamp) / 1000000
+    self.cmd = self.cmd +  " -t " + str(out_tsamp_secs)
 
     # handle output sub-int length, need lots of precision
-    block_length_seconds = out_tsamp * nsblk
-    blocks_per_subint = int(math.floor(outtsubint / block_length_seconds))
+    block_length_seconds = out_tsamp_secs * nsblk
+    blocks_per_subint = int(math.floor(out_tsubint / block_length_seconds))
     subint_length_seconds = block_length_seconds * blocks_per_subint
     self.cmd = self.cmd + " -L " + format(subint_length_seconds, ".16f")
 

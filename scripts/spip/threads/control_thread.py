@@ -28,6 +28,7 @@ class ControlThread(threading.Thread):
 
     while (self.keep_running()):
       sleep(1)
+    self.script.log (2, "ControlThread::run quit_file=" + str(path.exists(self.script.quit_file)) + " quit_event=" + str(self.script.quit_event.isSet()))
 
     self.script.log (2, "ControlThread::run keep_running == false")
     self.script.quit_event.set()

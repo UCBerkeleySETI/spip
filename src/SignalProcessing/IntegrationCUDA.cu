@@ -200,6 +200,8 @@ void spip::IntegrationCUDA::transform_TSPF_to_TSPF ()
   {
     unsigned nthread = 1024;
     dim3 blocks (nchan_work / nthread, nsigpol, 1);
+    if (nchan_work % nthread)
+      blocks.x++;
 
     uint64_t sigpol_stride = nchan_work;
     uint64_t dat_stride = nsigpol * sigpol_stride;

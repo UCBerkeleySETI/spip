@@ -129,6 +129,7 @@ void spip::BlockFormatUWB::unpack_hgft (char * buffer, uint64_t nbytes)
 
         ref = float(re);
         imf = float(im);
+        power = ((ref * ref) + (imf * imf));
 
         sums[ipol*ndim + 0] += ref;
         sums[ipol*ndim + 1] += imf;
@@ -164,18 +165,43 @@ void spip::BlockFormatUWB::unpack_hgft (char * buffer, uint64_t nbytes)
             ref = out[ifreq][0] / nfft;
             imf = out[ifreq][1] / nfft;
             power = ((ref * ref) + (imf * imf));
-            freq_time[ipol][ofreq][itime] += power;
+            bandpass[ipol][ofreq] += power;
           }
           ival = 0;
         }
 #else
-        power = ((ref * ref) + (imf * imf));
-        freq_time[ipol][ifreq_hg][itime] += power;
+        bandpass[ipol][ifreq_hg] += power;
 #endif
+
+        // the absolute sample number for the start of the block
+        unsigned isamp = iblock * nsamp_per_block + ibit;
+        itime = isamp / nsamp_per_time;
+
+        // now parse in the min max
+        ts_min[ipol][itime]  = std::min (power, ts_min[ipol][itime]);
+        ts_max[ipol][itime]  = std::max (power, ts_max[ipol][itime]);
+        ts_sum[ipol][itime]   += power;
+        ts_sumsq[ipol][itime] += power * power;
+
         idx += 2;
       } 
     }
   }
+
+  const float scale = float(nsamp_per_time);
+  for (unsigned ipol=0; ipol<npol; ipol++)
+  {
+    for (unsigned itime=0; itime<ntime; itime++)
+    {
+      float sumsq = ts_sumsq[ipol][itime];
+      float sumsum = ts_sum[ipol][itime] * ts_sum[ipol][itime];
+      float variance = (sumsq - sumsum/scale) / scale;
+      ts_rms[ipol][itime] = 0.0;
+      if (variance > 0)
+        ts_rms[ipol][itime] = sqrtf (variance);
+      ts_mean[ipol][itime] = ts_sum[ipol][itime] / scale;
+    }
+  } 
 }
 
 void spip::BlockFormatUWB::unpack_ms(char * buffer, uint64_t nbytes)
@@ -211,13 +237,13 @@ void spip::BlockFormatUWB::unpack_ms(char * buffer, uint64_t nbytes)
 
         // real
         idx = ipol*ndim + 0;
-        diff = (float) re - means[idx];
-        variances[idx] += diff * diff;
+        diff = float(re) - means[idx];
+        variances[idx] += (diff * diff);
 
         // imag
         idx = ipol*ndim + 1;
-        diff = (float) im - means[idx];
-        variances[idx] += diff * diff;
+        diff = float(im) - means[idx];
+        variances[idx] += (diff * diff);
 
         isamp += 2;
       }
@@ -226,7 +252,7 @@ void spip::BlockFormatUWB::unpack_ms(char * buffer, uint64_t nbytes)
 
   for (unsigned i=0; i<npol * ndim; i++)
   {
-    variances[i] /= ndat;
+    variances[i] /= (nblock * nsamp_per_block);
     stddevs[i] = sqrtf (variances[i]);
 #ifdef _DEBUG
     cerr << "spip::BlockFormatUWB::unpack_ms ipoldim=" << i << " mean=" << means[i] << " variance=" << variances[i] << " stddev=" << stddevs[i] << endl;

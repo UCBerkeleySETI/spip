@@ -24,7 +24,11 @@ namespace spip {
 
       void write_histograms(std::string hg_filename);
 
+      void write_bandpasses(std::string bp_filename);
+
       void write_freq_times(std::string ft_filename);
+
+      void write_time_series(std::string ts_filename);
 
       void write_mean_stddevs(std::string ms_filename);
 
@@ -70,17 +74,31 @@ namespace spip {
 
       uint64_t resolution;
 
-      std::vector <float>sums;
+      std::vector <float> sums;
 
-      std::vector <float>means;
+      std::vector <float> means;
 
-      std::vector <float>variances;
+      std::vector <float> variances;
 
       std::vector <float> stddevs;
 
       std::vector <std::vector <std::vector <std::vector <unsigned> > > > hist;
 
       std::vector <std::vector <std::vector <float> > > freq_time;
+
+      std::vector <std::vector <float> > bandpass;
+
+      std::vector <std::vector <float> > ts_min;
+
+      std::vector <std::vector <float> > ts_mean;
+
+      std::vector <std::vector <float> > ts_rms;
+
+      std::vector <std::vector <float> > ts_max;
+
+      std::vector <std::vector <float> > ts_sum;
+
+      std::vector <std::vector <float> > ts_sumsq;
 
     private:
 

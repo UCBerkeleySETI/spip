@@ -18,20 +18,19 @@
 
 using namespace std;
 
-spip::AdaptiveFilterPipeline::AdaptiveFilterPipeline (const char * in_key_string, const char * ref_key_string, const char * out_key_string)
+spip::AdaptiveFilterPipeline::AdaptiveFilterPipeline (const char * in_key_string, const char * out_key_string)
 {
   nfft = -1;
+  reference_pol = -1;
+#ifdef HAVE_CUDA
   device = -1;
+#endif
 
   in_db  = new DataBlockRead (in_key_string);
-  ref_db  = new DataBlockRead (ref_key_string);
   out_db = new DataBlockWrite (out_key_string);
 
   in_db->connect();
   in_db->lock();
-
-  ref_db->connect();
-  ref_db->lock();
 
   out_db->connect();
   out_db->lock();
@@ -45,10 +44,6 @@ spip::AdaptiveFilterPipeline::~AdaptiveFilterPipeline()
   in_db->disconnect();
   delete in_db;
 
-  ref_db->unlock();
-  ref_db->disconnect();
-  delete ref_db;
-
   out_db->unlock();
   out_db->disconnect();
   delete out_db;
@@ -61,46 +56,43 @@ void spip::AdaptiveFilterPipeline::set_channelisation (int freq_res)
   nfft = freq_res;
 }
 
+void spip::AdaptiveFilterPipeline::set_filtering (int ref_pol)
+{
+  reference_pol = ref_pol;
+}
+
 //! build the pipeline containers and transforms
-void spip::AdaptiveFilterPipeline::configure ()
+void spip::AdaptiveFilterPipeline::configure (spip::UnpackFloat * unpacker)
 {
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure ()" << endl;
 #ifdef HAVE_CUDA
   if (device >= 0)
-    return configure_cuda();
+    return configure_cuda(unpacker);
 #endif
   
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure creating input" << endl;
   // input containers, reads header 
   input = new spip::ContainerRingRead (in_db);
-  input_ref = new spip::ContainerRingRead (ref_db);
 
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure unpacked container" << endl;
   // unpacked containers
   unpacked = new spip::ContainerRAM ();
-  unpacked_ref = new spip::ContainerRAM ();
   
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure allocating UnpackFloat" << endl;
   // unpack to float operation
-  unpack_float = new spip::UnpackFloatRAM();
+  unpack_float = unpacker;
   unpack_float->set_input (input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
-
-  unpack_float_ref = new spip::UnpackFloatRAM();
-  unpack_float_ref->set_input (input_ref);
-  unpack_float_ref->set_output (unpacked_ref);
-  unpack_float_ref->set_verbose (verbose);
 
   // fine channels
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure allocating channelised container" << endl;
   channelised = new spip::ContainerRAM ();
-  channelised_ref = new spip::ContainerRAM ();
   
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure allocating Forward FFT" << endl;
@@ -111,21 +103,20 @@ void spip::AdaptiveFilterPipeline::configure ()
   fwd_fft->set_nfft (nfft);
   fwd_fft->set_verbose (verbose);
 
-  fwd_fft_ref = new spip::ForwardFFTFFTW();
-  fwd_fft_ref->set_input (unpacked_ref);
-  fwd_fft_ref->set_output (channelised_ref);
-  fwd_fft_ref->set_nfft (nfft);
-  fwd_fft_ref->set_verbose (verbose);
-
   // cleaned data
   cleaned = new spip::ContainerRAM ();
 
+  // TODO parameterise this
+  std::string output_dir = string(".");
+
+  if (verbose)
+    cerr << "spip::AdaptiveFilterPipeline::configure allocating Adaptive Filter" << endl;
   // RFI Filtering operation
-  filter = new spip::AdaptiveFilterRAM();
+  filter = new spip::AdaptiveFilterRAM(output_dir);
   filter->set_input (channelised);
-  filter->set_input_ref (channelised_ref);
   filter->set_output (cleaned);
   filter->set_verbose (verbose);
+  filter->set_filtering (reference_pol);
 
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure allocating output Ring Buffer" << endl;
@@ -166,7 +157,7 @@ void spip::AdaptiveFilterPipeline::set_device (int _device)
 }
   
 //! build the pipeline containers and transforms
-void spip::AdaptiveFilterPipeline::configure_cuda ()
+void spip::AdaptiveFilterPipeline::configure_cuda (spip::UnpackFloat * unpacker)
 {
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure_cuda creating input" << endl;
@@ -174,12 +165,8 @@ void spip::AdaptiveFilterPipeline::configure_cuda ()
   input = new spip::ContainerRingRead (in_db);
   input->register_buffers();
 
-  input_ref = new spip::ContainerRingRead (ref_db);
-  input_ref->register_buffers();
-
   // transfer host to device
   d_input = new spip::ContainerCUDADevice ();
-  d_input_ref = new spip::ContainerCUDADevice ();
 
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure_cuda allocating RAM to CUDA Transfer" << endl;
@@ -188,35 +175,28 @@ void spip::AdaptiveFilterPipeline::configure_cuda ()
   ram_to_cuda->set_output (d_input); 
   ram_to_cuda->set_verbose (verbose);
 
-  ram_to_cuda_ref = new spip::RAMtoCUDATransfer (stream);
-  ram_to_cuda_ref->set_input (input_ref);
-  ram_to_cuda_ref->set_output (d_input_ref);
-  ram_to_cuda_ref->set_verbose (verbose);
-
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure_cuda unpacked container" << endl;
   // unpacked container
   unpacked = new spip::ContainerCUDADevice ();
-  unpacked_ref = new spip::ContainerCUDADevice ();
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure_cuda allocating UnpackFloat" << endl;
 
   // unpack to float operation
-  unpack_float = new spip::UnpackFloatCUDA(stream);
+  unpack_float = unpacker;
   unpack_float->set_input (d_input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
-
-  unpack_float_ref = new spip::UnpackFloatCUDA(stream);
-  unpack_float_ref->set_input (d_input_ref);
-  unpack_float_ref->set_output (unpacked_ref);
-  unpack_float_ref->set_verbose (verbose);
+  UnpackFloatCUDA * tmp = dynamic_cast<UnpackFloatCUDA *>(unpacker);
+  if (tmp)
+    tmp->set_stream (stream);
+  else
+    throw Error (InvalidState, "spip::AdaptiveFilterPipeline::configure_cuda", "unpacker must be a UnpackFloatCUDA");
 
   // fine channels
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure_cuda allocating channelised container" << endl;
   channelised = new spip::ContainerCUDADevice ();
-  channelised_ref = new spip::ContainerCUDADevice ();
 
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure_cuda allocating Forward FFT" << endl;
@@ -227,20 +207,17 @@ void spip::AdaptiveFilterPipeline::configure_cuda ()
   fwd_fft->set_nfft (nfft);
   fwd_fft->set_verbose (verbose);
 
-  fwd_fft_ref = new spip::ForwardFFTCUDA(stream);
-  fwd_fft_ref->set_input (unpacked_ref);
-  fwd_fft_ref->set_output (channelised_ref);
-  fwd_fft_ref->set_nfft (nfft);
-  fwd_fft_ref->set_verbose (verbose);
-
   // cleaned data
   cleaned = new spip::ContainerCUDADevice();
 
+  // TODO parameterise this
+  string output_dir = string(".");
+
   // RFI Filtering operation
-  filter = new spip::AdaptiveFilterCUDA();
+  filter = new spip::AdaptiveFilterCUDA(stream, output_dir);
   filter->set_input (channelised);
-  filter->set_input_ref (channelised_ref);
   filter->set_output (cleaned);
+  filter->set_filtering (reference_pol);
   filter->set_verbose (verbose);
 
   // output of BWD fft
@@ -282,7 +259,9 @@ void spip::AdaptiveFilterPipeline::open ()
     cerr << "spip::AdaptiveFilterPipeline::open input->read_header()" << endl;
   // read from the input
   input->process_header();
-  input_ref->process_header();
+
+  // get the input data rate in bytes per second
+  input_bytes_per_second = input->calculate_bytes_per_second();
 
 #ifdef HAVE_CUDA
   if (device >= 0)
@@ -290,7 +269,6 @@ void spip::AdaptiveFilterPipeline::open ()
     if (verbose)
       cerr << "spip::AdaptiveFilterPipeline::open ram_to_cuda->configure()" << endl;
     ram_to_cuda->configure(spip::Ordering::SFPT);
-    ram_to_cuda_ref->configure(spip::Ordering::SFPT);
   }
 #endif
   
@@ -298,13 +276,11 @@ void spip::AdaptiveFilterPipeline::open ()
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::open unpack_float->configure()" << endl;
   unpack_float->configure(spip::Ordering::SFPT);
-  unpack_float_ref->configure(spip::Ordering::SFPT);
 
   // configure the forward FFT
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::open fwd_fft->configure()" << endl;
   fwd_fft->configure(spip::Ordering::SFPT);
-  fwd_fft_ref->configure(spip::Ordering::SFPT);
 
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::open filter->configure()" << endl;
@@ -350,22 +326,10 @@ void spip::AdaptiveFilterPipeline::close ()
     in_db->close_block (in_db->get_data_bufsz());
   }
 
-  if (ref_db->is_block_open())
-  {
-    if (verbose)
-      cerr << "spip::AdaptiveFilterPipeline::close ref_db->close_block(" << ref_db->get_data_bufsz() << ")" << endl;
-    ref_db->close_block (ref_db->get_data_bufsz());
-  }
-
-
   // close the data blocks, ending the observation
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::close in_db->close()" << endl;
   in_db->close();
-
-  if (verbose)
-    cerr << "spip::AdaptiveFilterPipeline::close ref_db->close()" << endl;
-  ref_db->close();
 
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::close out_db->close()" << endl;
@@ -386,8 +350,11 @@ bool spip::AdaptiveFilterPipeline::process ()
   out_db->open();
 
   uint64_t input_bufsz = in_db->get_data_bufsz();
-  uint64_t ref_bufsz = ref_db->get_data_bufsz();
-  uint64_t nbytes_input, nbytes_ref;
+  uint64_t nbytes_input;
+  uint64_t bytes_processed = 0;
+  int64_t time_processed, stats_processed, stats_last_processed;
+  stats_processed = 0;
+  stats_last_processed = 0;
 
   while (keep_processing)
   {
@@ -395,11 +362,8 @@ bool spip::AdaptiveFilterPipeline::process ()
     if (verbose)
       cerr << "spip::AdaptiveFilterPipeline::process input->open_block()" << endl;
     nbytes_input = input->open_block();
-    if (verbose)
-      cerr << "spip::AdaptiveFilterPipeline::process input_ref->open_block()" << endl;
-    nbytes_ref = input_ref->open_block();
 
-    if (nbytes_input < input_bufsz || nbytes_ref < ref_bufsz)
+    if (nbytes_input < input_bufsz)
       keep_processing = false;
 
     // only process full blocks of data
@@ -415,8 +379,6 @@ bool spip::AdaptiveFilterPipeline::process ()
       {
         ram_to_cuda->prepare();
         ram_to_cuda->transformation();
-        ram_to_cuda_ref->prepare();
-        ram_to_cuda_ref->transformation();
       }
   #endif
 
@@ -424,25 +386,38 @@ bool spip::AdaptiveFilterPipeline::process ()
         cerr << "spip::AdaptiveFilterPipeline::process unpack_float->transformation()" << endl;
       unpack_float->prepare();
       unpack_float->transformation();
-      if (verbose)
-        cerr << "spip::AdaptiveFilterPipeline::process unpack_float_ref->transformation()" << endl;
-      unpack_float_ref->prepare();
-      unpack_float_ref->transformation();
 
       // perform Forward FFT operation
       if (verbose)
         cerr << "spip::AdaptiveFilterPipeline::process fwd_fft->transformation()" << endl;
       fwd_fft->prepare();
       fwd_fft->transformation ();
-      if (verbose)
-        cerr << "spip::AdaptiveFilterPipeline::process fwd_fft_ref->transformation()" << endl;
-      fwd_fft_ref->prepare();
-      fwd_fft_ref->transformation ();
 
       if (verbose)
         cerr << "spip::AdaptiveFilterPipeline::process filter->transformation()" << endl;
       filter->prepare();
       filter->transformation();
+
+      // count the bytes processed
+      bytes_processed += nbytes_input;
+      time_processed = int64_t(double(bytes_processed) / input_bytes_per_second);
+
+      // stats update every 10s
+      stats_processed = time_processed / 10;
+
+      if (stats_processed > stats_last_processed)
+      {
+        filter->write_gains ();
+        filter->write_dirty ();
+        filter->write_cleaned ();
+      }
+      stats_last_processed = stats_processed;
+
+#ifdef TESTING_NUER
+      filter->write_gains ();
+      filter->write_dirty ();
+      filter->write_cleaned ();
+#endif
 
       // perform the Backward FFT operation
       if (verbose)
@@ -464,9 +439,6 @@ bool spip::AdaptiveFilterPipeline::process ()
     if (verbose)
       cerr << "spip::AdaptiveFilterPipeline::process input->close_block()" << endl;
     input->close_block();
-    if (verbose)
-      cerr << "spip::AdaptiveFilterPipeline::process input_ref->close_block()" << endl;
-    input_ref->close_block();
   }
 
   // close the data blocks

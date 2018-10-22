@@ -21,6 +21,9 @@ namespace spip {
       //! reset the overflow block
       void reset ();
 
+      //! zero the overflow buffer
+      void zero ();
+
       //! copy from the supplied buffer to overflow buffer
       void copy_from (char *, size_t, size_t);
 

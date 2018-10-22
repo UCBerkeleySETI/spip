@@ -24,26 +24,29 @@ spip::DetectionPolarimetryCUDA::~DetectionPolarimetryCUDA ()
 {
 }
 
-void inline spip::DetectionPolarimetryCUDA::cross_detect (float p_r, float p_i, float q_r, float q_i,
-                                                         float * pp, float * qq, float * pq_r, float * pq_i)
+inline __device__ float4 cuda_cross_detect (float2 p, float2 q)
 {
-  *pp = (p_r * p_r) + (p_i * p_i);
-  *qq = (q_r * q_r) + (q_i * q_i);
-  *pq_r = (p_r * q_r) + (p_i * q_i);
-  *pq_i = (p_r * q_i) - (p_i * q_r);
+  float4 c;
+  c.x = (p.x * p.x) + (p.y * p.y);
+  c.y = (q.x * q.x) + (q.y * q.y);
+  c.z = (p.x * q.x) + (p.y * q.y);
+  c.w = (p.x * q.y) - (p.y * q.x);
+  return c;
 }
 
-void inline spip::DetectionPolarimetryCUDA::stokes_detect (float p_r, float p_i, float q_r, float q_i,
-                                                         float * s0, float * s1, float * s2, float * s3)
+inline __device__ float4 cuda_stokes_detect (float2 p, float2 q)
 {
-  const float pp = (p_r * p_r) + (p_i * p_i);
-  const float qq = (q_r * q_r) + (q_i * q_i);
-  *s0 = pp + qq;
-  *s1  = pp - qq;
-  *s2 = 2 * ((p_r * q_r) + (p_i * q_i));
-  *s3 = 2 * ((p_r * q_i) + (p_i * q_r));
-}
+  const float pp = (p.x * p.x) + (p.y * p.y);
+  const float qq = (q.x * q.x) + (q.y * q.y);
 
+  float4 c;
+  c.x = pp + qq;
+  c.y = pp - qq;
+  c.z = 2 * ((p.x * q.x) + (p.y * q.y));
+  c.w = 2 * ((p.x * q.y) + (p.y * q.x));
+
+  return c;
+}
 
 void spip::DetectionPolarimetryCUDA::transform_SFPT_to_SFPT ()
 {
@@ -53,11 +56,88 @@ void spip::DetectionPolarimetryCUDA::transform_SFPT_to_SFPT ()
 }
 
 
+__global__ void DetectionPolarimetry_TSPF_Coherence_Kernel (
+      const __restrict__ cuFloatComplex * in, float * out,
+      uint64_t nchan,
+      uint64_t in_sigdat_stride, uint64_t out_sigdat_stride)
+{
+  // channel processed by this thread
+  const uint64_t ichan = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+  if (ichan < nchan)
+  {
+    //              isigdat      signal/dat offset
+    uint64_t idx = (blockIdx.y * in_sigdat_stride)  + ichan;
+    uint64_t odx = (blockIdx.y * out_sigdat_stride) + ichan;
+
+    // read pol 0 and pol 1 complex samples
+    const cuFloatComplex p = in[idx];
+    const cuFloatComplex q = in[idx + nchan];
+
+    float4 c = cuda_cross_detect (p, q);
+
+    out[odx + (0 * nchan)] = c.x;
+    out[odx + (1 * nchan)] = c.y;
+    out[odx + (2 * nchan)] = c.z;
+    out[odx + (3 * nchan)] = c.w;
+  }
+}
+
+__global__ void DetectionPolarimetry_TSPF_Stokes_Kernel (
+      const __restrict__ cuFloatComplex * in, float * out,
+      uint64_t nchan,
+      uint64_t in_sigdat_stride, uint64_t out_sigdat_stride)
+{
+  // channel processed by this thread
+  const uint64_t ichan = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+  if (ichan < nchan)
+  {
+    //              isigdat      signal/dat offset
+    uint64_t idx = (blockIdx.y * in_sigdat_stride)  + ichan;
+    uint64_t odx = (blockIdx.y * out_sigdat_stride) + ichan;
+
+    // read pol 0 and pol 1 complex samples
+    const cuFloatComplex p = in[idx];
+    const cuFloatComplex q = in[idx + nchan];
+
+    float4 c = cuda_stokes_detect (p, q);
+
+    out[odx + (0 * nchan)] = c.x;
+    out[odx + (1 * nchan)] = c.y;
+    out[odx + (2 * nchan)] = c.z;
+    out[odx + (3 * nchan)] = c.w;
+  }
+}
+
+
+
 void spip::DetectionPolarimetryCUDA::transform_TSPF_to_TSPF ()
 {
   if (verbose)
     cerr << "spip::DetectionPolarimetryCUDA::transform_TSPF_to_TSPF()" << endl;
-  throw invalid_argument ("spip::DetectionPolarimetryCUDA::transform_TSPF_to_TSPF not implemented (yet)");
+
+  cuFloatComplex * in  = (cuFloatComplex *) input->get_buffer();
+  float * out = (float *) output->get_buffer();
+
+  unsigned nsigdat = nsignal * ndat;
+  unsigned nthread = (nchan < 1024) ? nchan : 1024;
+  dim3 blocks (nchan/nthread, nsigdat, 1);
+  if (nchan % nthread != 0)
+    blocks.x ++;
+
+  uint64_t in_sigdat_stride  = npol * nchan;
+  uint64_t out_sigdat_stride = 4 * nchan;
+  if (state == spip::Signal::Coherence)
+  {
+    DetectionPolarimetry_TSPF_Coherence_Kernel<<<blocks, nthread, 0, stream>>>(in, out, nchan, in_sigdat_stride, out_sigdat_stride);
+  }
+  if (state == spip::Signal::Stokes)
+  {
+    DetectionPolarimetry_TSPF_Stokes_Kernel<<<blocks, nthread, 0, stream>>>(in, out, nchan, in_sigdat_stride, out_sigdat_stride);
+
+  }
+
 }
 
 void spip::DetectionPolarimetryCUDA::transform_TSPFB_to_TSPFB ()

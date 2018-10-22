@@ -28,9 +28,7 @@ namespace spip {
 
       inline int64_t decode_packet (char * buf, unsigned * payload_size);
 
-      void gen_packet (char * buf, size_t bufsz);
-
-
+      inline void gen_packet (char * buf, size_t bufsz);
   };
 
 }

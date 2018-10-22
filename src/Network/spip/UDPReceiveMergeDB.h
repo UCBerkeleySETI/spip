@@ -50,7 +50,8 @@ namespace spip {
 #ifdef HAVE_VMA
         pthread_t id = pthread_self();
         struct vma_api_t * vma_api = vma_get_api();
-        vma_api->thread_offload (0, id);
+        if (vma_api)
+          vma_api->thread_offload (0, id);
 #endif
         ((UDPReceiveMergeDB*) obj )->control_thread ();
         pthread_exit (NULL);

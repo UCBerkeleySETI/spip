@@ -166,7 +166,8 @@ int main(int argc, char *argv[]) try
   if (control_port > 0)
   {
     // open a listening socket for observation parameters
-    cerr << "uwb_udpdbstats: start_control_thread (" << control_port << ")" << endl;
+    if (verbose)
+      cerr << "uwb_udpdbstats: start_control_thread (" << control_port << ")" << endl;
     udpdb->start_control_thread (control_port);
 
     bool keep_receiving = true;
@@ -180,7 +181,7 @@ int main(int argc, char *argv[]) try
       // start the main receiving thread to receive 1 observation of data
       if (verbose)
         cerr << "uwb_udpdbstats: receiving" << endl;
-      keep_receiving = udpdb->receive (core);
+      keep_receiving = udpdb->main (core);
     }
   }
   else
@@ -190,10 +191,10 @@ int main(int argc, char *argv[]) try
     udpdb->open ();
 
     cerr << "uwb_udpdbstats: issuing start command" << endl;
-    udpdb->start_monitor();
+    udpdb->start_recording();
 
     cerr << "uwb_udpdbstats: calling receive" << endl;
-    udpdb->receive (core);
+    udpdb->main (core);
   }
 
   udpdb->stop_stats_thread ();
@@ -241,6 +242,6 @@ void signal_handler(int signalValue)
   }
   quit_threads = 1;
 
-  udpdb->stop_capture();
+  udpdb->quit_capture();
 }
 

@@ -1,6 +1,6 @@
 /***************************************************************************
  *
- *   Copyright (C) 2015 Andrew Jameson
+ *   Copyright (C) 2018 Andrew Jameson
  *   Licensed under the Academic Free License version 2.1
  *
  ***************************************************************************/
@@ -47,10 +47,20 @@ void spip::UDPOverflow::resize (size_t bytes)
   }
 }
 
+void spip::UDPOverflow::zero()
+{
+  if ((buffer) && (bufsz > 0))
+  {
+    bzero (buffer, bufsz);
+  }
+}
+
+
 void spip::UDPOverflow::reset()
 {
   last_byte = 0;
   overflowed_bytes = 0;
+  zero();
 }
 
 void spip::UDPOverflow::copied_from (size_t offset, size_t bytes)
@@ -73,11 +83,14 @@ int64_t spip::UDPOverflow::copy_to (char * to)
   // copy to the supplied pointer up to the last byte copied in
   memcpy (to, buffer, last_byte);
 
+  // zero the overflow buffer
+  zero ();
+
   // reset the last byte copied
   last_byte = 0;
 
   int64_t bytes = int64_t(overflowed_bytes);
-  bytes = 0;
+  overflowed_bytes = 0;
 
   // return the total bytes copied from the overflow buffer
   return bytes; 

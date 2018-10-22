@@ -30,8 +30,19 @@ endif
 
 if HAVE_SPEAD2
 
-libspipnet_la_SOURCES += SPEADReceiver.C SPEADBeamFormerConfig.C \
-                         SPEADReceiverMerge.C
+libspipnet_la_SOURCES += \
+  IBVQueue.C \
+  IBVReceiver.C \
+  IBVReceiveDB.C \
+  IBVReceiveMerge2DB.C \
+  SPEADReceiver.C \
+  SPEADBeamFormerConfig.C \
+  SPEADReceiverMerge.C
+
+libspipnet_headers += \
+  spip/IBVQueue.h \
+  spip/IBVReceiveDB.h \
+  spip/IBVReceiveMerge2DB.h
 
 AM_CXXFLAGS += @BOOST_CPPFLAGS@ @SPEAD2_CFLAGS@
 LDADD += @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@

@@ -91,15 +91,27 @@ size_t spip::AsciiHeader::get_header_length() const
 
 void spip::AsciiHeader::load_from_file (const char * filename)
 {
-  size_t file_size = spip::AsciiHeader::filesize (filename);
-  if (file_size > header_size)
+  // the size of the header must be read from a parameter
+  unsigned header_size_guess = 4096;
+  if (header_size_guess > header_size)
   {
-    cerr << "spip::AsciiHeader::load_from_file resizing" << endl;
-    resize (file_size);
+    resize (header_size_guess);
   }
-  if (spip::AsciiHeader::fileread (filename, header, header_size) < 0)
+  if (spip::AsciiHeader::header_read (filename, header, header_size) < 0)
+    throw runtime_error ("could not read header from file");
+
+  unsigned actual_header_size;
+  if (get ("HDR_SIZE", "%u", &actual_header_size) != 1)
+    throw runtime_error ("HDR_SIZE did not exist in header");
+
+  if (actual_header_size > header_size)
+  {
+    resize (actual_header_size);
+  }
+  if (spip::AsciiHeader::fileread (filename, header, actual_header_size) < 0)
     throw runtime_error ("could not read header from file");
 }
+
 
 void spip::AsciiHeader::load_from_str (const char * string)
 {
@@ -340,6 +352,7 @@ char * spip::AsciiHeader::header_find (const char* hdr, const char* keyword)
 {
   const char* key = strstr (hdr, keyword);
 
+
   // keyword might be the very first word in header
   while (key > hdr)
   {
@@ -376,9 +389,10 @@ long spip::AsciiHeader::fileread (const char* filename, char* buffer, unsigned b
     return -1;
   }
 
-  if (fsize > bufsz) {
-    fprintf (stderr, "fileread: filesize=%ld > bufsize=%u\n", fsize, bufsz);
-    return -1;
+  size_t to_read = bufsz - 1;
+  if (fsize < bufsz)
+  {
+    to_read = fsize;
   }
 
   fptr = fopen (filename, "r");
@@ -387,7 +401,7 @@ long spip::AsciiHeader::fileread (const char* filename, char* buffer, unsigned b
     return -1;
   }
 
-  if (fread (buffer, fsize, 1, fptr) != 1) {
+  if (fread (buffer, to_read, 1, fptr) != 1) {
     perror ("fileread: fread");
     fclose (fptr);
     return -1;
@@ -395,9 +409,43 @@ long spip::AsciiHeader::fileread (const char* filename, char* buffer, unsigned b
 
   fclose (fptr);
 
-  memset (buffer + fsize, '\0', bufsz - fsize);
+  memset (buffer + to_read, '\0', bufsz - to_read);
 
   return 0;
 }
 
+//! read only bufsz bytes from the filename
+long spip::AsciiHeader::header_read (const char* filename, char* buffer, unsigned bufsz)
+{
+  FILE* fptr = 0;
+  long fsize = filesize (filename);
+  long to_read = bufsz - 1;
+
+  if (fsize < 0)
+  {
+    fprintf (stderr, "header_read: filesize(%s) %s\n", filename, strerror(errno));
+    return -1;
+  }
+
+  if (fsize < bufsz)
+    to_read = fsize;
+
+  fptr = fopen (filename, "r");
+  if (!fptr) {
+    fprintf (stderr, "header_read: fopen(%s) %s\n", filename, strerror(errno));
+    return -1;
+  }
+
+  if (fread (buffer, to_read, 1, fptr) != 1) {
+    perror ("header_read: fread");
+    fclose (fptr);
+    return -1;
+  }
+
+  fclose (fptr);
+
+  memset (buffer + to_read, '\0', bufsz - to_read);
+  
+  return 0;
+}
 

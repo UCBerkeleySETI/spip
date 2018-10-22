@@ -31,11 +31,13 @@ class UWBRecvDaemon(RecvDaemon):
 
   def getEnvironment (self):
     env = RecvDaemon.getEnvironment (self)
-    #env["LD_PRELOAD"] = "libvma.so"
-    #env["VMA_MTU"] = "4200"
-    #env["VMA_RING_ALLOCATION_LOGIC_RX"] = "10"
-    #env["VMA_INTERNAL_THREAD_AFFINITY"] = "6"
-    #env["VMA_TRACELEVEL"] = "WARNING"
+    env["LD_PRELOAD"] = "libvma.so"
+    env["VMA_MTU"] = "9216"
+    env["VMA_RING_ALLOCATION_LOGIC_RX"] = "0"
+    env["VMA_THREAD_MODE"] = "0"
+    env["VMA_INTERNAL_THREAD_AFFINITY"] = str(int(self.cpu_core) + 1)
+    env["VMA_MEM_ALLOC_TYPE"] = "1"
+    env["VMA_TRACELEVEL"] = "WARNING"
     return env
 
   def getCommand (self, config_file):
@@ -51,6 +53,13 @@ class UWBRecvDaemon(RecvDaemon):
             + " -s " + str(self.id) \
             + " -f dualvdif" \
             + " " + config_file
+
+    #cmd = self.cfg["STREAM_BINARY"] + " -k " + self.db_key \
+    #        + " -b " + self.cpu_core \
+    #        + " -c " + self.ctrl_port \
+    #        + " -f dualvdif" \
+    #        + " " + config_file
+
     return cmd
 
 ###############################################################################

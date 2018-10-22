@@ -5,6 +5,7 @@
  *
  ***************************************************************************/
 
+#include "spip/Error.h"
 #include "spip/DataBlock.h"
 
 #include <sstream>
@@ -15,7 +16,6 @@
 #ifdef HAVE_CUDA
 #include <cuda_runtime.h>
 #endif
-
 
 using namespace std;
 
@@ -58,6 +58,10 @@ spip::DataBlock::DataBlock (const char * key_string)
   header_bufsz = 0;
   data_bufsz = 0;
   verbose = false;
+
+#ifdef HAVE_CUDA
+  device_id = -1;
+#endif
 }
 
 spip::DataBlock::~DataBlock ()
@@ -82,6 +86,10 @@ void spip::DataBlock::connect ()
   data_bufsz   = ipcbuf_get_bufsz ((ipcbuf_t *) data_block);
 
   header = (char *) malloc (header_bufsz);
+
+#ifdef HAVE_CUDA
+  device_id = ipcbuf_get_device ((ipcbuf_t *) data_block);
+#endif
 
   connected = true;
 }
@@ -112,6 +120,14 @@ void spip::DataBlock::disconnect ()
 #ifdef HAVE_CUDA
 void spip::DataBlock::register_cuda()
 {
+  // don't register data blocks that reside on device.
+  if (device_id >= 0)
+  {
+    throw Error (InvalidState, "spip::DataBlock::register_cuda",
+                 "cannot register data block that resides on the device");
+    return;
+  }
+
   ipcbuf_t * db = (ipcbuf_t *) data_block;
 
   // ensure that the data blocks are SHM locked
@@ -133,6 +149,14 @@ void spip::DataBlock::register_cuda()
 
 void spip::DataBlock::unregister_cuda()
 {
+  // don't register data blocks that reside on device.
+  if (device_id >= 0)
+  {
+    throw Error (InvalidState, "spip::DataBlock::unregister_cuda",
+                 "cannot unregister data block that resides on the device");
+    return;
+  }
+
   ipcbuf_t * db = (ipcbuf_t *) data_block;
   cudaError_t rval;
 
@@ -144,5 +168,4 @@ void spip::DataBlock::unregister_cuda()
       throw runtime_error ("cudaHostUnRegister failed");
   }
 }
-
 #endif

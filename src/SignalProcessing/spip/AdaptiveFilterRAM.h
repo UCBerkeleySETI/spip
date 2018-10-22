@@ -12,10 +12,9 @@
 #include "config.h"
 
 #include "spip/AdaptiveFilter.h"
-#include "spip/ContainerRAM.h"
+#include "spip/ContainerRAMFileWrite.h"
 
-//#include <float.h>
-//#include <complex.h>
+#include <string.h>
 
 namespace spip {
 
@@ -23,7 +22,7 @@ namespace spip {
   {
     public:
     
-      AdaptiveFilterRAM ();
+      AdaptiveFilterRAM (std::string);
       
       ~AdaptiveFilterRAM ();
 
@@ -39,6 +38,12 @@ namespace spip {
 
       void transform_SFPT ();
 
+      void write_gains ();
+
+      void write_dirty ();
+
+      void write_cleaned ();
+
     protected:
     
     private:
@@ -48,6 +53,17 @@ namespace spip {
       float * ref_buffer;
 
       size_t buffer_size;
+
+      ContainerRAMFileWrite * gains_file_write;
+
+      ContainerRAMFileWrite * dirty_file_write;
+
+      ContainerRAMFileWrite * cleaned_file_write;
+
+      float previous_factor;
+
+      bool processed_first_block;
+
   };
 }
 

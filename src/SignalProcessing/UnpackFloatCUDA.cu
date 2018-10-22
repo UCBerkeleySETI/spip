@@ -116,15 +116,18 @@ __global__ void unpack_int32_bigendian(const __restrict__ int32_t* input, float 
   output[idx] = (float(swapped) + offset) * scale;
 }
 
-
-
-spip::UnpackFloatCUDA::UnpackFloatCUDA (cudaStream_t _stream)
+spip::UnpackFloatCUDA::UnpackFloatCUDA ()
 {
-  stream = _stream;
+  stream = 0;
 }
 
 spip::UnpackFloatCUDA::~UnpackFloatCUDA ()
 {
+}
+
+void spip::UnpackFloatCUDA::set_stream (cudaStream_t _stream)
+{
+  stream = _stream;
 }
 
 void spip::UnpackFloatCUDA::prepare ()
@@ -174,5 +177,5 @@ void spip::UnpackFloatCUDA::transform_SFPT_to_SFPT ()
     else
       cudaMemcpyAsync ((void *) out, (void *) in, nbytes, cudaMemcpyDeviceToDevice, stream);
   }
-
 }
+

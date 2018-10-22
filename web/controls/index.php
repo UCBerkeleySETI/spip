@@ -23,14 +23,19 @@ class controls extends spip_webpage
     $this->independent_beams = true;
 
     $this->topology = array();
+    $this->server_list = array();
+    $this->client_list = array();
 
     if (strcmp($this->config["INDEPENDENT_BEAMS"], "true") !== TRUE)
     {
       $this->independent_beams = false;
       $host = $this->config["SERVER_HOST"];
       if (!array_key_exists($host, $this->topology))
+      {
         $this->topology[$host] = array();
-      array_push($this->topology[$host], array("beam" => "server", "subband" => "", "stream_id" => "-1"));
+        array_push ($this->server_list, $host);
+      }
+      array_push ($this->topology[$host], array("beam" => "server", "subband" => "", "stream_id" => "-1"));
     }
 
     for ($i=0; $i<$this->config["NUM_STREAM"]; $i++)
@@ -38,7 +43,13 @@ class controls extends spip_webpage
       list ($host, $beam, $subband) = explode (":", $this->config["STREAM_".$i]);
 
       if (!array_key_exists($host, $this->topology))
+      {
         $this->topology[$host] = array();
+        if (!in_array($host, $this->server_list))
+        {
+          array_push ($this->client_list, $host);
+        }
+      }
       array_push($this->topology[$host], array("beam" => $beam, "subband" => $subband, "stream_id" => $i));
     }
 
@@ -71,6 +82,9 @@ class controls extends spip_webpage
   {
 ?>
     <script type='text/javascript'>
+
+      stop_wait = 0;
+      start_wait = 0;
 
       function examine_daemons (host, id, daemons)
       { 
@@ -220,6 +234,127 @@ class controls extends spip_webpage
         actionLMC(url);
       }
 
+      function controlMessage (id, message)
+      {
+        document.getElementById(id).innerHTML = message;
+      }
+
+      function startAll()
+      {
+        controlMessage("stop_all_reply", "");
+        controlMessage("start_all_reply", "Starting Medusa services");
+        disableAll();
+<?php
+        foreach ($this->server_list as $host)
+          echo "        startLMC ('".$host."', 'server');\n";
+        foreach ($this->client_list as $host)
+          echo "        startLMC ('".$host."', '0');\n";
+?>
+        start_wait = 60;
+        waitForStart();
+      }
+
+      function stopAll()
+      {
+        controlMessage("start_all_reply", "");
+        controlMessage("stop_all_reply", "Stopping Medusa services");
+        disableAll();
+<?php
+        foreach ($this->client_list as $host)
+          echo "        stopLMC ('".$host."', '0');\n";
+        foreach ($this->server_list as $host)
+          echo "        stopLMC ('".$host."', 'server');\n";
+?>
+        stop_wait = 60;
+        waitForStop();
+      }
+
+      function disableAll()
+      {
+        document.getElementById("start_all").disabled = true;
+        document.getElementById("stop_all").disabled = true;
+<?php
+        foreach ($this->client_list as $host)
+        {
+          echo "        document.getElementById('start_".$host."').disabled = true;\n";
+          echo "        document.getElementById('stop_".$host."').disabled = true;\n";
+        }
+        foreach ($this->server_list as $host)
+        {
+          echo "        document.getElementById('start_".$host."').disabled = true;\n";
+          echo "        document.getElementById('stop_".$host."').disabled = true;\n";
+        }
+?>
+      }
+
+      function enableAll()
+      {
+        document.getElementById("start_all").disabled = false;
+        document.getElementById("stop_all").disabled = false;
+<?php   
+        foreach ($this->client_list as $host)
+        {
+          echo "        document.getElementById('start_".$host."').disabled = false;\n";
+          echo "        document.getElementById('stop_".$host."').disabled = false;\n";
+        }
+        foreach ($this->server_list as $host)
+        {
+          echo "        document.getElementById('start_".$host."').disabled = false;\n";
+          echo "        document.getElementById('stop_".$host."').disabled = false;\n";
+        }
+?>
+      }
+
+      function checkStates(colours)
+      {
+        var i=0;
+        var j=0;
+        var ready = true;
+        elements = document.getElementsByTagName("img")
+        for (i=0; i<elements.length; i++)
+        {
+          element_ready = false;
+          for (j=0; j<colours.length; j++)
+          {
+            if (elements[i].src.indexOf(colours[j]) != -1)
+              element_ready = true
+          }
+          if (!element_ready)
+            ready = false;
+        }
+        return ready;
+      }
+
+      function waitForStop()
+      {
+        colors = new Array ("red", "grey");
+        if (!checkStates(colors))
+        {
+          stop_wait--;
+          controlMessage("stop_all_reply", "Stopping Medusa services [timeout " + stop_wait + "]");
+          setTimeout ('waitForStop()', 1000);
+          return 0;
+        }
+        stop_wait = 0;
+        controlMessage("stop_all_reply", "All Medusa services stopped");
+        enableAll();
+      }
+
+      function waitForStart()
+      {
+        colors = new Array ("green");
+        if (!checkStates(colors))
+        {
+          start_wait--;
+          controlMessage ("start_all_reply", "Starting Medusa services [timeout " + start_wait + "]");
+          setTimeout ('waitForStart()', 1000);
+          return 0;
+        }
+        start_wait = 0;
+        controlMessage("start_all_reply", "All Medusa services started");
+        enableAll();
+      }
+
     </script>
 <?php
   }
@@ -228,6 +363,46 @@ class controls extends spip_webpage
   function printHTML ()
   {
     echo "<h1>Controls</h1>\n";
+
+    echo "<h2>Instrument Controls</h2>\n";
+
+    echo "<p>Use these buttons to start or stop the Medusa Backend in the correct sequence.\n";
+    echo "Note that it may take 10s of seconds for the startup or shutdown to complete.</p>\n";
+
+    echo "<table cellpadding='5px'>\n";
+
+    echo "<tr>\n";
+    echo  "<td><b>Control</b></td>\n";
+    echo  "<td><b>Response</b></td>\n";
+    echo "</tr>\n";
+
+    echo "<tr>\n";
+    echo  "<td>";
+    echo    "<input id='start_all' type='button' onClick='startAll()' value='Start Instrument'/><br/>";
+    echo  "</td>";
+    echo  "<td>";
+    echo    "<div id='start_all_reply'></div>\n";
+    echo  "</td>\n";
+    echo  "</tr>\n";
+      
+    echo "<tr>\n";
+    echo  "<td>";
+    echo    "<input id='stop_all' type='button' onClick='stopAll()' value='Stop Instrument'/>\n";
+    echo  "</td>\n";
+    echo  "<td>";
+    echo    "<div id='stop_all_reply'></div>\n";
+    echo  "</td>\n";
+    echo  "</tr>\n";
+
+    echo "</table>\n";
+
+    echo "<p>When starting Medusa, all the Individual Server Controls must be OFF (red or grey). Click the Start Instrument button once and wait for the all the controls to change from OFF (red/grey) to ON (green).</p>\n";
+
+    echo "<p>When stopping Medusa, all the Individual Server Controls must be on (green). Click the Stop Instrument button once and wait for all the controls to change from ON (green) to OFF (red/grey).</p>\n";
+
+    echo "<hr>\n";
+
+    echo "<h2>Individual Server Controls</h2>\n";
 
     echo "<center>\n";
 
@@ -265,8 +440,8 @@ class controls extends spip_webpage
           # each host has a single LMC instance that manages all child daemons
           echo "<td rowspan=".$host_rows." width='150px'>\n";
             echo "<img border='0' id='".$host."_lmc_light' src='/spip/images/grey_light.png' width='15px' height='15px'>\n";
-            echo "<input type='button' value='Start' onClick='startLMC(\"".$host."\",\"".$stream["beam"]."\")'/>\n";
-            echo "<input type='button' value='Stop' onClick='stopLMC(\"".$host."\",\"".$stream["beam"]."\")'/>\n";
+            echo "<input id='start_".$host."' type='button' value='Start' onClick='startLMC(\"".$host."\",\"".$stream["beam"]."\")'/>\n";
+            echo "<input id='stop_".$host."' type='button' value='Stop' onClick='stopLMC(\"".$host."\",\"".$stream["beam"]."\")'/>\n";
           echo "</td>\n";
         }
 
@@ -325,13 +500,13 @@ class controls extends spip_webpage
   
   function printUpdateHTML($get)
   {
+    # echo "control::index::printUpdateHTML<BR>\n";
     # spip_lmc script runs on each client/server, check that it is running and responsive
     $xml = "<controls_update>";
 
     # check if the LMC script is running on the specified host
     $hosts = array_keys($this->topology);
     $port  = $this->config["LMC_PORT"];
-    $lmc_socket = new spip_socket();
 
     $xml_cmd  = XML_DEFINITION;
     $xml_cmd .= "<lmc_cmd>";
@@ -342,12 +517,15 @@ class controls extends spip_webpage
     foreach ($hosts as $host)
     {
       $xml .= "<lmc host='".$host."' port='".$port."'>";
-      if ($lmc_socket->open ($host, $port, 0) == 0)
+      $lmc_socket = new spip_socket();
+      $connected = $lmc_socket->open ($host, $port, 0);
+      if ($connected == 0)
       {
         $xml .= "<state>Running</state>";
         $lmc_socket->write ($xml_cmd."\r\n");
         list ($rval, $reply) = $lmc_socket->read();
-        $xml .= $reply;
+        if ($rval == 0)
+          $xml .= $reply;
         $lmc_socket->close();
       }
       else
@@ -372,20 +550,11 @@ class controls extends spip_webpage
       $cmd = "";
       if ($get["cmd"] == "start_lmc")
       {
-        $cmd = "ssh ".$get["host"]." 'python ".$this->config["SCRIPTS_DIR"]."/spip_lmc.py'";
+        $cmd = "ssh ".$get["host"]." '".$this->config["SCRIPTS_DIR"]."/spip.init start'";
       }
       else if ($get["cmd"] == "stop_lmc")
       {
-        if ($get["stream"] == "server")
-        {
-          $control_dir = $this->config["SERVER_CONTROL_DIR"];
-          $cmd = "touch ".$control_dir."/spip_lmc_".$get["host"].".quit";
-        }
-        else
-        {
-          $control_dir = $this->config["CLIENT_CONTROL_DIR"];
-          $cmd = "ssh ".$get["host"]." 'touch ".$control_dir."/spip_lmc_".$get["host"].".quit'";
-        }
+        $cmd = "ssh ".$get["host"]." '".$this->config["SCRIPTS_DIR"]."/spip.init stop'"; 
       }
       else
       {

@@ -18,14 +18,14 @@ namespace spip {
   {
     public:
      
-      AdaptiveFilter ();
+      AdaptiveFilter (std::string);
 
       ~AdaptiveFilter ();
 
+      void set_filtering (int);
+
       void configure (Ordering output_order);
-
-      virtual void set_input_ref (Container *) = 0;
-
+        
       void prepare ();
 
       void prepare_output ();
@@ -40,9 +40,14 @@ namespace spip {
 
       virtual void transform_SFPT () = 0;
 
-    protected:
+      //! Required transformation to write gain values to disk
+      virtual void write_gains () = 0;
 
-      Container * input_ref;
+      virtual void write_dirty () = 0;
+
+      virtual void write_cleaned () = 0;
+
+    protected:
 
       unsigned nchan;
 
@@ -61,11 +66,30 @@ namespace spip {
       // generic container to store the gains
       Container * gains;
 
+      // generic container to store the dirty
+      Container * dirty;
+
+      // generic container to store the cleaned
+      Container * cleaned;
+
+      // generic container to store the normalization factor
+      Container * norms;
+
       // from Nuer's simulation and Adaptive Filter paper
       float epsilon;
 
       // number of samples to integrate into the filter
       unsigned filter_update_time;
+
+      // number of output polarisations
+      unsigned out_npol;
+
+      // polarisation containing the RFI reference signal (<=0 means none)
+      int ref_pol;
+
+      bool perform_filtering;
+
+      std::string output_dir;
 
     private:
 

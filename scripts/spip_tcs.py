@@ -10,6 +10,8 @@
 import os, threading, sys, socket, select, signal, traceback, xmltodict, copy
 import errno
 
+from xml.parsers.expat import ExpatError
+
 from spip.config import Config
 from spip.daemons.bases import ServerBased,BeamBased
 from spip.daemons.daemon import Daemon
@@ -211,40 +213,49 @@ class TCSDaemon(Daemon):
           # an accepted connection must have generated some data
           else:
             try:
-              raw = handle.recv(4096)
+              raw = handle.recv(131072)
 
               message = raw.strip()
 
               if len(message) > 0:
                 self.log(2, "TCSDaemon::commandThread message='" + message+"'")
-                xml = xmltodict.parse(message)
-                self.log(3, "<- " + str(xml))
+                try:
+                  xml = xmltodict.parse(message)
 
-                # Parse XML for correctness
-                (valid, command, error) = self.parse_obs_cmd (xml, id)
+                  self.log(3, "<- " + str(xml))
+                  # Parse XML for correctness
+                  (valid, command, error) = self.parse_obs_cmd (xml, id)
 
-                self.log(1, "TCSDaemon::commandThread valid=" + str(valid) \
+                except ExpatError as e:
+                  self.log(2, "TCSDaemon::commandThread message unparseable '" + message + "'")
+                  valid = False
+
+                self.log(2, "TCSDaemon::commandThread valid=" + str(valid) \
                          + " command=" + command + " error=" + str(error))
+
+                self.log(1, "<- " + command)
 
                 if valid :
                   if command == "start":
-                    self.log(1, "TCSDaemon::commandThread issue_start_cmd message="+message)
+                    self.log(2, "TCSDaemon::commandThread issue_start_cmd message="+message)
                     self.issue_start_cmd (xml)
                   elif command == "stop":
-                    self.log(1, "TCSDaemon::commandThread issue_stop_cmd message="+message)
+                    self.log(2, "TCSDaemon::commandThread issue_stop_cmd message="+message)
                     self.issue_stop_cmd (xml)
                   elif command == "configure":
-                    self.log(1, "TCSDaemon::commandThread no action for configure command")
+                    self.log(2, "TCSDaemon::commandThread no action for configure command")
                   else:
                     self.log(-1, "Unrecognized command [" + command + "]")
            
+                  response = "OK"
                 else:
+                  response = "FAIL: " + error
                   self.log(-1, "failed to parse xml: " + error)
 
-                response = "OK"
-                self.log(3, "-> " + response)
+                self.log(1, "-> " + response)
                 xml_response = "<?xml version='1.0' encoding='ISO-8859-1'?>" + \
                                "<tcs_response>" + response + "</tcs_response>"
+
                 handle.send (xml_response + "\r\n")
 
               else:
@@ -287,14 +298,28 @@ class TCSDaemon(Daemon):
 
             if command == "configure":
 
+              if not self.beam_states[b]["state"] == "Idle":
+                return (False, "none", "Received Configure command when not idle")
+
               self.log(2, "TCSDaemon::parse_obs_cmd received configuration for beam " + b)
               self.beam_states[b]["lock"].acquire()
               self.beam_states[b]["config"] = copy.deepcopy(xml['obs_cmd'])
               self.log (2, "TCSDaemon::parse_obs_cmd command==configure UTC_START=" + self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"])
-              self.beam_states[b]["state"]     = "Configured"
-              self.beam_states[b]["lock"].release()
+              (ok, message) = self.validate_config (self.beam_states[b]["config"])
+              self.log (2, "TCSDaemon::parse_obs_cmd ok=" + str(ok) + " message=" + message)
+              if ok:
+                self.beam_states[b]["state"] = "Configured"
+                self.beam_states[b]["lock"].release()
+              else:
+                self.beam_states[b]["state"] = "Misconfigured"
+                self.log(-1, "TCSDaemon::parse_obs_cmd validation failed: " + message)
+                self.beam_states[b]["lock"].release()
+                return (False, command, message)
 
             elif command == "start":
+
+              if not self.beam_states[b]["state"] == "Configured":
+                return (False, "none", "Received START command when not properly configured")
 
               self.beam_states[b]["lock"].acquire()
               self.beam_states[b]["state"] = "Starting"
@@ -306,6 +331,9 @@ class TCSDaemon(Daemon):
 
             elif command == "stop":
   
+              #if not self.beam_states[b]["state"] == "Recording":
+              #  return (False, "none", "Received STOP command when not recording")
+
               self.beam_states[b]["lock"].acquire()
               self.beam_states[b]["state"] = "Stopping"
               utc_stop = xml['obs_cmd']['observation_parameters']['utc_stop']['#text']
@@ -321,6 +349,7 @@ class TCSDaemon(Daemon):
 
     return (True, command, "")
 
+
   ###############################################################################
   # issue_start_cmd
   def issue_start_cmd (self, xml):
@@ -335,19 +364,26 @@ class TCSDaemon(Daemon):
         b = xml['obs_cmd']['beam_configuration']['beam_state_' + str(ibeam)]['@name']
         self.log(2, "TCSDaemon::issue_start_cmd beam name=" + b)
         if b in self.beam_states.keys():
-          obs = {}
+
+          self.log(1, "TCSDaemon::issue_start_cmd config=" + str(self.beam_states[b]["config"].keys()))
+
+          obs_config = {}
 
           self.beam_states[b]["lock"].acquire()
 
-          # add sour parameters from XML to header
+          utc_start = "unset"
+          source = "unset"
+
+          # add source parameters
           s = self.beam_states[b]["config"]["source_parameters"]
           for k in s.keys():
             key = s[k]["@key"]
             val = s[k]["#text"]
-            obs[key] = val
-            self.log(1, key + "=" + val)
- 
-          # inject the observation parameters         
+            obs_config[key] = val
+            self.log (1, key + "=" + val)
+            if key == "SOURCE":
+              source = val
+          # add the observation parameters
           o = self.beam_states[b]["config"]["observation_parameters"]
 
           self.log(1, "TCSDaemon::issue_start_cmd o=" + str(o))
@@ -355,19 +391,9 @@ class TCSDaemon(Daemon):
 
           # if no UTC_START has been specified, set it to +5 seconds
           if o["utc_start"]["#text"] == "None":
-            local_current = times.getCurrentTime()
-            utc_current = times.getUTCTime()
-
-            local_offset = times.getCurrentTime(5)
-            utc_offset = times.getUTCTime(5)
-
-            self.log(1, "TCSDaemon::issue_start_cmd local_current=" + local_current)
-            self.log(1, "TCSDaemon::issue_start_cmd   utc_current=" +   utc_current)
-            self.log(1, "TCSDaemon::issue_start_cmd  local_offset=" + local_offset)
-            self.log(1, "TCSDaemon::issue_start_cmd    utc_offset=" +   utc_offset)
-
-            o["utc_start"]["#text"] = utc_offset
-            self.log(1, "TCSDaemon::issue_start_cmd utc_start=" + o["utc_start"]["#text"])
+            utc_start = times.getUTCTime(5)
+            o["utc_start"]["#text"] = utc_start
+            self.log(1, "TCSDaemon::issue_start_cmd utc_start=" + utc_start)
 
           else:
             self.log(1, "TCSDaemon::issue_start_cmd utc_start already set to =" + o["utc_start"]["#text"])
@@ -378,51 +404,69 @@ class TCSDaemon(Daemon):
               val = o[k]["#text"]
             except KeyError as e:
               val = ''
-            obs[key] = val
+            obs_config[key] = val
             self.log(1, key + "=" + val)
 
-          # inject custom fields into header
-          c = self.beam_states[b]["config"]["custom_parameters"]
-          for k in c.keys():
-            key = c[k]["@key"]
-            try:
-              val = c[k]["#text"]
-            except KeyError as e:
-              val = ''
-            obs[key] = val
-            self.log(1, key + "=" + val)
+          # extract the stream informatiom
+          s = self.beam_states[b]["config"]["stream_configuration"]
 
-          modes = self.beam_states[b]["config"]["processing_modes"]
-          for k in modes.keys():
-            key = modes[k]["@key"]
-            val = modes[k]["#text"] 
-            obs[key] = val
-            self.log(1, key + "=" + val)
-            
-            # inject processing parameters into header
-            if val == "true" or val == "1":
-              self.log (1, "TCSDaemon::issue_start_cmd mode=" + k)
-              p = self.beam_states[b]["config"][k + "_processing_parameters"]
-              for l in p.keys():
-                pkey = p[l]["@key"]
-                try:
-                  pval = p[l]["#text"]
-                except KeyError as e:
-                  val = ''
-                obs[pkey] = pval
-                self.log(1, pkey + "=" + pval)
+          # determine the number of streams present in the configure command
+          nstream = s["nstream"]["#text"]
+          if int(nstream) != int(self.cfg["NUM_STREAM"]):
+            self.log(1, "TCSDaemon::issue_start_cmd number of streams in config and command did not match")
 
-          # ensure the start command is set
-          obs["COMMAND"] = "START"
-          obs["OBS_OFFSET"] = "0"
-
-          self.beam_states[b]["lock"].release()
-
-          # convert to a single ascii string
-          obs_header = Config.writeDictToString (obs)
+          # record which streams are processing which modes
+          stream_modes = {}
 
           # work out which streams correspond to these beams
-          for istream in range(int(self.cfg["NUM_STREAM"])):
+          for istream in range(int(nstream)):
+
+            stream_xml = self.beam_states[b]["config"]["stream" + str(istream)]
+
+            # make a deep copy of the common configuration
+            stream_config = copy.deepcopy (obs_config)
+
+            # inject custom fields into header
+            custom = stream_xml["custom_parameters"]
+            for k in custom.keys():
+              key = custom[k]["@key"]
+              try:
+                val = custom[k]["#text"]
+              except KeyError as e:
+                val = ''
+              stream_config[key] = val
+              self.log(1, key + "=" + val)
+
+            modes = stream_xml["processing_modes"]
+            for k in modes.keys():
+              key = modes[k]["@key"]
+              val = modes[k]["#text"]
+              stream_config[key] = val
+              self.log(1, key + "=" + val)
+
+              # inject processing parameters into header
+              if val == "true" or val == "1":
+                if not (k in stream_modes.keys()):
+                  stream_modes[k] = []
+                stream_modes[k].append(istream)
+                self.log (1, "TCSDaemon::issue_start_cmd mode=" + k)
+                p = stream_xml[k + "_processing_parameters"]
+                for l in p.keys():
+                  pkey = p[l]["@key"]
+                  try:
+                    pval = p[l]["#text"]
+                  except KeyError as e:
+                    val = ''
+                  stream_config[pkey] = pval
+                  self.log(1, pkey + "=" + pval)
+
+            # ensure the start command is set
+            stream_config["COMMAND"] = "START"
+            stream_config["OBS_OFFSET"] = "0"
+
+            # convert to a single ascii string
+            obs_header = Config.writeDictToString (stream_config)
+
             (host, beam_idx, subband) = self.cfg["STREAM_"+str(istream)].split(":")
             beam = self.cfg["BEAM_" + beam_idx]
             self.log(2, "TCSDaemon::issue_start_cmd host="+host+" beam="+beam+" subband="+subband)
@@ -430,7 +474,7 @@ class TCSDaemon(Daemon):
             # connect to streams for this beam only
             if beam == b:
 
-              # control port the this recv stream 
+              # control port the this recv stream
               ctrl_port = int(self.cfg["STREAM_CTRL_PORT"]) + istream
 
               self.log(1, host + ":"  + str(ctrl_port) + " <- start")
@@ -455,10 +499,57 @@ class TCSDaemon(Daemon):
               #   sock.send(obs_header)
               #   sock.close()
 
+          utc_start = self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"]
+
           # update the dict of observing info for this beam
-          self.beam_states[b]["lock"].acquire()
           self.beam_states[b]["state"] = "Recording"
           self.beam_states[b]["lock"].release()
+
+          # now handle the active streams
+          for mode in stream_modes.keys():
+            self.log(1, "TCSDaemon::issue_start_cmd mode=" + mode + " streams=" + str(stream_modes[mode]))
+            self.prepare_observation (beam, utc_start, source, mode, stream_modes[mode])
+
+  def prepare_observation (self, beam, utc_start, source, mode, streams):
+
+    if mode == "fold":
+      base_dir = self.cfg["SERVER_FOLD_DIR"]
+    elif mode == "search":
+      base_dir = self.cfg["SERVER_SEARCH_DIR"]
+    elif mode == "continuum":
+      base_dir = self.cfg["SERVER_CONTINUUM_DIR"]
+    elif mode == "spectral_line":
+      base_dir = self.cfg["SERVER_SPECTRAL_LINE_DIR"]
+    elif mode == "vlbi":
+      base_dir = self.cfg["SERVER_VLBI_DIR"]
+    elif mode == "tran":
+      base_dir = self.cfg["SERVER_TRANSIENTS_DIR"]
+    else:
+      return (0, "Unrecognized processing mode: " + mode)
+
+    processing_dir = base_dir + "/processing"
+
+    # create the directory structure
+    src_dir = processing_dir + "/" + beam + "/" + utc_start + "/" + source + "/"
+    os.makedirs (src_dir, 0755)
+
+    # write stream information to file
+    fptr = open (src_dir + "/obs.info", "w")
+    fptr.write(Config.writePaddedString("NUM_STREAM", len(streams)) + "\n")
+
+    for i in range(len(streams)):
+
+      # get the stream configuration
+      (freq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + str(streams[i])].split(":")
+
+      # create the ouput sub-band dir
+      os.makedirs (src_dir + "/" + freq)
+
+      # write the configuration to the file
+      fptr.write(Config.writePaddedString("SUBBAND_" + str(i), \
+                 self.cfg["SUBBAND_CONFIG_" + str(streams[i])]) + "\n")
+
+    fptr.close()
 
   ###############################################################################
   # issue_stop_cmd
@@ -480,7 +571,7 @@ class TCSDaemon(Daemon):
           self.beam_states[b]["state"] = "Stopping"
           obs["COMMAND"] = "STOP"
 
-          # inject the observation parameters         
+          # inject the observation parameters
           o = self.beam_states[b]["config"]["observation_parameters"]
 
           # if no UTC_STOP has been specified, set it to now

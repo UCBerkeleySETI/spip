@@ -6,6 +6,7 @@
  ***************************************************************************/
 
 #include "spip/Filterbank.h"
+#include "spip/Error.h"
 
 #include <signal.h>
 #include <unistd.h>
@@ -56,13 +57,13 @@ void spip::Filterbank::set_channelisation (int freq_res, int nchan_out)
 }
 
 //! build the pipeline containers and transforms
-void spip::Filterbank::configure ()
+void spip::Filterbank::configure (spip::UnpackFloat * unpacker)
 {
   if (verbose)
     cerr << "spip::Filterbank::configure ()" << endl;
 #ifdef HAVE_CUDA
   if (device >= 0)
-    return configure_cuda();
+    return configure_cuda(unpacker);
 #endif
   
   if (verbose)
@@ -78,7 +79,7 @@ void spip::Filterbank::configure ()
   if (verbose)
     cerr << "spip::Filterbank::configure allocating UnpackFloat" << endl;
   // unpack to float operation
-  unpack_float = new spip::UnpackFloatRAM();
+  unpack_float = unpacker;
   unpack_float->set_input (input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
@@ -136,7 +137,7 @@ void spip::Filterbank::set_device (int _device)
 }
   
 //! build the pipeline containers and transforms
-void spip::Filterbank::configure_cuda ()
+void spip::Filterbank::configure_cuda (spip::UnpackFloat * unpacker)
 {
   if (verbose)
     cerr << "spip::Filterbank::configure_cuda creating input" << endl;
@@ -161,10 +162,15 @@ void spip::Filterbank::configure_cuda ()
     cerr << "spip::Filterbank::configure_cuda allocating UnpackFloat" << endl;
 
   // unpack to float operation
-  unpack_float = new spip::UnpackFloatCUDA(stream);
+  unpack_float = unpacker; 
   unpack_float->set_input (d_input);
   unpack_float->set_output (unpacked);
   unpack_float->set_verbose (verbose);
+  UnpackFloatCUDA * tmp = dynamic_cast<UnpackFloatCUDA *>(unpacker);
+  if (tmp)
+    tmp->set_stream (stream);
+  else
+    throw Error (InvalidState, "spip::Filterbank::configure_cuda", "unpacker must be a UnpackFloatCUDA");
 
   // fine channels
   if (verbose)

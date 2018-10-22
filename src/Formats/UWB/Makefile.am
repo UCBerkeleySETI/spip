@@ -5,14 +5,13 @@ libuwb_headers = spip/BlockFormatUWB.h spip/UDPFormatUWB.h
 
 libuwb_la_SOURCES = BlockFormatUWB.C UDPFormatUWB.C
 
-bin_PROGRAMS = uwb_dbstats uwb_udprecv uwb_udpdb uwb_udpdbstats uwb_simdb uwb_udpmergedb
+bin_PROGRAMS = uwb_dbstats uwb_udprecv uwb_udpdb uwb_udpdbstats uwb_simdb
 
 uwb_dbstats_SOURCES = uwb_dbstats.C
 uwb_udprecv_SOURCES = uwb_udprecv.C
 uwb_udpdb_SOURCES = uwb_udpdb.C
 uwb_udpdbstats_SOURCES = uwb_udpdbstats.C
 uwb_simdb_SOURCES = uwb_simdb.C
-uwb_udpmergedb_SOURCES = uwb_udpmergedb.C
 
 AM_CXXFLAGS = -I. \
 	-I$(top_builddir)/src/Affinity \

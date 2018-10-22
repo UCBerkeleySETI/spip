@@ -11,23 +11,38 @@ from spip.utils.core import system
 def test_pulsar_valid (target):
 
   (reply, message) = get_psrcat_param (target, "name")
-  if reply != "ok":
+  if not reply:
     return (reply, message)
 
   if message == target:
-    return ("ok", "")
+    return (True, "")
   else:
-    return ("fail", "pulsar " + target + " did not exist in catalog")
+    return (False, "pulsar " + target + " did not exist in catalog")
 
 def get_psrcat_param (target, param):
+
   cmd = "psrcat -all " + target + " -c " + param + " -nohead -o short"
   rval, lines = system (cmd)
   if rval != 0 or len(lines) <= 0:
-    return ("fail", "could not use psrcat")
+    return (False, "could not use psrcat")
 
   if lines[0].startswith("WARNING"):
-    return ("fail", "pulsar " + target + " did not exist in catalog " + lines[0])
+    return (False, "pulsar " + target + " did not exist in catalog " + lines[0])
 
-  parts = lines[0].split()
-  if len(parts) == 2 and parts[0] == "1":
-    return ("ok", parts[1])
+  return (True, target)
+
+def test_fluxcal (target, fluxcal_on_file, fluxcal_off_file):
+
+  # check if the target matches the fluxcal off file
+  cmd = "grep " + target + " " + fluxcal_on_file + " | wc -l"
+  rval, lines = system (cmd)
+  if rval == 0 and len(lines) == 1 and int(lines[0]) > 0:
+    return (True, "")
+
+  # check if the target matches the fluxcal off file
+  cmd = "grep " + target + " " + fluxcal_on_file + " | wc -l"
+  rval, lines = system (cmd)
+  if rval == 0 and len(lines) == 1 and int(lines[0]) > 0:
+    return (True, "")
+
+  return (False, target + " did not exist in fluxcal files")

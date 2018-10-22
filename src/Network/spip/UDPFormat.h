@@ -76,6 +76,14 @@ namespace spip {
 
       void set_noise_buffer_size (unsigned nbytes);
 
+      void set_twos_complement () { twos_complement = true; };
+
+      void set_offset_binary () { twos_complement = false; };
+
+      void set_little_endian () { little_endian = true; };
+
+      void set_big_endian () { little_endian = false; };
+
       //! set whether this format will determine the UTC_START itself
       void set_self_start (bool ss) { self_start = ss; };
 
@@ -138,6 +146,10 @@ namespace spip {
       bool prepared;
 
       bool self_start;
+
+      bool twos_complement;
+
+      bool little_endian;
 
     private:
 

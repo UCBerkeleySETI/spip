@@ -60,6 +60,9 @@ namespace spip {
       //! Ensure meta-data is correct in output
       virtual void prepare_output () = 0;
 
+      //! Return the type of transformation
+      Behaviour get_type () { return type; };
+
       bool verbose;
 
     private:

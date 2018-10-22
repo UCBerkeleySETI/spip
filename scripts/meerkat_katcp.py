@@ -83,7 +83,7 @@ class KATCPDaemon(Daemon):
       if beam == self.beam:
         # if the current beam is not configured
         if self.repack == "None":
-          self.repack = host + ":" + str(int(self.cfg["BEAM_REPACK_PORT"]) + int(beam))
+          self.repack = host + ":" + str(int(self.cfg["BEAM_REPACK_FOLD_PORT"]) + int(beam))
     
     if self.repack == "None":
       raise Exception ("KATCPDaemon could not find beam repack daemon")

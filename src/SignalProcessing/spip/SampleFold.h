@@ -9,7 +9,7 @@
 #ifndef __SampleFold_h
 #define __SampleFold_h
 
-#include "spip/ContainerCUDA.h"
+#include "spip/Container.h"
 #include "spip/Transformation.h"
 
 namespace spip {

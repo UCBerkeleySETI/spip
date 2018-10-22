@@ -2,8 +2,6 @@
 #ifndef __UDPReceiver_h
 #define __UDPReceiver_h
 
-//#include "config.h"
-
 #include "spip/AsciiHeader.h"
 #include "spip/UDPFormat.h"
 #include "spip/UDPStats.h"

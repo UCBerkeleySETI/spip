@@ -24,7 +24,6 @@ class timing extends spip_webpage
     $this->plot_width = 240;
     $this->plot_height = 180;
 
-
     for ($ibeam=0; $ibeam<$this->config["NUM_BEAM"]; $ibeam++)
     {
       $beam_name = $this->config["BEAM_".$ibeam];
@@ -276,12 +275,12 @@ class timing extends spip_webpage
       if ($this->config["INDEPENDENT_BEAMS"] == "true")
       {
         $host = $beam["host"];
-        $port = $this->config["BEAM_REPACK_PORT"] + $ibeam;
+        $port = $this->config["BEAM_REPACK_FOLD_PORT"] + $ibeam;
       }
       else
       {
         $host = $this->config["SERVER_HOST"];
-        $port = $this->config["BEAM_REPACK_PORT"] + $ibeam;
+        $port = $this->config["BEAM_REPACK_FOLD_PORT"] + $ibeam;
       }
 
       if ($repack_socket->open ($host, $port, 0) == 0)
@@ -371,7 +370,7 @@ class timing extends spip_webpage
       {
         $host = $this->config["SERVER_HOST"];
       }
-      $port = $this->config["BEAM_REPACK_PORT"];
+      $port = $this->config["BEAM_REPACK_FOLD_PORT"];
 
       if ($ibeam >= 0)
         $port += $ibeam;
@@ -464,7 +463,7 @@ class timing extends spip_webpage
                      $beam."_observer" => "Observer",
                      $beam."_elapsed" => "Elapsed",
                      $beam."_dec" => "DECJ",
-                     $beam."_snr" => "SNR",
+                     $beam."_snr" => "S/N",
                      $beam."_integrated" => "Integrated");
 
     echo "<table id='obsTable' width='100%'>\n";
@@ -548,7 +547,7 @@ class timing extends spip_webpage
 
     echo "</tr>\n";
 
-    echo "<tr><td>SNR</td><td></td><td></td><td></td></tr>\n";
+    echo "<tr><td>S/N</td><td></td><td></td><td></td></tr>\n";
 
     echo "</table>\n";
   }

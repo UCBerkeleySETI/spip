@@ -70,7 +70,7 @@ inline int64_t spip::UDPFormatDualVDIF::decode_packet (char * buf, unsigned * pk
   int64_t byte_offset = (offset_second * bytes_per_second) + (frame_number * frame_size) + (thread_id * packet_data_size);
 
 #ifdef _DEBUG
-  cerr << "spip::UDPFormatDualVDIF::decode_packet thread_id =" << thread_id  
+  cerr << "spip::UDPFormatDualVDIF::decode_packet thread_id=" << thread_id
        << " offset_second=" << offset_second << " frame_number=" << frame_number 
        << " byte_offset=" << byte_offset << endl;
 #endif

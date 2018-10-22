@@ -16,6 +16,8 @@
 #include <iostream>
 #include <stdexcept>
 
+//#define _DEBUG
+
 using namespace std;
 
 spip::UDPSocketSend::UDPSocketSend ()
@@ -30,6 +32,9 @@ spip::UDPSocketSend::~UDPSocketSend ()
 
 void spip::UDPSocketSend::open (string ip_address, int port, string local_ip_address)
 {
+#ifdef _DEBUG
+  cerr << "spip::UDPSocketSend::open sending to " << ip_address << ":" << port << " from " << local_ip_address << endl;
+#endif
   // open the socket FD
   spip::UDPSocket::open (port);
 

@@ -1,0 +1,88 @@
+#!/bin/bash
+#
+# spip    Swinburne Pulsar Instrumentation Package
+#
+# chkconfig: 345 70 30
+# description: Swinburne Pulsar Instrumentation Package
+# processname: spip_lmc.py
+
+# Source function library.
+#. /etc/init.d/functions
+
+RETVAL=0
+prog="spip"
+
+SPIP_USER=spip
+SPIP_HOST=`hostname -s`
+SPIP_BIN_DIR=${HOME}/linux_64/bin
+SPIP_CTL_DIR=$UWB/control
+SPIP_QUIT_FILE=$SPIP_CTL_DIR/spip_lmc_${SPIP_HOST}.quit
+LOCKFILE=$SPIP_CTL_DIR/spip_lmc_${SPIP_HOST}.lock
+
+start() {
+  echo -n "Starting $prog: "
+  /usr/bin/python $SPIP_BIN_DIR/spip_lmc.py
+  RETVAL=$?
+  if [ $RETVAL -eq 0 ] && touch $LOCKFILE
+  then
+    echo "OK"
+  else
+    echo "FAILED"
+  fi
+  return $RETVAL
+}
+
+stop() {
+  echo -n "Shutting down $prog: "
+  RUNNING=`pgrep -f "/usr/bin/python $SPIP_BIN_DIR/spip_lmc.py" | wc -l`
+  touch $SPIP_QUIT_FILE
+  while [ $RUNNING -gt 0 ]
+  do
+    sleep 1
+    RUNNING=`pgrep -f "/usr/bin/python $SPIP_BIN_DIR/spip_lmc.py" | wc -l`
+  done
+  rm -f $SPIP_CTL_DIR/spip_lmc_${SPIP_HOST}.quit
+        RETVAL=$?
+        if [ $RETVAL -eq 0 ] && rm -f $LOCKFILE
+  then
+          echo "OK"
+  else
+    echo "FAILED"
+  fi
+        return $RETVAL
+}
+
+status() {
+        echo -n "Checking $prog status: "
+  pgrep -f "/usr/bin/python $SPIP_BIN_DIR/spip_lmc.py" >& /dev/null
+  RETVAL=$?
+  if [ $RETVAL -eq 0 ]
+  then 
+    echo "Running"
+  else
+    echo "Not Running"
+  fi
+  return $RETVAL
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    status)
+        status
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    *)
+        echo "Usage: $prog {start|stop|status|restart}"
+        exit 1
+        ;;
+esac
+exit $RETVAL
+

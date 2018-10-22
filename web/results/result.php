@@ -30,14 +30,22 @@ class result extends spip_webpage
     $this->host = "Error";
     $this->port = -1;
 
-    for ($istream=0; $istream<$this->config["NUM_STREAM"]; $istream++)
+    if ($this->config["INDEPENDENT_BEAMS"] == "false")
     {
-      list ($host, $ibeam, $subband) = explode (":", $this->config["STREAM_".$istream]);
-      $beam_name = $this->config["BEAM_".$ibeam];
-      if ($beam_name == $this->beam)
+      $this->host = $this->config["SERVER_HOST"];
+      $this->port = $this->config["BEAM_RESULTS_PORT"];
+    }
+    else
+    {
+      for ($istream=0; $istream<$this->config["NUM_STREAM"]; $istream++)
       {
-        $this->host = $host;
-        $this->port =  $this->config["BEAM_RESULTS_PORT"] + $ibeam;
+        list ($host, $ibeam, $subband) = explode (":", $this->config["STREAM_".$istream]);
+        $beam_name = $this->config["BEAM_".$ibeam];
+        if ($beam_name == $this->beam)
+        {
+          $this->host = $host;
+          $this->port =  $this->config["BEAM_RESULTS_PORT"] + $ibeam;
+        }
       }
     }
     $this->update_url = "result.php?update=true&beam=".$this->beam."&utc_start=".$this->utc_start."&source=".str_replace("+", "%2B", $this->source);

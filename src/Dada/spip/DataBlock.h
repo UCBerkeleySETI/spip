@@ -11,7 +11,6 @@
 #include <cstddef>
 #include <string>
 
-
 namespace spip
 {
   class DataBlock 
@@ -78,6 +77,10 @@ namespace spip
       void * header;
 
       uint64_t header_size;
+
+#ifdef HAVE_CUDA
+      int device_id;
+#endif
 
     private:
 

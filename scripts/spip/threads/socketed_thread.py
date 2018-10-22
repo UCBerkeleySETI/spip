@@ -5,7 +5,7 @@
 # 
 ###############################################################################
 
-import threading, socket, errno, select
+import threading, socket, errno, select, fcntl
 
 class SocketedThread (threading.Thread):
 
@@ -30,8 +30,14 @@ class SocketedThread (threading.Thread):
 
     self.script.log (2, "SocketedThread::run listening on " + self.host + ":" + str(self.port))
     sock.bind((self.host, int(self.port)))
-    self.script.log (3, "SocketedThread configuring number of listening slots to " + str(self.nlisten))
+
+    self.script.log (3, "SocketedThread::run configuring number of listening slots to " + str(self.nlisten))
     sock.listen(self.nlisten)
+
+    self.script.log (3, "SocketedThread::run prevent inheritance of socket FDs into forked processes")
+    flags = fcntl.fcntl(sock.fileno(), fcntl.F_GETFD)
+    flags |= fcntl.FD_CLOEXEC
+    fcntl.fcntl(sock.fileno(), fcntl.F_SETFD, flags)
 
     self.can_read = [sock]
     self.can_write = []

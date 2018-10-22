@@ -58,6 +58,11 @@ void spip::BackwardFFTCUDA::configure_plan ()
     throw CUFFTError (result, "spip::BackwardFFTCUDA::prepare_plan",
                       "cufftCreate(plan)");
 
+  // disable auto-allocation
+  result = cufftSetAutoAllocation(plan, 0);
+  if (result != CUFFT_SUCCESS)
+    throw CUFFTError (result, "BackwardFFTCUDA::prepare_plan", "cufftSetAutoAllocation");
+
   configure_plan_dimensions();
 
   size_t work_area_size;
@@ -83,14 +88,6 @@ void spip::BackwardFFTCUDA::configure_plan ()
 
   if (verbose)
     cerr << "BackwardFFTCUDA::prepare_plan work_area_size=" << work_area_size << endl;
-  auto_allocate = work_area_size > 0;
-
-  if (verbose)
-    cerr << "BackwardFFTCUDA::prepare_plan auto_allocate=" << auto_allocate << endl;
-
-  result = cufftSetAutoAllocation(plan, auto_allocate);
-  if (result != CUFFT_SUCCESS)
-    throw CUFFTError (result, "BackwardFFTCUDA::prepare_plan", "cufftSetAutoAllocation");
 
   if (work_area_size > 0)
   {
@@ -105,6 +102,10 @@ void spip::BackwardFFTCUDA::configure_plan ()
     error = cudaMalloc (&work_area, work_area_size);
     if (error != cudaSuccess)
       throw runtime_error("BackwardFFTCUDA::prepare_plan cudaMalloc (work_area) failed");
+
+    result = cufftSetWorkArea(plan, work_area);
+    if (result != CUFFT_SUCCESS)
+      throw CUFFTError (result, "BackwardFFTCUDA::configure_plan", "cufftSetWorkArea");
   }
   else
     work_area = 0;
@@ -140,7 +141,7 @@ void spip::BackwardFFTCUDA::transform_TFPS_to_SFPT ()
       {
         for (unsigned isig=0; isig<nsignal; isig++)
         {
-          result = cufftExecC2C(plan, in + ipolsig, out, CUFFT_FORWARD);
+          result = cufftExecC2C(plan, in + ipolsig, out, CUFFT_INVERSE);
           if (result != CUFFT_SUCCESS)
             throw CUFFTError (result, "spip::BackwardFFTCUDA::transform_TFPS_to_SFPT", "cufftExecC2C(plan)");
 
@@ -177,7 +178,7 @@ void spip::BackwardFFTCUDA::transform_TSPF_to_SFPT ()
         const uint64_t out_chan_offset = ochan * out_chan_stride;
         const uint64_t out_offset = out_chan_offset + out_sig_offset + out_pol_offset;
 
-        result = cufftExecC2C(plan, in, out + out_offset, CUFFT_FORWARD);
+        result = cufftExecC2C(plan, in, out + out_offset, CUFFT_INVERSE);
         if (result != CUFFT_SUCCESS)
           throw CUFFTError (result, "spip::BackwardFFTCUDA::transform_TSPF_to_SFPT", "cufftExecC2C(plan)");
 
@@ -219,7 +220,7 @@ void spip::BackwardFFTCUDA::transform_SFPT_to_SFPT ()
         const uint64_t in_offset  = in_chan_offset + in_sig_offset + in_pol_offset;
         const uint64_t out_offset = out_chan_offset + out_sig_offset + out_pol_offset;
 
-        result = cufftExecC2C(plan, in + in_offset, out + out_offset, CUFFT_FORWARD);
+        result = cufftExecC2C(plan, in + in_offset, out + out_offset, CUFFT_INVERSE);
         if (result != CUFFT_SUCCESS)
           throw CUFFTError (result, "spip::BackwardFFTCUDA::transform_SFPT_to_SFPT", "cufftExecC2C(plan)");
       }

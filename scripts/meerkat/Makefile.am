@@ -9,4 +9,5 @@ dist_bin_SCRIPTS = \
   meerkat_fold.py \
   meerkat_proc.py \
   meerkat_search.py \
+  meerkat_tcs.py \
   meerkat_xpose.py

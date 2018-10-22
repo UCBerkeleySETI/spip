@@ -23,6 +23,8 @@ class stat extends spip_webpage
     $this->plot_width = 160;# 240;
     $this->plot_height = 120;#180;
 
+    $this->cache_dir = $this->config["WEB_DIR"]."/spip/cache";
+
     for ($istream=0; $istream<$this->config["NUM_STREAM"]; $istream++)
     {
       list ($host, $ibeam, $subband) = explode (":", $this->config["STREAM_".$istream]);
@@ -261,28 +263,72 @@ class stat extends spip_webpage
     $xml_req .= "<res>".$get["res"]."</res>";
     $xml_req .= "</stat_request>";
 
-    $stat_socket = new spip_socket(); 
-    $rval = 0;
-    $reply = 0;
-    if ($stat_socket->open ($host, $port, 0) == 0)
+    # update cached image every 10s only
+    $update_freq = 10;
+    $now = time();
+    $curr = $now - ($now % $update_freq);
+
+    $prefix = $host."_".$port."_".$get["plot"]."_".$get["pol"]."_".$get["dim"]."_".$get["res"];
+    $cache_file = $prefix."_".$curr.".png";
+
+    if (!file_exists($this->cache_dir))
     {
-      $stat_socket->write ($xml_req."\r\n");
-      list ($rval, $reply) = $stat_socket->read_raw();
+      mkdir ($this->cache_dir);
     }
-    else
+
+    $file = $this->cache_dir."/".$cache_file;
+
+    if (!file_exists($file))
     {
-      // TODO generate PNG with error text
-      echo "ERROR: could not connect to ".$host.":".$port."<BR>\n";
-      return;
+      $stat_socket = new spip_socket(); 
+      $rval = 0;
+      $reply = 0;
+      if ($stat_socket->open ($host, $port, 0) == 0)
+      {
+        $stat_socket->write ($xml_req."\r\n");
+        list ($rval, $reply) = $stat_socket->read_raw();
+      }
+      else
+      {
+        // TODO generate PNG with error text
+        echo "ERROR: could not connect to ".$host.":".$port."<BR>\n";
+        return;
+      }
+      $stat_socket->close();
+
+      // check again just in case another PHP thread handled this file
+      if (!file_exists($file))
+      {
+        $flags = LOCK_EX;
+        file_put_contents ($file, $reply, $flags);
+      }
     }
-    $stat_socket->close();
     
-    if ($rval == 0)
+    if (file_exists($file))
     {
-      header('Content-type: image/png');
+      header("Content-type: image/png");
       header('Content-Disposition: inline; filename="image.png"');
-      echo $reply;
+      header("Content-length: ".filesize($file));
+      header("Last-Modified: ".date(DATE_RFC2822, $curr));
+      readfile($file);
     }
+
+    // delete old cache files
+    foreach (glob ($this->cache_dir."/".$prefix."_*.png") as $filename)
+    {
+      // delete files more than 30s old
+      if ($now - filemtime($filename) > 30)
+      {
+        @unlink ($filename);
+      }
+    }
+    
+    #if ($rval == 0)
+    #{
+    #  header('Content-type: image/png');
+    #  header('Content-Disposition: inline; filename="image.png"');
+    #  echo $reply;
+    #}
   }
 
   function renderObsTable ($stream)
@@ -360,10 +406,10 @@ class stat extends spip_webpage
 
     echo "<tr>\n";
     echo   "<td>";
-    echo     "<a id='".$stream."_freq_vs_time_0_none_link'>";
-    echo       "<img id='".$stream."_freq_vs_time_0_none' ".$img_params." width='160px'/>";
+    echo     "<a id='".$stream."_timeseries_0_none_link'>";
+    echo       "<img id='".$stream."_timeseries_0_none' ".$img_params." width='160px'/>";
     echo     "</a>";
-    echo     "<input type='hidden' id='".$stream."_freq_vs_time_0_none_ts'/>";
+    echo     "<input type='hidden' id='".$stream."_timeseries_0_none_ts'/>";
     echo   "</td>\n";
 
     echo   "<td>";
@@ -380,10 +426,10 @@ class stat extends spip_webpage
     echo   "</td>\n";
 
     echo   "<td>";
-    echo     "<a id='".$stream."_freq_vs_time_1_none_link'>";
-    echo       "<img id='".$stream."_freq_vs_time_1_none' ".$img_params." width='160px'/>";
+    echo     "<a id='".$stream."_timeseries_1_none_link'>";
+    echo       "<img id='".$stream."_timeseries_1_none' ".$img_params." width='160px'/>";
     echo     "</a>";
-    echo     "<input type='hidden' id='".$stream."_freq_vs_time_1_none_ts'/>";
+    echo     "<input type='hidden' id='".$stream."_timeseries_1_none_ts'/>";
     echo   "</td>\n";
 
     echo   "<td>";
@@ -400,7 +446,7 @@ class stat extends spip_webpage
     echo   "</td>\n";
 
     echo "</tr>\n";
-    echo "<tr><td>Freq v Time</td><td>Histogram</td><td>Bandpass</td><td>Freq v Time</td><td>Histogram</td><td>Bandpass</td></tr>\n";
+    echo "<tr><td>Timeseries</td><td>Histogram</td><td>Bandpass</td><td>Timeseries</td><td>Histogram</td><td>Bandpass</td></tr>\n";
 
     echo "</table>\n";
   }

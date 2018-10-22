@@ -8,7 +8,12 @@
 #include "config.h"
 
 #include "spip/CalibrationPipeline.h"
+#include "spip/UnpackFloatRAMUWB.h"
 #include "spip/HardwareAffinity.h"
+
+#if HAVE_CUDA
+#include "spip/UnpackFloatCUDAUWB.h"
+#endif
 
 #include <signal.h>
 #include <math.h>
@@ -42,11 +47,14 @@ int main(int argc, char *argv[]) try
 
   int core;
 
-  // folding period in micro seconds
-  double period_us = 2;
+  // number of output channels 
+  unsigned nfft = 128;
 
   // output sampling time
   double tsamp_out = 10;
+
+  // perform polarisation scrunching
+  bool pscrunch = false;
 
 #ifdef HAVE_CUDA
   int device = -1;
@@ -65,7 +73,7 @@ int main(int argc, char *argv[]) try
         break;
 
       case 'c':
-        period_us = double(atof (optarg));
+        nfft = atoi (optarg);
         break;
 
 #ifdef HAVE_CUDA
@@ -78,6 +86,10 @@ int main(int argc, char *argv[]) try
         cerr << "Usage: " << endl;
         usage();
         exit(EXIT_SUCCESS);
+        break;
+
+      case 'p':
+        pscrunch = true;
         break;
 
       case 't':
@@ -109,59 +121,44 @@ int main(int argc, char *argv[]) try
   in_key = argv[optind];
   out_key = argv[optind+1];
 
+  unsigned channel_oversampling = 8;
+
   // UWB sampling interval is fixed at 1/128 micro seconds
-  double tsamp_us = 1.0f / 128.0f;
+  double tsamp_in = 1.0f / 128000000.0f;
 
-  // the number of phase bins to fold the calibration signal into
-  unsigned nbin = floor(period_us / tsamp_us);
+  double tsamp_channelised = tsamp_in * nfft * channel_oversampling;
+  
+  // averaging time for TSYS measurement is 1s [for now]
+  uint64_t dat_dec = uint64_t (tsamp_out / tsamp_channelised);
+  unsigned pol_dec = 1;
+  if (pscrunch)
+    pol_dec = 2;
 
-  if (tsamp_us * nbin != period_us)
-  {
-    cerr << "ERROR: folding period must be an integer multiple of the sampling interval" << endl;
-    return EXIT_FAILURE;
-  }
-
-  // folding period in seconds
-  double period_s = period_us / 1e6;
-
-  // check limits
-  if (tsamp_out < 2 * period_s)
-  {
-    cerr << "ERROR: output sampling interval must be at least greater than twice the folding period" << endl;
-    return EXIT_FAILURE;
-  }
-
-  // number of output folds per output time sample
-  unsigned folds_per_output_sample = unsigned(floor(tsamp_out / period_s));
-
-  // the number of input time samples that will be integrated into an output time sample
-  unsigned dat_dec = folds_per_output_sample * nbin;
-
-  if (verbose)
-  {
-    spip::Container::verbose = true;
-    cerr << "requested output sampling interval: " << tsamp_out << " seconds" << endl;
-    cerr << "folds per output sample=" << folds_per_output_sample << endl;
-    cerr << "input samples per output sample=" << dat_dec << endl;
-  }
+  cerr << "uwb_calibration_pipeline: dat_dec=" << dat_dec << " pol_dec=" << pol_dec << " nfft=" << nfft << endl;
 
   cp = new spip::CalibrationPipeline (in_key.c_str(), out_key.c_str());
 
   if (verbose)
     cp->set_verbose();
 
-  cerr << "nbin=" << nbin << " dat_dec=" << dat_dec << endl;
-  cp->set_periodicity (nbin, dat_dec);
+  cp->set_channelisation (nfft * channel_oversampling);
+  cp->set_decimation (dat_dec, pol_dec, channel_oversampling);
 
   // TODO think about signal state
   //cp->set_output_state (spip::Signal::Coherence);
 
 #ifdef HAVE_CUDA
   if (device >= 0)
+  {
     cp->set_device (device);
+    cp->configure (new spip::UnpackFloatCUDAUWB());
+  }
+  else
 #endif
-
-  cp->configure ();
+  {
+    cp->configure (new spip::UnpackFloatRAMUWB());
+  }
+  
   cp->open ();
   cp->process ();
   cp->close ();
@@ -182,15 +179,16 @@ catch (std::exception& exc)
 
 void usage()
 {
-  cout << "uwb_continuum_pipeline [options] inkey outkey" << endl;
-  cout << " -b core    bind to CPU core" << endl;
+  cout << "uwb_calibration_pipeline [options] inkey outkey" << endl;
+  cout << " -b core      bind to CPU core" << endl;
+  cout << " -c channels  channelisation [default 128]" << endl;
 #ifdef HAVE_CUDA
-  cout << " -d gpu     use GPU" << endl;
+  cout << " -d gpu       use GPU" << endl;
 #endif
-  cout << " -c period  folding period in microseconds [default 2]" << endl;
-  cout << " -t secs    desired output sampling interval in seconds [default 10]" << endl;
-  cout << " -h         display usage" << endl;
-  cout << " -v         verbose output" << endl;
+  cout << " -p           scrunch polarisations to produce Stokes I" << endl;
+  cout << " -t secs      desired output sampling interval in seconds [default 10]" << endl;
+  cout << " -h           display usage" << endl;
+  cout << " -v           verbose output" << endl;
 }
 
 void signal_handler (int signalValue)

@@ -48,6 +48,7 @@ spip::DataBlockStats::DataBlockStats(const char * key_string)
   control_state = Idle;
   verbose = false;
   poll_time = 5;
+  write_freq_time = false;
 
   // assume 256 bins for histograms by default
   nbin = 256;
@@ -316,12 +317,29 @@ bool spip::DataBlockStats::monitor (std::string stats_dir, unsigned stream_id)
 
       block_format->write_histograms (ss.str());
       
+      if (write_freq_time)
+      {
+        ss.str("");
+        ss << stats_dir << "/" << local_time << "."
+           << stream_id << ".ft.stats";
+        if (verbose)
+          cerr << "spip::DataBlockStats::monitor creating FT stats file " << ss.str() << endl;
+        block_format->write_freq_times (ss.str());
+      }
+
       ss.str("");
-      ss << stats_dir << "/" << local_time << "." 
-         << stream_id << ".ft.stats";
+      ss << stats_dir << "/" << local_time << "."
+         << stream_id << ".bp.stats";
       if (verbose)
-        cerr << "spip::DataBlockStats::monitor creating FT stats file " << ss.str() << endl;
-      block_format->write_freq_times (ss.str());
+        cerr << "spip::DataBlockStats::monitor creating BP stats file " << ss.str() << endl;
+      block_format->write_bandpasses (ss.str());
+
+      ss.str("");
+      ss << stats_dir << "/" << local_time << "."
+         << stream_id << ".ts.stats";
+      if (verbose)
+        cerr << "spip::DataBlockStats::monitor creating TS stats file " << ss.str() << endl;
+      block_format->write_time_series (ss.str());
 
       ss.str("");
       ss << stats_dir << "/" << local_time << "." 

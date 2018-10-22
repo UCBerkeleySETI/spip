@@ -112,6 +112,8 @@ namespace spip {
       unsigned poll_time;
 
       char utc_start[20];
+
+      bool write_freq_time;
       
   };
 

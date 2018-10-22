@@ -1,18 +1,20 @@
 #!/usr/bin/env python
 
 ##############################################################################
-#  
+#
 #     Copyright (C) 2015 by Andrew Jameson
 #     Licensed under the Academic Free License version 2.1
-# 
+#
 ###############################################################################
 
 #
-# spip_lmc - 
+# spip_lmc -
 #
 
-import os, socket, threading, sys, errno, traceback, select, xmltodict, subprocess
+import os, socket, threading, sys, errno, traceback, select
+import fcntl
 from time import sleep
+
 import spip_lmc_monitor as lmc_mon
 
 from spip.daemons.bases import HostBased
@@ -20,7 +22,6 @@ from spip.daemons.daemon import Daemon
 from spip.threads.reporting_thread import ReportingThread
 from spip.utils.sockets import getHostNameShort
 from spip.config import Config
-from spip.utils.core import system
 
 DAEMONIZE = True
 DL = 1
@@ -138,39 +139,56 @@ class lmcThread (threading.Thread):
   # stop the daemons listed in ranks in reverse order
   def stop_daemons (self, ranks):
 
+    self.parent.log(2, self.prefix + " stop_daemons(" + str(ranks)+")")
     for rank in ranks[::-1]:
       if rank == 0:
         self.parent.log (2, self.prefix + " sleep(5) for rank 0 daemons")
         sleep(5)
 
       for daemon in self.daemons[rank]:
+        self.parent.log(2, self.prefix + " touch " + daemon + self.file_suffix + ".quit")
         open(self.control_dir + "/" + daemon + self.file_suffix + ".quit", 'w').close()
 
       rank_timeout = self.daemon_exit_wait
-      daemon_running = 1
 
-      while daemon_running and rank_timeout > 0:
-        daemon_running = 0
+      # check if each daemon is running
+      daemons_running = {}
+      for daemon in self.daemons[rank]:
+        daemons_running[daemon] = 1 
+
+      any_daemon_running = True
+      while any_daemon_running and rank_timeout > 0:
+
+        any_daemon_running = False
         self.parent.system_lock.acquire()
+
         for daemon in self.daemons[rank]:
           cmd = "pgrep -f '^python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "'"
           rval, lines = self.parent.system (cmd, 3, True)
           if rval == 0 and len(lines) > 0:
-            daemon_running = 1
+            any_daemon_running = True
+            daemons_running[daemon] = True
             self.parent.log(2, self.prefix + "daemon " + daemon + " with rank " +
-                        str(rank) + " still running")
+                            str(rank) + " still running")
+          else:
+            daemons_running[daemon] = False
+
         self.parent.system_lock.release()
-        if daemon_running:
-          self.parent.log(3, self.prefix + "daemons " + "with rank " + str(rank) +
+
+        if any_daemon_running:
+          self.parent.log(3, self.prefix + "daemons with rank " + str(rank) +
                       " still running")
+          rank_timeout = rank_timeout - 1
           sleep(1)
 
       # if any daemons in this rank timed out, hard kill them
-      if rank_timeout == 0:
+      if any_daemon_running:
+        self.parent.log(1, self.prefix + " rank_timeout expired")
         self.parent.system_lock.acquire()
         for daemon in self.daemons[rank]:
-          cmd = "pkill -f ''^python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "'"
-          rval, lines = self.parent.system (cmd, 3)
+          if daemons_running[daemon]:
+            cmd = "pkill -f '^python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "'"
+            rval, lines = self.parent.system (cmd, 3)
         self.parent.system_lock.release()
 
       # remove daemon.quit files for this rank
@@ -278,8 +296,13 @@ class LMCReportingThread (ReportingThread):
 
     self.script.log (2, "LMCReportingThread listening on " + self.host + ":" + str(self.port))
     sock.bind((self.host, int(self.port)))
+
     self.script.log (3, "LMCReportingThread configuring number of listening slots to " + str(self.nlisten))
     sock.listen(self.nlisten)
+
+    flags = fcntl.fcntl(sock.fileno(), fcntl.F_GETFD)
+    flags |= fcntl.FD_CLOEXEC
+    fcntl.fcntl(sock.fileno(), fcntl.F_SETFD, flags)
 
     self.can_read = [sock]
     self.can_write = []
@@ -365,7 +388,7 @@ class LMCReportingThread (ReportingThread):
     if command == "reload_clients":
       self.script.log(1, "Reloading streams")
       for stream in self.script.host_streams:
-        self.sciprt.reload_streams[stream] = True
+        self.script.reload_streams[stream] = True
       self.script.log(1, "Reloading beams")
       for beam in self.script.host_beams:
         self.script.reload_beams[beam] = True
