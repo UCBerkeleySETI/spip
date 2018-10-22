@@ -23,6 +23,8 @@
 
 #include <unistd.h>
 
+#define MKBF1K64A
+
 using namespace std;
 
 template<typename T>
@@ -36,7 +38,11 @@ static inline T extract_bits(T value, int first, int cnt)
 spip::UDPFormatMeerKATSPEAD1k::UDPFormatMeerKATSPEAD1k()
 {
   packet_header_size = 56 + 8;
+#ifdef MKBF1K64A
+  packet_data_size   = 1024;
+#else
   packet_data_size   = 4096;
+#endif
   packet_size = packet_header_size + packet_data_size;
 
   obs_start_sample = 0;
@@ -53,7 +59,11 @@ spip::UDPFormatMeerKATSPEAD1k::UDPFormatMeerKATSPEAD1k()
   heap_size = nbytes_per_heap;
 
   // this is the average size 
+#ifdef MKBF1K64A
+  avg_pkt_size = 1024;
+#else
   avg_pkt_size = 4096;
+#endif
   pkts_per_heap = (unsigned) ceil ( (float) (nsamp_per_heap * nchan * nbytes_per_samp) / (float) avg_pkt_size);
 
   first_heap = true;
@@ -307,19 +317,22 @@ inline void spip::UDPFormatMeerKATSPEAD1k::encode_header (char * buf)
 inline std::size_t spip::UDPFormatMeerKATSPEAD1k::decode_cbf_packet (spip::cbf_packet_header &out, const uint8_t *data, std::size_t max_size)
 {
   std::uint64_t header = spead2::load_be<std::uint64_t>(data);
+#ifdef _DEBUG
   if (extract_bits(header, 48, 16) != magic_version)
   {
     cerr << "packet rejected because magic or version did not match"  << endl;
     return 0;
   }
-
   int item_id_bits = extract_bits(header, 40, 8) * 8;
+#endif
   int heap_address_bits = extract_bits(header, 32, 8) * 8;
+#ifdef _DEBUG
   if (item_id_bits == 0 || heap_address_bits == 0)
   {
     cerr << "packet rejected because flavour is invalid" << endl;
     return 0;
   }
+#endif
 
 #ifdef _DEBUG
   if (item_id_bits + heap_address_bits != 8 * sizeof(spead2::item_pointer_t))
@@ -330,11 +343,13 @@ inline std::size_t spip::UDPFormatMeerKATSPEAD1k::decode_cbf_packet (spip::cbf_p
 #endif
 
   out.n_items = extract_bits(header, 0, 16);
+#ifdef _DEBUG
   if (std::size_t(out.n_items) * sizeof(spead2::item_pointer_t) + 8 > max_size)
   {
     cerr << "packet rejected because the items overflow the packet" << endl;
     return 0;
   }
+#endif
 
   // Mark specials as not found
   out.heap_cnt = -1;
@@ -385,13 +400,17 @@ inline std::size_t spip::UDPFormatMeerKATSPEAD1k::decode_cbf_packet (spip::cbf_p
           first_regular = std::min(first_regular, i);
   }
 
+#ifdef _DEBUG
   if (out.heap_cnt == -1 || out.payload_offset == -1 || out.payload_length == -1)
   {
     cerr << "packet rejected because it does not have required items" << endl;
     return 0;
   }
+#endif
 
   std::size_t size = out.payload_length + out.n_items * sizeof(spead2::item_pointer_t) + 8;
+
+#ifdef _DEBUG
   if (size > max_size)
   {
     cerr << "packet rejected because payload length overflows packet size" << endl;
@@ -402,6 +421,7 @@ inline std::size_t spip::UDPFormatMeerKATSPEAD1k::decode_cbf_packet (spip::cbf_p
     cerr << "packet rejected because payload would overflow given heap length" << endl;
     return 0;
   }
+#endif
 
   // Adjust the pointers to skip the specials, since live_heap::add_packet does not
   // need them
@@ -414,7 +434,11 @@ inline std::size_t spip::UDPFormatMeerKATSPEAD1k::decode_cbf_packet (spip::cbf_p
 
 inline int64_t spip::UDPFormatMeerKATSPEAD1k::decode_packet (char* buf, unsigned * pkt_size)
 {
+#ifdef MKBF1K64A
+  decode_cbf_packet (cbf_header, (const uint8_t *) buf, 1088);
+#else
   decode_cbf_packet (cbf_header, (const uint8_t *) buf, 4160);
+#endif
 
   *pkt_size = (unsigned) cbf_header.payload_length;
 
@@ -467,20 +491,25 @@ inline int64_t spip::UDPFormatMeerKATSPEAD1k::decode_packet (char* buf, unsigned
 }
 
 #else
+// this is the old decoder - consider removing
 
 void spip::UDPFormatMeerKATSPEAD1k::decode_spead (char * buf)
 {
 #ifdef OLD_DECODER
-  spead2::recv::decode_packet (header, (const uint8_t *) buf, 4160);
+  spead2::recv::decode_packet (header, (const uint8_t *) buf, 1088);
 #else
-  decode_cbf_packet (cbf_header, (const uint8_t *) buf, 4160);
+  decode_cbf_packet (cbf_header, (const uint8_t *) buf, 1088);
 #endif
 }
 
 // return byte offset for this payload in the whole data stream
 inline int64_t spip::UDPFormatMeerKATSPEAD1k::decode_packet (char* buf, unsigned * pkt_size)
 {
+#ifdef MKBF1K64A
+  spead2::recv::decode_packet (header, (const uint8_t *) buf, 1088);
+#else
   spead2::recv::decode_packet (header, (const uint8_t *) buf, 4160);
+#endif
 
   *pkt_size = (unsigned) header.payload_length;
 
