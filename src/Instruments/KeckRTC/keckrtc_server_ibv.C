@@ -20,7 +20,7 @@
 #endif
 #include "spip/KeckRTCDefs.h"
 #include "spip/KeckRTCUtil.h"
-
+#include "spip/stopwatch.h"
 
 #include <float.h>
 #include <unistd.h>
@@ -268,8 +268,7 @@ int main(int argc, char *argv[]) try
 #endif
   char * host_ptr = (char *) host_buf;
 
-  struct timeval start_frame;
-  struct timeval end_frame;
+  stopwatch_t frame_sw;
 
   std::vector<double> times;
   uint64_t frames_to_receive = frame_rate * duration;
@@ -327,7 +326,7 @@ int main(int argc, char *argv[]) try
     }
 
     // 
-    gettimeofday (&start_frame, 0);
+    StartTimer (&frame_sw);
 
 #ifdef HAVE_CUDA
     if (process_data) 
@@ -355,11 +354,11 @@ int main(int argc, char *argv[]) try
     }
 #endif
 
-    gettimeofday (&end_frame, 0);
+    StopTimer (&frame_sw);
 
     // determine the time taken to perform GPU H2D, kernel and D2H
-    double frame_time = diff_time (start_frame, end_frame);
-    times[iframe] = frame_time;
+    unsigned long frame_time_ns = ReadTimer (&frame_sw);
+    times[iframe] = double(frame_time_ns) / 1000;
     iframe++;
 
     if (keep_receiving)

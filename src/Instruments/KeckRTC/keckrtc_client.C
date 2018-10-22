@@ -141,6 +141,7 @@ int main(int argc, char *argv[]) try
   sock_recv.resize (bufsz);
   sock_recv.set_block ();
 
+  stopwatch_t frame_sw;
   stopwatch_t wait_sw;
   double sleep_time = 0;
   if (network_rate > 0)
@@ -179,7 +180,7 @@ int main(int argc, char *argv[]) try
   // transmit phase
   while (iframe < frames_to_send && !quit_threads)
   {
-    gettimeofday (&start_frame, 0);
+    StartTimer(&frame_sw);
 
     uint64_t bytes_sent = 0;
     while (bytes_sent < frame_size)
@@ -202,19 +203,19 @@ int main(int argc, char *argv[]) try
       cerr << "Receiving a reply" << endl;
     size_t reply_size = sock_recv.recv_from();
     sock_recv.consume_packet();
+    StopTimer(&frame_sw);
 
-    gettimeofday (&end_frame, 0);
     if (verbose)
       cerr << "Received " << reply_size << " bytes" << endl;
 
-    double frame_time = diff_time (start_frame, end_frame);
-    times[iframe] = frame_time;
-    time_sum += frame_time;
+    unsigned long frame_time_ns = ReadTimer(&frame_sw);
+    times[iframe] = double(frame_time_ns) / 1000;
+    time_sum += times[iframe];
 
     packets_sent++;
     iframe++;
 
-    // now get the current time 
+    // now get the current time to ensure the frame rate is correct
     gettimeofday (&curr_time, 0);
     double curr_offset = diff_time(start_time, curr_time);
     double next_frame_offset = iframe * (double(1e6) / frame_rate);

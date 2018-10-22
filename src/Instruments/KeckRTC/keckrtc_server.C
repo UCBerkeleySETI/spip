@@ -24,7 +24,7 @@
 #endif
 #include "spip/KeckRTCDefs.h"
 #include "spip/KeckRTCUtil.h"
-
+#include "spip/stopwatch.h"
 
 #include <float.h>
 #include <unistd.h>
@@ -273,8 +273,7 @@ int main(int argc, char *argv[]) try
 #endif
   char * host_ptr = (char *) host_buf;
 
-  struct timeval start_frame;
-  struct timeval end_frame;
+  stopwatch_t frame_sw;
 
   std::vector<double> times;
   uint64_t frames_to_receive = frame_rate * duration;
@@ -319,8 +318,7 @@ int main(int argc, char *argv[]) try
       sock_recv->consume_packet();
     }
 
-    // 
-    gettimeofday (&start_frame, 0);
+    StartTimer(&frame_sw);
 
 #ifdef HAVE_CUDA
     if (process_data) 
@@ -348,10 +346,13 @@ int main(int argc, char *argv[]) try
     }
 #endif
 
-    gettimeofday (&end_frame, 0);
+    StopTimer(&frame_sw);
+
+    unsigned long frame_time_ns = ReadTimer(&frame_sw);
+    cerr << "frame_time_ns=" << frame_time_ns << endl;
 
     // determine the time taken to perform GPU H2D, kernel and D2H
-    double frame_time = diff_time (start_frame, end_frame);
+    double frame_time = double(frame_time_ns) / 1000;
     times[iframe] = frame_time;
     iframe++;
 
@@ -369,48 +370,6 @@ int main(int argc, char *argv[]) try
     uint64_t frames_sent = iframe - 1;
     write_timing_data ("recv_timing.dat", times, frames_sent);
     print_timing_data (times, frames_sent, frame_size);
-    
-/*
-    double duration_min = DBL_MAX;
-    double duration_max = -DBL_MAX;
-    double duration_sum = 0;
-      
-    int flags = O_WRONLY | O_CREAT | O_TRUNC; 
-    int perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-    int fd = open ("recv_timing.dat", flags, perms);
-    ::write (fd, times, frames_sent * sizeof(double));
-    ::close (fd);
-     
-    double time_sum = 0;
-      
-    for (iframe=0; iframe<frames_sent; iframe++)
-    { 
-      double duration = times[iframe];
-        
-      if (duration < duration_min)
-        duration_min = duration;
-      if (duration > duration_max)
-        duration_max = duration;
-      duration_sum += duration;
-       
-      time_sum += duration;
-    }
-      
-    double duration_mean = duration_sum / double(frames_sent);
-    cerr << "duration timing:" << endl;
-    cerr << "  minimum=" << duration_min << " us" << endl;
-    cerr << "  mean="    << duration_mean << " us" << endl;
-    cerr << "  maximum=" << duration_max << " us" << endl;
-     
-    double bytes_per_microsecond = (frames_sent * frame_size) / time_sum;
-    double gb_per_second = (bytes_per_microsecond * 1000000) / 1000000000;
-      
-    double frames_per_microsecond = frames_sent / time_sum;
-    double frames_per_second = frames_per_microsecond *1e6;
-      
-    cerr << "  data_rate=" << gb_per_second << " Gb/s" << endl;
-    cerr << "  frame_rate=" << frames_per_second << endl;
-*/
   }
 
   sock_send->close_me();
