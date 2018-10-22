@@ -5,6 +5,8 @@
  *
  ***************************************************************************/
 
+//#define _DEBUG
+//#define _TRACE
 #include "config.h"
 
 #include "spip/Error.h"
@@ -178,10 +180,10 @@ int main(int argc, char *argv[]) try
   client = std::string(argv[optind+2]);
 
   // configure the queue
-  size_t packet_size = 8242;
-  size_t buffer_size = packet_size * 64;
+  size_t num_packets = 64;
+  size_t packet_size = 8192;
   size_t header_size = 0;
-  queue->configure (buffer_size, packet_size, header_size);
+  queue->configure (num_packets, packet_size, header_size);
 
   // open the IBV queue
   queue->open (server, port);
