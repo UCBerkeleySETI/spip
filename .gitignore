@@ -79,6 +79,7 @@ src/Formats/VDIF/vlbi_fake
 src/Formats/VDIF/vdif_udpgen
 src/Formats/VDIF/vdif_udprecv
 src/Instruments/KeckRTC/keckrtc_client
+src/Instruments/KeckRTC/keckrtc_client_ibv
 src/Instruments/KeckRTC/keckrtc_server
 src/Instruments/KeckRTC/keckrtc_server_ibv
 src/Instruments/KeckRTC/keckrtc_server_ibv_gdr

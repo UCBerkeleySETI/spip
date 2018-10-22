@@ -7,11 +7,7 @@
 
 #include "spip/Error.h"
 #include "spip/UDPSocketSend.h"
-#ifdef HAVE_VMA
-#include "spip/UDPSocketReceiveVMA.h"
-#else
-#include "spip/UDPSocketReceive.h"
-#endif
+#include "spip/IBVQueue.h"
 #include "spip/HardwareAffinity.h"
 
 #include "spip/KeckRTCDefs.h"
@@ -46,6 +42,10 @@ int main(int argc, char *argv[]) try
   string client;
 
   spip::HardwareAffinity hw_affinity;
+
+  boost::asio::io_service io;
+
+  spip::IBVQueue queue(io);
 
   int verbose = 0;
 
@@ -138,17 +138,14 @@ int main(int argc, char *argv[]) try
 
   port++;
 
-#ifdef HAVE_VMA
-  spip::UDPSocketReceiveVMA sock_recv;
-#else
-  spip::UDPSocketReceive sock_recv;
-#endif
-
   if (verbose)
     cerr << "opening receiving socket on " << client << ":" << port << endl;
-  sock_recv.open (client, port);
-  sock_recv.resize (bufsz);
-  sock_recv.set_block ();
+  size_t packet_size = 8192;
+  size_t header_size = 32;
+  size_t num_packets = 2;
+  queue.configure (num_packets, packet_size, header_size);
+  queue.open (client, port);
+  queue.allocate();
 
   stopwatch_t frame_sw;
   stopwatch_t wait_sw;
@@ -210,12 +207,19 @@ int main(int argc, char *argv[]) try
     // receive a reply
     if (verbose)
       cerr << "Receiving a reply" << endl;
-    size_t reply_size = sock_recv.recv_from();
-    sock_recv.consume_packet();
+    bool have_packet = false;
+    int got = queue.open_packet();
+    while (!have_packet)
+    {
+      got = queue.open_packet();
+      if (got > 0)
+        have_packet = true;
+    }
+    queue.close_packet();
     StopTimer(&frame_sw);
 
     if (verbose)
-      cerr << "Received " << reply_size << " bytes" << endl;
+      cerr << "Received " << got << " bytes" << endl;
 
     unsigned long frame_time_ns = ReadTimer(&frame_sw);
     times[iframe] = double(frame_time_ns) / 1000;
@@ -244,7 +248,6 @@ int main(int argc, char *argv[]) try
   sock_send.send (bufsz-1);
 
   sock_send.close_me();
-  sock_recv.close_me();
 
   uint64_t discard_frames = 100;
 

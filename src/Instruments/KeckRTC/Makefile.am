@@ -47,10 +47,13 @@ endif
 
 if HAVE_SPEAD2
 
-bin_PROGRAMS += keckrtc_server_ibv
+bin_PROGRAMS += keckrtc_server_ibv keckrtc_client_ibv
 keckrtc_server_ibv_SOURCES = keckrtc_server_ibv.C
+keckrtc_client_ibv_SOURCES = keckrtc_client_ibv.C
 keckrtc_server_ibv_CXXFLAGS = $(AM_CXXFLAGS) @SPEAD2_CFLAGS@
 keckrtc_server_ibv_LDADD = $(LDADD) @SPEAD2_LIBS@ -lrdmacm -libverbs
+keckrtc_client_ibv_CXXFLAGS = $(AM_CXXFLAGS) @SPEAD2_CFLAGS@
+keckrtc_client_ibv_LDADD = $(LDADD) @SPEAD2_LIBS@ -lrdmacm -libverbs
 
 endif
 
