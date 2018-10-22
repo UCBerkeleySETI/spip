@@ -130,7 +130,7 @@ void ResumeTimer(stopwatch_t *stopWatch)
 *                containing the timer data.
 *   Effects    : None
 *   Returned   : The total time the stopwatch has been running in
-*                milliseconds.  If the stopwatch is stopped, the amount of
+*                nanoseconds.  If the stopwatch is stopped, the amount of
 *                time accumulated prior to stopping the stopwatch is
 *                returned.
 ***************************************************************************/
@@ -142,7 +142,7 @@ unsigned long ReadTimer(const stopwatch_t *stopWatch)
     if (FALSE == stopWatch->isRunning)
     {
         return (stopWatch->runningTime.tv_sec * 1e9) +
-            (stopWatch->runningTime.tv_nsec / 1000);
+            (stopWatch->runningTime.tv_nsec);
     }
 
     clock_gettime(CLOCK_MONOTONIC, &now);
@@ -159,7 +159,7 @@ unsigned long ReadTimer(const stopwatch_t *stopWatch)
         stopWatch->runningTime.tv_sec) * 1e9;
 
     delta += ((now.tv_nsec - stopWatch->startTime.tv_nsec) +
-        stopWatch->runningTime.tv_nsec) / 1000;
+        stopWatch->runningTime.tv_nsec);
  
     return delta;
 }

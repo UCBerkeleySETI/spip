@@ -349,7 +349,6 @@ int main(int argc, char *argv[]) try
     StopTimer(&frame_sw);
 
     unsigned long frame_time_ns = ReadTimer(&frame_sw);
-    cerr << "frame_time_ns=" << frame_time_ns << endl;
 
     // determine the time taken to perform GPU H2D, kernel and D2H
     double frame_time = double(frame_time_ns) / 1000;

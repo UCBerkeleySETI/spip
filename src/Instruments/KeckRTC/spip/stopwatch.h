@@ -70,7 +70,7 @@ void StartTimer(stopwatch_t *stopWatch);    /* start or restart stopwatch */
 void StopTimer(stopwatch_t *stopWatch);     /* stopwatch */
 void ResumeTimer(stopwatch_t *stopWatch);   /* resume stopped watch */
 
-/* returns stopwatch time in ms */
+/* returns stopwatch time in ns */
 unsigned long ReadTimer(const stopwatch_t *stopWatch);
 /* delay a started stopwatch until end seconds */
 void DelayTimer(const stopwatch_t *stopWatch, double end);
