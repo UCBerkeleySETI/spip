@@ -322,6 +322,7 @@ void usage()
     "  -d num      run test for num seconds [default 10]\n"
     "  -f bytes    size of a frame in bytes [default "<< KeckRTC_HEAP_SIZE << "]\n"
     "  -n rate     limit data transmission to rate Gb/s [default no limit]\n"
+    "  -p bytes    size of a UDP packet in bytes [default " << KeckRTC_UDP_SIZE << "]\n"
     "  -r rate     run test at frame rate [default 2000Hz]\n"
     "  -h          print this help text\n"
     "  -v          verbose output\n"

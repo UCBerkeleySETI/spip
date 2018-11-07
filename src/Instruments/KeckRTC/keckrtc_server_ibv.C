@@ -443,6 +443,7 @@ void usage()
 #endif
     "  -h          print this help text\n"
     "  -i          ignore data processing\n"
+    "  -p bytes    size of a UDP packet in bytes [default " << KeckRTC_UDP_SIZE << "]\n"
     "  -r rate     frame rate of test in Hz [default 2000]\n"
     "  -v          verbose output\n"
     << endl;
