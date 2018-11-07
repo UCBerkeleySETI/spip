@@ -58,6 +58,8 @@ int main(int argc, char *argv[]) try
 
   unsigned frame_size = KeckRTC_HEAP_SIZE;
 
+  unsigned packet_size = KeckRTC_UDP_SIZE;
+
   unsigned frame_rate = 2000;
 
   unsigned duration = 10;
@@ -79,12 +81,12 @@ int main(int argc, char *argv[]) try
 
 #ifdef HAVE_CUDA
 #ifdef HAVE_GDR
-  while ((c = getopt(argc, argv, "b:d:f:g:hijr:v")) != EOF) 
+  while ((c = getopt(argc, argv, "b:d:f:g:hijp:r:v")) != EOF) 
 #else
-  while ((c = getopt(argc, argv, "b:d:f:g:hir:v")) != EOF) 
+  while ((c = getopt(argc, argv, "b:d:f:g:hip:r:v")) != EOF) 
 #endif // ! HAVE_GDR
 #else
-  while ((c = getopt(argc, argv, "b:d:f:hir:v")) != EOF) 
+  while ((c = getopt(argc, argv, "b:d:f:hip:r:v")) != EOF) 
 #endif
   {
     switch(c) 
@@ -121,6 +123,10 @@ int main(int argc, char *argv[]) try
 
       case 'i':
         process_data = false;
+        break;
+
+      case 'p':
+        packet_size = atoi(optarg);
         break;
 
       case 'r':
@@ -177,9 +183,6 @@ int main(int argc, char *argv[]) try
   port = atoi(argv[optind+1]);
   client = std::string(argv[optind+2]);
 
-  // UDP packet size for send/recv
-  size_t bufsz = KeckRTC_UDP_SIZE;
-
   // create a UDP receiving socket
 #ifdef HAVE_VMA
   spip::UDPSocketReceiveVMA * sock_recv = new spip::UDPSocketReceiveVMA();
@@ -188,7 +191,7 @@ int main(int argc, char *argv[]) try
 #endif
   cerr << "opening recv socket on " << server << ":" << port << endl;
   sock_recv->open (server, port);
-  sock_recv->resize (bufsz + 64);
+  sock_recv->resize (packet_size + 64);
   sock_recv->set_block ();
 
   port++;
@@ -196,7 +199,7 @@ int main(int argc, char *argv[]) try
   spip::UDPSocketSend * sock_send = new spip::UDPSocketSend();
   cerr << "opening send socket to " << client << ":" << port << " from  " << server << endl;
   sock_send->open (client, port, server);
-  sock_send->resize (bufsz);
+  sock_send->resize (packet_size);
 
   void * send_buf_ptr = (void *) sock_send->get_buf();
   void * recv_buf_ptr = (void *) sock_recv->get_buf();
@@ -207,12 +210,12 @@ int main(int argc, char *argv[]) try
   cudaError_t rval;
 
   // register the udp socket buffers as host memory
-  rval = cudaHostRegister (send_buf_ptr, bufsz, flags);
+  rval = cudaHostRegister (send_buf_ptr, packet_size, flags);
   if (rval != cudaSuccess)
     cerr << "cudaHostRegister failed on sock_send" << endl;
 
   // not sure I can do this with a VMA socket
-  rval = cudaHostRegister (recv_buf_ptr, bufsz, flags);
+  rval = cudaHostRegister (recv_buf_ptr, packet_size, flags);
   if (rval != cudaSuccess)
     cerr << "cudaHostRegister failed on sock_recv" << endl;
 
@@ -334,9 +337,9 @@ int main(int argc, char *argv[]) try
       }
 
       // perform some sort of operation 
-      keckrtc_dummy (dev_buf, bufsz, stream);
+      keckrtc_dummy (dev_buf, packet_size, stream);
 
-      rval = cudaMemcpyAsync (send_buf_ptr, dev_buf, bufsz, cudaMemcpyDeviceToHost, stream);
+      rval = cudaMemcpyAsync (send_buf_ptr, dev_buf, packet_size, cudaMemcpyDeviceToHost, stream);
       if (rval != cudaSuccess)
         cerr << "cudaMemcpyAsync failed on sock_recv" << endl;
 
@@ -358,9 +361,9 @@ int main(int argc, char *argv[]) try
     if (keep_receiving)
     {
       if (verbose)
-        cerr << "Sending reply of " << bufsz << " bytes" << endl;
+        cerr << "Sending reply of " << packet_size << " bytes" << endl;
       // send a reply
-      sock_send->send (bufsz);
+      sock_send->send (packet_size);
     }
   }
 

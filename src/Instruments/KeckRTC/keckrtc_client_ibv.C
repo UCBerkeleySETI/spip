@@ -53,6 +53,8 @@ int main(int argc, char *argv[]) try
 
   unsigned frame_size = KeckRTC_HEAP_SIZE;
 
+  unsigned packet_size = KeckRTC_UDP_SIZE;
+
   unsigned frame_rate = 2000; // hertz
 
   unsigned duration = 10; // seconds
@@ -62,7 +64,7 @@ int main(int argc, char *argv[]) try
   opterr = 0;
   int c;
 
-  while ((c = getopt(argc, argv, "b:d:f:hn:r:v")) != EOF) 
+  while ((c = getopt(argc, argv, "b:d:f:hn:p:r:v")) != EOF) 
   {
     switch(c) 
     {
@@ -86,6 +88,10 @@ int main(int argc, char *argv[]) try
 
       case 'n':
         network_rate = atoi(optarg);
+        break;
+
+      case 'p':
+        packet_size = atoi(optarg);
         break;
 
       case 'r':
@@ -125,22 +131,18 @@ int main(int argc, char *argv[]) try
   client = std::string(argv[optind+2]);
   port = atoi(argv[optind+1]);
 
-  // UDP packet size for send/recv
-  size_t bufsz = KeckRTC_UDP_SIZE;
-
   // create a UDP sending socket
   spip::UDPSocketSend sock_send;
   if (verbose)
     cerr << "opening sending socket to " << server << ":" << port 
          << " from " << client << endl;
   sock_send.open (server, port, client);
-  sock_send.resize (bufsz);
+  sock_send.resize (packet_size);
 
   port++;
 
   if (verbose)
     cerr << "opening receiving socket on " << client << ":" << port << endl;
-  size_t packet_size = 8192;
   size_t header_size = 32;
   size_t num_packets = 2;
   queue.configure (num_packets, packet_size, header_size);
@@ -154,7 +156,7 @@ int main(int argc, char *argv[]) try
   {
     //                                      Gb/s           b/s  B/us
     double bytes_per_microsecond = double(network_rate) * (1e9 / 8);
-    sleep_time = bufsz / bytes_per_microsecond;
+    sleep_time = packet_size / bytes_per_microsecond;
     cerr << "sleep_time=" << sleep_time *1e6 << " seconds" << endl;
   }
 
@@ -196,9 +198,9 @@ int main(int argc, char *argv[]) try
 
       // send a packet
       if (verbose)
-        cerr << "Sending " << bufsz << " bytes" << endl;
-      sock_send.send (bufsz);
-      bytes_sent += bufsz;
+        cerr << "Sending " << packet_size << " bytes" << endl;
+      sock_send.send (packet_size);
+      bytes_sent += packet_size;
 
       if (network_rate > 0)
         DelayTimer(&wait_sw, sleep_time);
@@ -244,8 +246,8 @@ int main(int argc, char *argv[]) try
 
   double total_time = diff_time(start_time, end_time);
 
-  cerr << "Sending " << bufsz-1 << " bytes" << endl;
-  sock_send.send (bufsz-1);
+  cerr << "Sending " << packet_size-1 << " bytes" << endl;
+  sock_send.send (packet_size-1);
 
   sock_send.close_me();
 
