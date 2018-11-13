@@ -193,6 +193,7 @@ int main(int argc, char *argv[]) try
   sock_recv->open (server, port);
   sock_recv->resize (packet_size + 64);
   sock_recv->set_block ();
+  sock_recv->resize_kernel_buffer(4 * 1024 * 1024);
 
   port++;
 
@@ -270,10 +271,12 @@ int main(int argc, char *argv[]) try
     if (rval != cudaSuccess)
       cerr << "cudaMalloc failed on dev_buf" << endl;
   }
+  char * dev_buf_char = (char *) dev_buf;
 #else
   // no CUDA/GDR
   host_buf = malloc (frame_size);
 #endif
+
   char * host_ptr = (char *) host_buf;
 
   stopwatch_t frame_sw;
@@ -281,10 +284,20 @@ int main(int argc, char *argv[]) try
   std::vector<double> times;
   uint64_t frames_to_receive = frame_rate * duration;
   times.resize(frames_to_receive + 1);
+  for (unsigned i=0; i<frames_to_receive+1; i++)
+    times[i] = 0;
 
   uint64_t iframe = 0;
 
-  cerr << "ready to receive" << endl;
+  StartTimer(&frame_sw);
+  // copy a complete frame to the GPU
+  memset (host_ptr, 0, frame_size);
+  rval = cudaMemcpyAsync (dev_buf, host_ptr, frame_size,
+                          cudaMemcpyHostToDevice, stream);
+  rval = cudaStreamSynchronize (stream);
+  StopTimer(&frame_sw);
+
+  cerr << "Ready to receive: expecting " << frames_to_receive << " frames" << endl;
 
   // main transfer loop
   bool keep_receiving = true;
@@ -296,7 +309,7 @@ int main(int argc, char *argv[]) try
     {
       // receive a packet
       size_t reply_size = sock_recv->recv_from ();
-      if (reply_size == KeckRTC_UDP_SIZE)
+      if (reply_size == packet_size)
       {
         if (process_data) 
 	{
@@ -308,10 +321,14 @@ int main(int argc, char *argv[]) try
           }
 	  else
 #endif
-#endif
 	  {
-            memcpy (host_ptr + bytes_received, sock_recv->buf_ptr, reply_size);
+	    // copy the packet to a pinned buffer that won't get overwritten by other frames
+	    memcpy (host_ptr + bytes_received, sock_recv->buf_ptr, reply_size);
           }
+
+#else	  // !HAVE_CUDA
+          memcpy (host_ptr + bytes_received, sock_recv->buf_ptr, reply_size);
+#endif
         }
       	bytes_received += reply_size;
       }
@@ -327,17 +344,18 @@ int main(int argc, char *argv[]) try
     if (process_data) 
     {
 #ifdef HAVE_GDR
-      // GDR path already has copied the data to GPU
       if (!use_gdr)
 #endif
       {
-        rval = cudaMemcpyAsync (dev_buf, host_ptr, frame_size, cudaMemcpyHostToDevice, stream);
-        if (rval != cudaSuccess)
-          cerr << "cudaMemcpyAsync failed on sock_recv" << endl;
+	// start a copy to the GPU
+        rval = cudaMemcpyAsync (dev_buf, host_ptr, frame_size, 
+				cudaMemcpyHostToDevice, stream);
+         if (rval != cudaSuccess)
+           cerr << "cudaMemcpyAsync failed on host_ptr to dev_buf" << endl;
       }
-
-      // perform some sort of operation 
-      keckrtc_dummy (dev_buf, packet_size, stream);
+      
+      // perform some sort of operation, disabled for ow
+      // keckrtc_dummy (dev_buf, packet_size, stream);
 
       rval = cudaMemcpyAsync (send_buf_ptr, dev_buf, packet_size, cudaMemcpyDeviceToHost, stream);
       if (rval != cudaSuccess)
@@ -367,15 +385,18 @@ int main(int argc, char *argv[]) try
     }
   }
 
-  if (iframe > 0)
-  { 
-    uint64_t frames_sent = iframe - 1;
-    write_timing_data ("recv_timing.dat", times, frames_sent);
-    print_timing_data (times, frames_sent, frame_size);
-  }
-
   sock_send->close_me();
   sock_recv->close_me();
+
+  // don't count the first 10 frames
+  uint64_t frames_offset = 10;
+
+  if (iframe > frames_offset)
+  {
+    uint64_t frames_sent = iframe - 1;
+    write_timing_data ("recv_timing.dat", times, frames_offset, frames_sent);
+    print_timing_data (times, frames_offset, frames_sent, frame_size);
+  }
 
   delete sock_send;
   delete sock_recv;

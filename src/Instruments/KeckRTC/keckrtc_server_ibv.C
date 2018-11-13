@@ -186,8 +186,11 @@ int main(int argc, char *argv[]) try
   client = std::string(argv[optind+2]);
 
   // configure the queue
-  size_t num_packets = 64;
+  size_t num_packets = 8192;
   size_t header_size = 0;
+  if (verbose)
+    cerr << "configuring queue with packet_size=" << packet_size 
+         << " header_size=" << header_size << endl;
   queue->configure (num_packets, packet_size, header_size);
 
   // open the IBV queue
@@ -292,7 +295,7 @@ int main(int argc, char *argv[]) try
     {
       // receive a packet
       int got = queue->open_packet ();
-      if (got == KeckRTC_UDP_SIZE)
+      if (got == packet_size)
       {
         if (process_data) 
 	{
@@ -346,7 +349,7 @@ int main(int argc, char *argv[]) try
       }
 
       // perform some sort of operation 
-      keckrtc_dummy (dev_buf, packet_size, stream);
+      // keckrtc_dummy (dev_buf, packet_size, stream);
 
       rval = cudaMemcpyAsync (send_buf_ptr, dev_buf, packet_size, cudaMemcpyDeviceToHost, stream);
       if (rval != cudaSuccess)
@@ -375,11 +378,13 @@ int main(int argc, char *argv[]) try
     }
   }
 
-  if (iframe > 0)
+  // skip the first 10 frames
+  uint64_t frames_offset = 10;
+  if (iframe > frames_offset)
   { 
     uint64_t frames_sent = iframe - 1;
-    write_timing_data ("recv_timing.dat", times, frames_sent);
-    print_timing_data (times, frames_sent, frame_size);
+    write_timing_data ("recv_timing.dat", times, frames_offset, frames_sent);
+    print_timing_data (times, frames_offset, frames_sent, frame_size);
   }
 
   sock_send->close_me();
