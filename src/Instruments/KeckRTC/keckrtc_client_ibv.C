@@ -143,8 +143,8 @@ int main(int argc, char *argv[]) try
 
   if (verbose)
     cerr << "opening receiving socket on " << client << ":" << port << endl;
-  size_t header_size = 32;
-  size_t num_packets = 2;
+  size_t num_packets = 64;
+  size_t header_size = 0;
   queue.configure (num_packets, packet_size, header_size);
   queue.open (client, port);
   queue.allocate();
