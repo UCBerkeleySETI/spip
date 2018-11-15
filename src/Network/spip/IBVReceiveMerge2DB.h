@@ -25,7 +25,8 @@ namespace spip {
 
     public:
 
-      IBVReceiveMerge2DB (const char * key1, const char * key2);
+      IBVReceiveMerge2DB (const char * key1, const char * key2,
+                          boost::asio::io_service& io_service);
 
       ~IBVReceiveMerge2DB ();
 
@@ -159,6 +160,10 @@ namespace spip {
       pthread_cond_t cond_recvs[2];
 
       pthread_mutex_t mutex_recvs[2];
+
+      IBVQueue queue1;
+
+      IBVQueue queue2;
 
       IBVQueue * queues[2];
 
