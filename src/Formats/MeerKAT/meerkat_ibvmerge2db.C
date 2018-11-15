@@ -100,7 +100,9 @@ int main(int argc, char *argv[])
  
   try
   {
-    ibvmerge2db = new spip::IBVReceiveMerge2DB(key1.c_str(), key2.c_str());
+    boost::asio::io_service io_service;
+
+    ibvmerge2db = new spip::IBVReceiveMerge2DB(key1.c_str(), key2.c_str(), io_service);
 
     if (format.compare("spead") == 0)
       ibvmerge2db->set_formats (new spip::UDPFormatMeerKATSPEAD(), new spip::UDPFormatMeerKATSPEAD());
