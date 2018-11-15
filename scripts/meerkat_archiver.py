@@ -117,7 +117,7 @@ class MeerKATArchiverDaemon(Daemon):
 
   def main (self):
 
-    self.ftp_server = "hdd-pod3.kat.ac.za"
+    self.ftp_server = "10.98.52.103"
     self.ftp_username = "kat"
     self.ftp_password = "kat"
     self.local_path = self.completed_dir
