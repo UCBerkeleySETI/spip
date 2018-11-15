@@ -69,7 +69,7 @@ class MEERKATFoldDaemon (MEERKATProcDaemon):
     outtsubint = -1
     dm = -1
     outnbin = -1
-    innchan = self.header["NCHAN"]
+    innchan = int(self.header["NCHAN"])
     outnchan = innchan
 
     try:
@@ -94,7 +94,8 @@ class MEERKATFoldDaemon (MEERKATProcDaemon):
       self.header["FOLD_OUTNBIN"] = str(outnbin)
 
     try:
-      outnchan = int(self.header["FOLD_OUTNCHAN"])
+      # TODO deal with the 2 subbands better
+      outnchan = int(self.header["FOLD_OUTNCHAN"]) / 2
     except:
       outnchan = innchan
       self.log(-1, "FOLD_OUTNCHAN not present in header, assuming " + str(outnchan))
@@ -107,9 +108,8 @@ class MEERKATFoldDaemon (MEERKATProcDaemon):
       self.log(-1, "FOLD_OUTDM not present in header, assuming " + str(dm))
       self.header["FOLD_OUTDM"] = str(dm)
 
-
     # configure the command to be run
-    self.cmd = "dspsr -Q " + db_key_filename + " -minram 2048 -cuda " + self.gpu_id + " -no_dyn"
+    self.cmd = "dspsr -Q " + db_key_filename + " -minram 512 -cuda " + self.gpu_id + " -no_dyn"
 
     # handle detection options
     if outnpol == 1 or outnpol == 2 or outnpol == 3 or outnpol == 4:
@@ -135,9 +135,40 @@ class MEERKATFoldDaemon (MEERKATProcDaemon):
     # handle a custom DM
     if dm >= 0:
       self.cmd = self.cmd + " -D " + str(dm)
+    else:
+      (rval, dm) = self.get_dm (self.header["SOURCE"])
+      if rval != 0:
+        self.log(-1, "get_dm(" + self.header["SOURCE"] + ") failed, using 0")
+        dm = 0
 
-    # set a minimum kernel length
-    self.cmd = self.cmd + " -x 2048"
+    self.log(1, "dm=" + str(dm))
+
+    # use a relatively small kernel length 
+    if dm > 0:
+      bw = float(self.header["BW"])
+      self.log(1, "bw=" + str(bw))
+      freq = float(self.header["FREQ"])
+      self.log(1, "freq=" + str(freq))
+      (rval, opt_kernel_length) = self.get_optimal_kernel_length (dm, innchan, bw, freq)
+      if rval == 0:
+        self.log(1, "opt_kernel_length=" + str(opt_kernel_length))
+        if opt_kernel_length < 1024:
+          self.log(1, "overriding kernel length to 1024")
+          opt_kernel_length = 1024
+        self.cmd = self.cmd + " -x " + str(opt_kernel_length)
+      else:
+        self.log(-1, "get_optimal_kernel_length failed, using default kernel length")
+
+      #(rval, min_kernel_length) = self.get_minimum_kernel_length (dm, innchan, bw, freq)
+      #self.log(1, "min_kernel_length=" + str(min_kernel_length))
+      #if rval == 0:
+      #  if min_kernel_length < 2048:
+      #    kernel_length = 2048
+      #  else:
+      #    kernel_length = 2 * min_kernel_length
+      #  self.cmd = self.cmd + " -x " + str(kernel_length)
+      #else:
+      #  self.log(-1, "get_minimum_kernel_length failed, using default kernel length")
 
     self.log_prefix = "fold_src"
 

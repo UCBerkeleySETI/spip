@@ -102,6 +102,37 @@ class MEERKATProcDaemon (Daemon, StreamBased):
     self.log(2, "MEERKATProcDaemon::getEnvironment()")
     return environ.copy()
 
+  def get_minimum_kernel_length (self, dm, nchan, bw, freq):
+    cmd = "dmsmear -d " + str(dm) + " -n " + str(nchan) + " -b " + str(bw) + \
+          " -f " + str(freq) + " 2>&1 | grep 'Minimum Kernel Length' | awk '{print $4}'"
+    self.log (1, cmd)
+    rval, lines = self.system (cmd)
+    if rval == 0:
+      min = int(lines[0])
+      return 0, int(min)
+    else:
+      return 1, "0"
+
+  def get_optimal_kernel_length (self, dm, nchan, bw, freq):
+    cmd = "dmsmear -d " + str(dm) + " -n " + str(nchan) + " -b " + str(bw) + \
+          " -f " + str(freq) + " 2>&1 | grep 'Optimal kernel length' | awk '{print $4}'"
+    self.log (1, cmd)
+    rval, lines = self.system (cmd)
+    if rval == 0:
+      opt = int(lines[0])
+      return 0, int(opt)
+    else:
+      return 1, "0"
+
+  def get_dm (self, source):
+    cmd = "psrcat -all -c dm " + source + " -nohead -o short | awk '{print $2}'"
+    rval, lines = self.system (cmd)   
+    if rval == 0:
+      return 0, lines[0]
+    else:
+      return 1, "0"
+
+
   # main method 
   def main (self):
 

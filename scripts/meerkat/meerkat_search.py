@@ -62,7 +62,7 @@ class MEERKATSearchDaemon (MEERKATProcDaemon):
     outnpol = -1
     outtsubint = -1
     dm = -1
-    innchan = self.header["NCHAN"]
+    innchan = int(self.header["NCHAN"])
     outnchan = innchan
     outnbit = -1
 
@@ -95,8 +95,8 @@ class MEERKATSearchDaemon (MEERKATProcDaemon):
       self.header["SEARCH_OUTTDEC"] = str(outtdec)
 
     try:
-      outnchan = int(self.header["SEARCH_OUTNCHAN"])
-    except:
+      outnchan = int(self.header["SEARCH_OUTNCHAN"]) / 2
+    except: 
       outnchan = innchan
       self.log(-1, "SEARCH_OUTNCHAN not present in header, assuming " + str(outnchan))
       self.header["SEARCH_OUTNCHAN"] = str(outnchan)
@@ -109,7 +109,7 @@ class MEERKATSearchDaemon (MEERKATProcDaemon):
       self.header["SEARCH_DM"] = str(dm)
 
     # this seems to be a good default
-    nsblk = 256
+    nsblk = 1024
 
     # configure the command to be run
     self.cmd = "digifits -Q " + db_key_filename + " -cuda " + self.gpu_id + " -nsblk " + str(nsblk)
@@ -141,9 +141,21 @@ class MEERKATSearchDaemon (MEERKATProcDaemon):
 
     # handle a custom DM
     if dm >= 0:
+
       self.cmd = self.cmd + " -do_dedisp true -D " + str(dm)
-      # set a minimum kernel length
-      self.cmd = self.cmd + " -x 2048"
+
+      # use a relatively small kernel length 
+      bw = float(self.header["BW"])
+      freq = float(self.header["FREQ"])
+      (rval, opt_kernel_length) = self.get_optimal_kernel_length (dm, innchan, bw, freq)
+      if rval == 0:
+        self.log(1, "opt_kernel_length=" + str(opt_kernel_length))
+        if opt_kernel_length < 1024:
+          self.log(1, "overriding kernel length to 1024")
+          opt_kernel_length = 1024
+        self.cmd = self.cmd + " -x " + str(opt_kernel_length)
+      else:
+        self.log(-1, "get_optimal_kernel_length failed, using default kernel length")
 
     self.log(1, self.cmd)
     self.log_prefix = "search_src"
