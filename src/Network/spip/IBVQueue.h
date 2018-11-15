@@ -40,12 +40,16 @@ namespace spip {
 
       void open_multicast (std::string ip_address, std::string group, int port);
 
+      void join_multicast(std::string ip_address, int port);
+
       void poll_once ();
 
       int open_packet ();
 
       void close_packet ();
        
+      uint64_t process_sleeps () { uint64_t val = nsleeps; nsleeps = 0; return val; };
+
       uint8_t * buf_ptr;
 
     protected:
@@ -74,6 +78,8 @@ namespace spip {
       size_t n_slots;
 
       size_t num_multicast;
+
+      uint64_t nsleeps;
 
       std::vector<std::string> groups;
 
@@ -116,7 +122,7 @@ namespace spip {
 
       static spead2::ibv_flow_t
       create_flow(const spead2::ibv_qp_t &qp, const boost::asio::ip::udp::endpoint &endpoint,
-                  int port_num);
+                  int port_num, bool mc);
 
       static void req_notify_cq (ibv_cq *cq);
 
