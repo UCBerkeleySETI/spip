@@ -12,6 +12,7 @@
 #include <iostream>
 #include <cstring>
 
+#include <inttypes.h>
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -228,7 +229,7 @@ void spip::ContainerFileWrite::open_file()
   if (!fixed_filename)
   {
     char filename_buf[FILENAME_MAX];
-    snprintf (filename_buf, FILENAME_MAX, "%s_%016" PRIu64 ".%06lu.dada", utc_start_str.c_str(), obs_offset, file_number);
+    snprintf (filename_buf, FILENAME_MAX, "%s_%016lu.%06lu.dada", utc_start_str.c_str(), obs_offset, file_number);
     filename = dir + "/" + string(filename_buf);
     temporary_filename = dir + "/." + string(filename_buf) + ".tmp";
     if (verbose)

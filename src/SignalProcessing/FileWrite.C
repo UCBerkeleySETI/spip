@@ -170,7 +170,7 @@ void spip::FileWrite::open_file (const char * utc_start_str, uint64_t obs_offset
     prev_obs_offset = int64_t(obs_offset);
 
     char filename_buf[FILENAME_MAX];
-    snprintf (filename_buf, FILENAME_MAX, "%s_%016" PRIu64 ".%06lu.%s", 
+    snprintf (filename_buf, FILENAME_MAX, "%s_%016%lu.%06lu.%s", 
               utc_start_str, obs_offset, file_number, filename_suffix.c_str());
     filename = dir + "/" + string(filename_buf);
     temporary_filename = dir + "/." + string(filename_buf) + ".tmp";
