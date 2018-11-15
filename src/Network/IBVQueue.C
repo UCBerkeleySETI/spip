@@ -42,12 +42,17 @@ spip::IBVQueue::IBVQueue (boost::asio::io_service& io_service) : join_socket(io_
 
 spip::IBVQueue::~IBVQueue ()
 {
+  join_socket.close();
+
   // drain the irecv queue
   while (ipacket < npackets)
   {
     open_packet();
     close_packet();
   }
+
+  // sleep so that we can unsubscrube from the switch
+  sleep(1);
 }
 
 
@@ -59,7 +64,7 @@ void spip::IBVQueue::build (const boost::asio::ip::address_v4 interface_address)
   if (n_slots != 0)
     throw runtime_error ("Queue must be configured prior to building");
 
-  n_slots = int(buffer_size / packet_size);
+  n_slots = int(buffer_size / max_raw_size);
 
 #ifdef _DEBUG
   cerr << "spip::IBVQueue::build n_slots=" << n_slots << endl;
@@ -89,6 +94,9 @@ void spip::IBVQueue::build (const boost::asio::ip::address_v4 interface_address)
 #endif
   qp = create_qp (pd, cq, n_slots);
 
+#ifdef _DEBUG
+  cerr << "spip::IBVQueue::build qp.modify (IBV_QPS_INIT, cm_id->port_num);" << endl;
+#endif
   qp.modify (IBV_QPS_INIT, cm_id->port_num);
 }
 
@@ -134,6 +142,7 @@ void spip::IBVQueue::allocate ()
   for (std::size_t i = 0; i < n_slots; i++)
   {
     std::memset(&slots[i], 0, sizeof(slots[i]));
+    //slots[i].wr.next = (i + 1 < n_slots) ? &slots[i+1].wr : nullptr;
     slots[i].sge.addr = (uintptr_t) &buffer[i * max_raw_size];
     slots[i].sge.length = max_raw_size;
     slots[i].sge.lkey = mr->lkey;
@@ -146,6 +155,7 @@ void spip::IBVQueue::allocate ()
 #ifdef _DEBUG
   cerr << "spip::IBVQueue::alocate qp.modify(IBV_QPS_RTR);" << endl;
 #endif
+
   qp.modify(IBV_QPS_RTR);
 }
 
@@ -166,12 +176,14 @@ void spip::IBVQueue::open (string ip_address, int port)
 #ifdef _DEBUG
   cerr << "spip::IBVQueue::open flows.push_back(create_flow(qp, " << endpoint << ", " << cm_id->port_num << ")" << endl;
 #endif
-  flows.push_back(create_flow(qp, endpoint, cm_id->port_num));
-
+  flows.push_back(create_flow(qp, endpoint, cm_id->port_num, false));
 }
 
 void spip::IBVQueue::open_multicast (string ip_address, string group, int port)
 {
+#ifdef _DEBUG
+  cerr << "spip::IBVQueue::open_multicast ip_address=" << ip_address << " group=" << group << " port=" << port << endl;
+#endif
   boost::asio::ip::address_v4 interface_address = boost::asio::ip::address_v4::from_string(ip_address);
 
   build (interface_address);
@@ -195,10 +207,6 @@ void spip::IBVQueue::open_multicast (string ip_address, string group, int port)
     std::string plus = group.substr(pos + delimiter.length());
     num_multicast = std::stoi (plus) + 1;
 
-#ifdef _DEBUG
-   cerr << "spip::UDPSocketReceive::open_multicast num_multicast=" << num_multicast << endl;
-#endif
-
     // build multicast addresses
     groups.resize(num_multicast);
 
@@ -213,13 +221,39 @@ void spip::IBVQueue::open_multicast (string ip_address, string group, int port)
     }
   }
 
+#ifdef _DEBUG
+  cerr << "spip::UDPSocketReceive::open_multicast num_multicast=" << num_multicast << endl;
+#endif
+
+#ifdef _TRACE
+  for (unsigned i=0; i<num_multicast; i++)
+    cerr << "spip::UDPSocketReceive::open_multicast group[" << i << "]=" << groups[i] << endl;
+#endif
+
+#ifdef _DEBUG
+  cerr << "spip::UDPSocketReceive::open_multicast creating flows" << endl;
+#endif
+  for (unsigned i=0; i<num_multicast; i++)
+  {
+    boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address_v4::from_string(groups[i]), port);
+    flows.push_back(create_flow(qp, endpoint, cm_id->port_num, true));
+  }
+}
+
+void spip::IBVQueue::join_multicast (string ip_address, int port)
+{
+  boost::asio::ip::address_v4 interface_address = boost::asio::ip::address_v4::from_string(ip_address);
+
   // configure reuse address on the join socket
   join_socket.set_option(boost::asio::socket_base::reuse_address(true));
+
+#ifdef _DEBUG
+  cerr << "spip::UDPSocketReceive::join_multicast join MC groups" << endl;
+#endif
 
   for (unsigned i=0; i<num_multicast; i++)
   {
     boost::asio::ip::udp::endpoint endpoint(boost::asio::ip::address_v4::from_string(groups[i]), port);
-    flows.push_back(create_flow(qp, endpoint, cm_id->port_num));
     join_socket.set_option(boost::asio::ip::multicast::join_group( endpoint.address().to_v4(), interface_address));
   }
 }
@@ -240,7 +274,7 @@ int spip::IBVQueue::open_packet ()
 #endif
     npackets = cq.poll (n_slots, wc.get());
 #ifdef _TRACE
-    if (npackets > 0)
+    //if (npackets > 0)
       cerr << "spip::IBVQueue::open_packet recv_cq.poll returned " << npackets << " packets" << endl;
 #endif
     ipacket = 0;
@@ -255,6 +289,10 @@ int spip::IBVQueue::open_packet ()
     // work request ID indicates which slot the packet is present in
     islot = wc[ipacket].wr_id;
 
+#ifdef _TRACE
+    cerr << "spip::IBVQueue::open_packet islot == wc[" << ipacket << "].wr_id == " << islot << endl;
+#endif
+
     if (wc[ipacket].status != IBV_WC_SUCCESS)
     {
       cerr << "Work Request failed with code " <<  wc[ipacket].status << endl;
@@ -262,6 +300,9 @@ int spip::IBVQueue::open_packet ()
     }
     else
     {
+#ifdef _TRACE
+      cerr << "spip::IBVQueue::open_packet wc[" << ipacket << "].status == IBV_WC_SUCCESS" << endl;
+#endif
       const void *ptr = reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(slots[islot].sge.addr));
       std::size_t len = wc[ipacket].byte_len;
 
@@ -288,6 +329,7 @@ int spip::IBVQueue::open_packet ()
       }
     }
   }
+  nsleeps++;
 
   // no packets available
   return 0;
@@ -336,9 +378,9 @@ ibv_qp_t spip::IBVQueue::create_qp ( const ibv_pd_t &pd,
 }
 
 ibv_flow_t spip::IBVQueue::create_flow(
-    const ibv_qp_t &qp, const boost::asio::ip::udp::endpoint &endpoint, int port_num)
+    const ibv_qp_t &qp, const boost::asio::ip::udp::endpoint &endpoint, int port_num, bool mc)
 {
-#ifdef _DEBUG
+#ifdef _TRACE
   cerr << "spip::IBVQueue::create_flow" << endl;
 #endif
   struct
@@ -362,9 +404,16 @@ ibv_flow_t spip::IBVQueue::create_flow(
    */
   flow_rule.eth.type = IBV_FLOW_SPEC_ETH;
   flow_rule.eth.size = sizeof(flow_rule.eth);
-  //spead2::mac_address dst_mac = multicast_mac(endpoint.address());
-  spead2::mac_address dst_mac = interface_mac(endpoint.address());
-  std::memcpy(&flow_rule.eth.val.dst_mac, &dst_mac, sizeof(dst_mac));
+  if (mc)
+  {
+      spead2::mac_address dst_mac = multicast_mac(endpoint.address());
+      std::memcpy(&flow_rule.eth.val.dst_mac, &dst_mac, sizeof(dst_mac));
+  } 
+  else
+  {
+      spead2::mac_address dst_mac = interface_mac(endpoint.address());
+      std::memcpy(&flow_rule.eth.val.dst_mac, &dst_mac, sizeof(dst_mac));
+  }
   // Set all 1's mask
   std::memset(&flow_rule.eth.mask.dst_mac, 0xFF, sizeof(flow_rule.eth.mask.dst_mac));
 
@@ -379,7 +428,7 @@ ibv_flow_t spip::IBVQueue::create_flow(
   flow_rule.udp.val.dst_port = htobe16(endpoint.port());
   flow_rule.udp.mask.dst_port = 0xFFFF;
 
-#ifdef _DEBUG
+#ifdef _TRACE
   cerr << "spip::IBVQueue::create_flow flow rule created" << endl;
 #endif
 
