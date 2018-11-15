@@ -28,15 +28,15 @@ void spip::UnpackFloatCUDAUWB::prepare ()
   spip::UnpackFloat::prepare ();
 
   if (endianness != Little)
-    throw Error(InvalidState, "spip::UnpackFloatCUDAUWB::prepare", "Expecting Little Endian data");
+    throw runtime_error ("spip::UnpackFloatCUDAUWB::prepare Expecting Little Endian data");
   if (encoding != OffsetBinary)
-    throw Error(InvalidState, "spip::UnpackFloatCUDAUWB::prepare", "Expecting Offset Binary data");
+    throw runtime_error ("spip::UnpackFloatCUDAUWB::prepare Expecting Offset Binary data");
   if (ndim != 2)
-    throw Error(InvalidState, "spip::UnpackFloatCUDAUWB::prepare", "Expecting complex sampled input");
+    throw runtime_error ("spip::UnpackFloatCUDAUWB::prepare Expecting complex sampled input");
   if (nchan != 1)
-    throw Error(InvalidState, "spip::UnpackFloatCUDAUWB::prepare", "Expecting 1 input channel"); 
+    throw runtime_error ("spip::UnpackFloatCUDAUWB::prepare Expecting 1 input channel"); 
   if (nsignal != 1)
-    throw Error(InvalidState, "spip::UnpackFloatCUDAUWB::prepare", "Expecting 1 input signal"); 
+    throw runtime_error ("spip::UnpackFloatCUDAUWB::prepare Expecting 1 input signal"); 
 }
 
 //! 2 x twos complement conversion
@@ -200,5 +200,5 @@ void spip::UnpackFloatCUDAUWB::transform_custom_to_SFPT ()
   else if (npol == 3)
     unpack_uwb_3pol_2dim_2val<<<blocks, nthread, 0, stream>>> (in, out, offset, scale, ndat);
   else
-    throw Error(InvalidState, "spip::UnpackFloatCUDAUWB::transform_custom_to_SFPT", "Expecting 1, 2 or 3 polarisations");
+    throw runtime_error ("spip::UnpackFloatCUDAUWB::transform_custom_to_SFPT Expecting 1, 2 or 3 polarisations");
 }
