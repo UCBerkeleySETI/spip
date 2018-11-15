@@ -413,7 +413,8 @@ inline std::size_t spip::UDPFormatMeerKATSPEAD1k::decode_cbf_packet (spip::cbf_p
 #ifdef _DEBUG
   if (size > max_size)
   {
-    cerr << "packet rejected because payload length overflows packet size" << endl;
+    cerr << "packet rejected because payload length [" << size 
+         << "] overflows packet size [" << max_size << "]" << endl;
     return 0;
   }
   if (out.heap_length >= 0 && out.payload_offset + out.payload_length > out.heap_length)
