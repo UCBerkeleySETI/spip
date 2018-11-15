@@ -81,8 +81,6 @@ spip::IBVReceiveMerge2DB::~IBVReceiveMerge2DB()
   {
     delete stats[i];
     delete formats[i];
-    if (overflows[i])
-      free (overflows[i]);
   }
 
   db1->unlock();
@@ -165,14 +163,9 @@ int spip::IBVReceiveMerge2DB::configure (const char * config_str)
   size_t header_size = formats[0]->get_header_size();
   size_t num_packets = 128;
 
-  overflow_bufsz = (formats[0]->get_resolution() + formats[0]->get_resolution()) / 2;
-
-  // this appears to be necessary for MeerKAT. More generalized solution required
-  overflow_bufsz *= 4;
   for (unsigned i=0; i<2; i++)
   {
     stats[i] = new UDPStats (formats[i]->get_header_size(), formats[i]->get_data_size());
-    overflows[i] = (char *) malloc (overflow_bufsz);
     queues[i]->configure (num_packets, packet_size, header_size);
 
     // open the IBV Queue 
@@ -529,8 +522,10 @@ void spip::IBVReceiveMerge2DB::start_threads (int c1, int c2)
   control_states[0] = Idle;
   control_states[1] = Idle;
 
-  blocks[0] = NULL;
-  blocks[1] = NULL;
+  curr_blocks[0] = NULL;
+  curr_blocks[1] = NULL;
+  next_blocks[0] = NULL;
+  next_blocks[1] = NULL;
 
   spip::IBVQueue::keep_receiving = true;
 
@@ -560,7 +555,6 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
   pthread_mutex_lock (&(mutex_recvs[1]));
 
   uint64_t ibuf = 0;
-  int64_t overflow_lastbyte;
 
 #ifdef _DEBUG
   cerr << "spip::IBVReceiveMerge2DB::datablock_thread locked mutexes" << endl;
@@ -578,15 +572,15 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
   if (control_cmd == Start)
   {
    // open the data block for writing
-    blocks[0] = (char *) (db1->open_block());
-    blocks[1] = (char *) (db2->open_block());
+    curr_blocks[0] = (char *) (db1->open_block());
+    curr_blocks[1] = (char *) (db2->open_block());
+    next_blocks[0] = (char *) (db1->open_block());
+    next_blocks[1] = (char *) (db2->open_block());
 
     // state of this thread
     control_state = Active;
 
     full[0] = full[1] = false;
-    overflow_lastbytes[0][0] = overflow_lastbytes[0][1] = 0;
-    overflow_lastbytes[1][0] = overflow_lastbytes[1][1] = 0;
 
 #ifdef _DEBUG
     cerr << "spip::IBVReceiveMerge2DB::datablock opened buffers for ibuf=" << ibuf << endl;
@@ -642,7 +636,7 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
     cerr << "spip::IBVReceiveMerge2DB::datablock filled buffer " << ibuf << endl;
 #endif
     
-    // close data block
+    // close curr data blocks
     db1->close_block(db1->get_data_bufsz());
     db2->close_block(db2->get_data_bufsz());
 
@@ -658,27 +652,22 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
       cerr << "STATE=Idle" << endl;
       control_state = Idle;
       control_states[0] = control_states[1] = control_state;
+
+      // close next data blocks TODO change to 0 bytes?
+      db1->close_block(db1->get_data_bufsz());
+      db2->close_block(db2->get_data_bufsz());
     }
     else
     {
-      //cerr << "spip::IBVReceiveMerge2DB::datablock opening blocks 0 and 1" << endl;
-      blocks[0] = (char *) (db1->open_block());
-      blocks[1] = (char *) (db2->open_block());
+      // switch the curr/next blocks
+      curr_blocks[0] = next_blocks[0];  
+      curr_blocks[1] = next_blocks[1];  
+
+      // open new next blocks
+      next_blocks[0] = (char *) (db1->open_block());
+      next_blocks[1] = (char *) (db2->open_block());
+
       full[0] = full[1] = false;
-     
-      // for each of the two sub-bands
-      for (unsigned i=0; i<2; i++)
-      {
-        // copy any overflowed data for subband (from each pol)
-        overflow_lastbyte = std::max (overflow_lastbytes[0][i], overflow_lastbytes[1][i]);
-        if (overflow_lastbyte > 0)
-        {
-#ifdef _DEBUG
-          cerr << "spip::IBVReceiveMerge2DB::data_block overflow saved " << overflow_lastbyte << " bytes" << endl;
-#endif
-          memcpy (blocks[i], overflows[i], overflow_lastbyte);
-        }
-      }
     }
 
     // release the DB mutex now that we have the recv threads locked
@@ -721,20 +710,18 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
   const int64_t data_bufsz = (db1->get_data_bufsz() + db2->get_data_bufsz()) / 2;
   int64_t curr_byte_offset;
   int64_t next_byte_offset = 0;
+  int64_t last_byte_offset = data_bufsz;
 
   // sub-band accounting
   const int64_t pol_stride = format->get_resolution();
   const int64_t subband_stride = pol_stride / 2;
 
-  // overflow buffer
-  int64_t overflow_maxbyte = 0;
-  int64_t overflowed_bytes = 0;
-
-  int64_t pol_bytes_this_buf = 0;
+  int64_t pol_bytes_curr_buf = 0;
+  int64_t pol_bytes_next_buf = 0;
   int64_t byte_offset;
   uint64_t pol_subband_offset = p * pol_stride / 2;
 
-  bool filled_this_buffer = false;
+  bool filled_curr_buffer = false;
   unsigned bytes_received;
   int got;
   uint64_t ibuf = 0;
@@ -771,36 +758,25 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
     {
       curr_byte_offset = next_byte_offset;
       next_byte_offset += data_bufsz;
-      overflow_maxbyte = next_byte_offset + overflow_bufsz;
+      last_byte_offset += data_bufsz;
 
 #ifdef _DEBUG
       if (p == 1)
         cerr << "spip::IBVReceiveMerge2DB::receive["<<p<<"] filling buffer " 
              << ibuf << " [" <<  curr_byte_offset << " - " << next_byte_offset
-             << " - " << overflow_maxbyte << "] overflow[0]=" << overflow_lastbytes[p][0]
-             << " overflow[1]=" << overflow_lastbytes[p][1] 
-             << " overflow_bufsz=" << overflow_bufsz << endl;
+             << " - " << last_byte_offset << "]" << endl;
 #endif
 
       // signal other threads waiting on the condition
       pthread_mutex_unlock (mutex_recv);
-      filled_this_buffer = false;
+      filled_curr_buffer = false;
       
-      // account for overflows from previous block
-      if (overflow_lastbytes[p][0] > 0 || overflow_lastbytes[p][1] > 0)
-      {
-        overflow_lastbytes[p][0] = 0;
-        overflow_lastbytes[p][1] = 0;
-        pol_bytes_this_buf = overflowed_bytes;
-        stat->increment_bytes (overflowed_bytes);
-        overflowed_bytes = 0;
-      }
-      else
-        pol_bytes_this_buf = 0;
+      // account for data saved into the next buf
+      pol_bytes_curr_buf = pol_bytes_next_buf;
 
       // while we have not filled this buffer with data from
       // this polarisation
-      while (!filled_this_buffer && spip::IBVQueue::keep_receiving)
+      while (!filled_curr_buffer && spip::IBVQueue::keep_receiving)
       {
         // get a packet from the socket
         got = queue->open_packet();
@@ -835,54 +811,50 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
               if (subband)
                 block_offset -= subband_stride;
 
-              pol_bytes_this_buf += bytes_received;
+              pol_bytes_curr_buf += bytes_received;
               stat->increment_bytes (bytes_received);
-
-              format->insert_last_packet (blocks[subband] + block_offset);
+              format->insert_last_packet (curr_blocks[subband] + block_offset);
               queue->close_packet();
             }
 
-            // packet fits in the overflow buffer
-            else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
+            // packet fits in the next block
+            else if ((byte_offset >= next_byte_offset) && (byte_offset < last_byte_offset))
             {
               int64_t block_offset = (byte_offset - next_byte_offset) + pol_subband_offset;
               if (subband)
                 block_offset -= subband_stride;
 
-              overflowed_bytes += bytes_received;
-
-              format->insert_last_packet (overflows[subband] + block_offset);
+              pol_bytes_next_buf += bytes_received;
+              stat->increment_bytes (bytes_received);
+              format->insert_last_packet (next_blocks[subband] + block_offset);
               queue->close_packet();
-
-              overflow_lastbytes[p][subband] = std::max (block_offset + bytes_received, overflow_lastbytes[p][subband]);
-
             }
+
             // packet belong to a previous buffer (this is a drop that has already been counted)
             else if (byte_offset < curr_byte_offset)
             {
               queue->close_packet();
             }
-            // packet belongs to a future buffer, that is beyond the overflow
+
+            // packet belongs to a future buffer, that is beyond the next_block
             else
             {
-              filled_this_buffer = true;
+              filled_curr_buffer = true;
             }
           }
 
           // close open data block buffer if is is now full
-          if (pol_bytes_this_buf >= data_bufsz || filled_this_buffer)
+          if (pol_bytes_curr_buf >= data_bufsz || filled_curr_buffer)
           {
 #ifdef _DEBUG
             if (p == 1)
               cerr << "spip::IBVReceiveMerge2DB::receive["<<p<<"] close_block "
-                   << " pol_bytes_this_buf=" << pol_bytes_this_buf 
+                   << " pol_bytes_curr_buf=" << pol_bytes_curr_buf 
                    << " data_bufsz=" << data_bufsz 
-                   << " overflow_lastbytes[" << p << "][0]=" << overflow_lastbytes[p][0]
-                   << " overflow_lastbytes[" << p << "][1]=" << overflow_lastbytes[p][1]
-                   << " filled_this_buffer=" << filled_this_buffer << endl;
+                   << " filled_curr_buffer=" << filled_curr_buffer << endl;
 #endif
-            stat->dropped_bytes (data_bufsz - pol_bytes_this_buf);
-            filled_this_buffer = true;
+            stat->dropped_bytes (data_bufsz - pol_bytes_curr_buf);
+            filled_curr_buffer = true;
           }
         }
         else if (got == 0)

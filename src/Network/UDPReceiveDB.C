@@ -451,18 +451,10 @@ bool spip::UDPReceiveDB::receive (int core)
     cerr << "spip::UDPReceiveDB::receive sock->resize_kernel_buffer(" << kernel_bufsz << ")" << endl;
   sock->resize_kernel_buffer (kernel_bufsz);
 
-  // configure the overflow buffer
-  overflow = new UDPOverflow();
-  uint64_t overflow_bufsz = resolution * 2;
-  while (overflow_bufsz <= 65536)
-    overflow_bufsz *= 2;
-  overflow->resize (overflow_bufsz);
-  overflow_block = (char *) overflow->get_buffer();
-
   // block accounting
   curr_byte_offset = 0;
   next_byte_offset = 0;
-  overflow_maxbyte = 0;
+  last_byte_offset = 0;
 
   control_state = Idle;
 
@@ -473,6 +465,11 @@ bool spip::UDPReceiveDB::receive (int core)
   while (control_cmd == None)
     pthread_cond_wait (&cond, &mutex);
   pthread_mutex_unlock (&mutex);
+
+  curr_block = NULL;
+  next_block = NULL;
+  bytes_curr_block = 0;
+  bytes_next_block = 0;
  
   // we have control command, so start the main loop
   while (spip::UDPSocketReceive::keep_receiving)
@@ -485,13 +482,22 @@ bool spip::UDPReceiveDB::receive (int core)
       case Record:
         if (verbose)
           cerr << "Start recording " << endl;
+        if (control_state == Idle)
+          next_block = (char *) db->open_block();
         control_state = Recording;
         set_control_cmd (None);
+
         break;
 
       case Stop:
         if (verbose)
           cerr << "Stop recording" << endl;
+        // close the "next" block that would have been opened
+        if (control_state == Recording)
+        {
+          db->close_block (data_block_bufsz);
+          next_block = NULL;
+        }
         control_state = Idle;
         spip::UDPSocketReceive::keep_receiving = false;
         set_control_cmd (None);
@@ -514,9 +520,20 @@ bool spip::UDPReceiveDB::receive (int core)
 
     if (control_state == Recording)
     {
-      block = (char *) db->open_block();
+      // rotate blocks
+      curr_block = next_block;
+      bytes_curr_block = bytes_next_block;
+
+      // get a new next block
+      next_block = (char *) db->open_block();
+      bytes_next_block = 0;
+
+      // receive into curr_block and next_block
       receive_block (format);
+
+      // close curr_block
       db->close_block (data_block_bufsz);
+      curr_block = NULL;
     }
     else
     {
@@ -547,20 +564,15 @@ bool spip::UDPReceiveDB::receive (int core)
 // receive a block of UDP data
 void spip::UDPReceiveDB::receive_block (UDPFormat * fmt)
 {
-  // copy any data from the overflow into the new block
-  int64_t bytes_this_buf = overflow->copy_to (block);
-  udp_stats->increment_bytes (bytes_this_buf);
-
   // increment the constraints for this block
   curr_byte_offset = next_byte_offset;
   next_byte_offset += data_block_bufsz;
-  overflow_maxbyte = next_byte_offset + overflow->get_bufsz();
+  last_byte_offset += data_block_bufsz;
 
 #ifdef _DEBUG
   cerr << "spip::UDPReceiveDB::receive_block filling buffer ["
        << curr_byte_offset << " - " << next_byte_offset
-       << " - " << overflow_maxbyte << "] "
-       << " overflow_bufsz=" << overflow->get_bufsz() << endl;
+       << " - " << last_byte_offset << "] " << endl;
 #endif
 
   unsigned bytes_received;
@@ -596,16 +608,17 @@ void spip::UDPReceiveDB::receive_block (UDPFormat * fmt)
         // packet belongs in current buffer
         if ((byte_offset >= curr_byte_offset) && (byte_offset < next_byte_offset))
         {
-          bytes_this_buf += bytes_received;
+          bytes_curr_block += bytes_received;
           udp_stats->increment_bytes (bytes_received);
-          fmt->insert_last_packet (block + (byte_offset - curr_byte_offset));
+          fmt->insert_last_packet (curr_block + (byte_offset - curr_byte_offset));
           sock->consume_packet();
         }
-        // packet belongs in overflow buffer
-        else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
+        // packet belongs in next buffer
+        else if ((byte_offset >= next_byte_offset) && (byte_offset < last_byte_offset))
         {
-          fmt->insert_last_packet (overflow_block + (byte_offset - next_byte_offset));
-          overflow->copied_from (byte_offset - next_byte_offset, bytes_received);
+          bytes_next_block += bytes_received;
+          udp_stats->increment_bytes (bytes_received);
+          fmt->insert_last_packet (next_block + (byte_offset - next_byte_offset));
           sock->consume_packet();
         }
         // ignore packets the preceed this buffer
@@ -613,7 +626,7 @@ void spip::UDPReceiveDB::receive_block (UDPFormat * fmt)
         {
           sock->consume_packet();
         }
-        // packet is beyond overflow buffer
+        // packet is beyond next buffer
         else
         {
           filled_this_block = true;
@@ -621,16 +634,16 @@ void spip::UDPReceiveDB::receive_block (UDPFormat * fmt)
       }
 
       // close open data block buffer if is is now full
-      if (bytes_this_buf >= int64_t(data_block_bufsz) || filled_this_block)
+      if (bytes_curr_block >= int64_t(data_block_bufsz) || filled_this_block)
       {
 #ifdef _DEBUG
-        cerr << bytes_this_buf << " / " << data_block_bufsz << " => " <<
-              ((float) bytes_this_buf / (float) data_block_bufsz) * 100 << endl;
-        cerr << "spip::UDPReceiveDB::receive_block bytes_this_buf="
-             << bytes_this_buf << " bytes_per_buf=" << data_block_bufsz
-             << " overflown=" << overflow->get_last_byte() << endl;
+        cerr << bytes_curr_block << " / " << data_block_bufsz << " => " <<
+              ((float) bytes_curr_block / (float) data_block_bufsz) * 100 << endl;
+        cerr << "spip::UDPReceiveDB::receive_block bytes_curr_block="
+             << bytes_curr_block << " bytes_per_buf=" << data_block_bufsz
+             << " bytes_next_block=" << bytes_next_block << endl;
 #endif
-        udp_stats->dropped_bytes (data_block_bufsz - bytes_this_buf);
+        udp_stats->dropped_bytes (data_block_bufsz - bytes_curr_block);
         filled_this_block = true;
       }
     }

@@ -47,7 +47,9 @@ namespace spip {
 
       void analyze_block();
 
-      char * monitor_block;
+      char * monitor_curr_block;
+
+      char * monitor_next_block;
 
     protected:
 

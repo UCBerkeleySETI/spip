@@ -37,7 +37,8 @@ using namespace std;
 spip::UDPReceiveDBStats::UDPReceiveDBStats (const char * key_string) : UDPReceiveDB(key_string)
 {
   block_format = NULL;
-  monitor_block = (char *) malloc(data_block_bufsz);
+  monitor_curr_block = (char *) malloc (data_block_bufsz);
+  monitor_next_block = (char *) malloc (data_block_bufsz);
 }
 
 spip::UDPReceiveDBStats::~UDPReceiveDBStats()
@@ -46,9 +47,13 @@ spip::UDPReceiveDBStats::~UDPReceiveDBStats()
     delete block_format;
   block_format = NULL;
 
-  if (monitor_block)
-    free (monitor_block);
-  monitor_block = NULL;
+  if (monitor_curr_block)
+    free (monitor_curr_block);
+  monitor_curr_block = NULL;
+
+  if (monitor_next_block)
+    free (monitor_next_block);
+  monitor_next_block = NULL;
 
   if (monitoring_udp_format)
     delete monitoring_udp_format;
@@ -245,13 +250,6 @@ bool spip::UDPReceiveDBStats::main (int core)
   sock = new UDPSocketReceive();
 #endif
 
-  if (verbose)
-    cerr << "spip::UDPReceiveDBStats::main creating overflow with " << resolution * 8 << " bytes" << endl;
-  // configure the overflow buffer
-  overflow = new UDPOverflow();
-  overflow->resize  (resolution * 8);
-  overflow_block = (char *) overflow->get_buffer();
-
   // always begin as Idle
   control_state = Idle;
 
@@ -282,10 +280,6 @@ bool spip::UDPReceiveDBStats::main (int core)
   }
   
   if (verbose)
-    cerr << "spip::UDPReceiveDBStats::main deleting overflow" << endl;
-  // delete allocated devices
-  delete overflow;
-  if (verbose)
     cerr << "spip::UDPReceiveDBStats::main deleting socket" << endl;
   delete sock;
 
@@ -298,7 +292,7 @@ bool spip::UDPReceiveDBStats::main (int core)
 
 void spip::UDPReceiveDBStats::ack_control_command ()
 {
-  // read thecontrol command
+  // read the control command
   switch (control_cmd)
   {
     case Monitor:
@@ -314,15 +308,24 @@ void spip::UDPReceiveDBStats::ack_control_command ()
 #ifdef _DEBUG
       cerr << "spip::UDPReceiveDBStats::receive control_cmd=Record" << endl;
 #endif
+      if (control_state == Idle)
+        next_block = (char *) db->open_block();
       cerr << "Start Recording" << endl;
       control_state = Recording;
       set_control_cmd (None);
+      
       break;
 
     case Stop:
 #ifdef _DEBUG
       cerr << "spip::UDPReceiveDBStats::receive control_cmd=Stop" << endl;
 #endif
+      // close the next block
+      if (control_state == Recording)
+      {
+        db->close_block (data_block_bufsz);
+        next_block = NULL;
+      }
       cerr << "Stop Monitoring/Recording" << endl;
       control_state = Idle;
       spip::UDPSocketReceive::keep_receiving = false;
@@ -333,6 +336,12 @@ void spip::UDPReceiveDBStats::ack_control_command ()
 #ifdef _DEBUG
       cerr << "spip::UDPReceiveDBStats::receive control_cmd=Quit" << endl;
 #endif
+      // close the next block
+      if (control_state == Recording)
+      {
+        db->close_block (data_block_bufsz);
+        next_block = NULL;
+      }
       if (verbose)
         cerr << "Quiting" << endl;
       control_state = Quitting;
@@ -390,10 +399,9 @@ void spip::UDPReceiveDBStats::receive ()
   // block accounting
   curr_byte_offset = 0;
   next_byte_offset = 0;
-  overflow_maxbyte = 0;
+  last_byte_offset = 0;
 
   // ensure that a receive_block call will start from the start
-  overflow->reset();
   udp_stats->reset();
 
   // ensure all packets buffered at the socket are cleared
@@ -402,9 +410,19 @@ void spip::UDPReceiveDBStats::receive ()
   spip::UDPSocketReceive::keep_receiving = true;
   while (spip::UDPSocketReceive::keep_receiving)
   {
-    block = (char *) db->open_block();
+    // rotate blocks
+    curr_block = next_block;
+    bytes_curr_block = bytes_next_block;
+
+    // get a new next block
+    next_block = (char *) db->open_block();
+    bytes_next_block = 0;
+
     receive_block (format);
+
+    // close curr_block
     db->close_block (data_block_bufsz);
+    curr_block = NULL;
 
     // check or a control cmd, to handle a change in state
     ack_control_command ();
@@ -437,11 +455,13 @@ void spip::UDPReceiveDBStats::monitor ()
 
   bool keep_monitoring = true;
   spip::UDPSocketReceive::keep_receiving = true;
+
+  // record data to the monitoring block
+  curr_block = monitor_curr_block;
+  next_block = monitor_next_block;
+
   while (keep_monitoring && spip::UDPSocketReceive::keep_receiving)
   {
-    // record data to the monitoring block
-    block = monitor_block;
-
     // if time has come to update the monitoring data
     if (monitor_wait > monitor_period)
     {
@@ -453,7 +473,7 @@ void spip::UDPReceiveDBStats::monitor ()
       // block accounting
       curr_byte_offset = 0;
       next_byte_offset = 0;
-      overflow_maxbyte = 0;
+      last_byte_offset = 0;
 
       // we have control command, so start the main loop
       // form a temporary header based on the configuration
@@ -483,9 +503,6 @@ void spip::UDPReceiveDBStats::monitor ()
 
       // reset the UDP statistics counter
       udp_stats->reset();
-
-      // reset the overslow buffer
-      overflow->reset();
 
 #ifdef _DEBUG
       cerr << "spip::UDPReceiveDBStats::monitor receive_block()" << endl;
@@ -525,6 +542,9 @@ void spip::UDPReceiveDBStats::monitor ()
     if (control_state != Monitoring)
       keep_monitoring = false;
   }
+
+  curr_block = NULL;
+  next_block = NULL;
 }
 
 void spip::UDPReceiveDBStats::analyze_block ()
@@ -539,11 +559,11 @@ void spip::UDPReceiveDBStats::analyze_block ()
 
   if (verbose > 1)
     cerr << "spip::UDPReceiveDBStats::analyze_block block_format->unpack_hgft()" << endl;
-  block_format->unpack_hgft (monitor_block, data_block_bufsz);
+  block_format->unpack_hgft (monitor_curr_block, data_block_bufsz);
 
   if (verbose > 1)
     cerr << "spip::UDPReceiveDBStats::analyze_block block_format->unpack_ms()" << endl;
-  block_format->unpack_ms (monitor_block, data_block_bufsz);
+  block_format->unpack_ms (monitor_curr_block, data_block_bufsz);
 
   // write the data files to disk 
   time_t now = time(0);

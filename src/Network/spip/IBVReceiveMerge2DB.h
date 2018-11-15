@@ -170,13 +170,9 @@ namespace spip {
 
       bool full[2];
 
-      char * blocks[2];
+      char * curr_blocks[2];
 
-      char * overflows[2];
-
-      size_t overflow_bufsz;
-        
-      int64_t overflow_lastbytes[2][2];
+      char * next_blocks[2];
 
       unsigned chunk_size;
 

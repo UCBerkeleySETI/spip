@@ -8,7 +8,6 @@
 #include "spip/UDPSocketReceive.h"
 #include "spip/UDPFormat.h"
 #include "spip/UDPStats.h"
-#include "spip/UDPOverflow.h"
 #include "spip/DataBlockWrite.h"
 
 #include <iostream>
@@ -111,8 +110,6 @@ namespace spip {
 
       UDPStats * udp_stats;
 
-      UDPOverflow * overflow;
-
       pthread_t stats_thread_id;
 
       DataBlockWrite * db;
@@ -137,13 +134,17 @@ namespace spip {
 
       int64_t next_byte_offset;
 
-      int64_t overflow_maxbyte;
+      int64_t last_byte_offset;
 
       uint64_t data_block_bufsz;
 
-      char * block;
+      char * curr_block;
 
-      char * overflow_block;
+      char * next_block;
+
+      uint64_t bytes_curr_block;
+
+      uint64_t bytes_next_block;
 
       pthread_cond_t cond;
 
