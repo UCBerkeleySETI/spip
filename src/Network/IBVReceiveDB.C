@@ -29,7 +29,9 @@
 
 using namespace std;
 
-spip::IBVReceiveDB::IBVReceiveDB(const char * key_string)
+spip::IBVReceiveDB::IBVReceiveDB(const char * key_string, 
+                                 boost::asio::io_service& io_service) 
+                                 : queue(io_service)
 {
   db = new DataBlockWrite (key_string);
 
@@ -46,10 +48,7 @@ spip::IBVReceiveDB::IBVReceiveDB(const char * key_string)
 
   pthread_cond_init( &cond, NULL);
   pthread_mutex_init( &mutex, NULL);
-  verbose = false;
-
-  boost::asio::io_service io;
-  queue = new IBVQueue(io);
+  verbose = verbose;
 }
 
 spip::IBVReceiveDB::~IBVReceiveDB()
@@ -115,29 +114,33 @@ int spip::IBVReceiveDB::configure (const char * config_str)
 
   // configure the queue
   // TODO make this configurable
-  size_t num_packets = 128;
+  size_t num_packets = 8192;
   packet_size = format->get_packet_size();
   header_size = format->get_header_size();
-  queue->configure (num_packets, packet_size, header_size);
+  queue.configure (num_packets, packet_size, header_size);
 
   // open the IBV Queue 
   if (data_mcast.size() > 0)
   {
-    cerr << "spip::IBVReceiveDB::configure queue->open_multicast (" 
-         << data_host << ", " << data_mcast << ", " << data_port << ")" << endl;
-    queue->open_multicast (data_host, data_mcast, data_port);
+    if (verbose)
+      cerr << "spip::IBVReceiveDB::configure queue.open_multicast (" 
+           << data_host << ", " << data_mcast << ", " << data_port << ")" 
+           << endl;
+    queue.open_multicast (data_host, data_mcast, data_port);
   }
   else
   {
     if (verbose)
-      cerr << "spip::IBVReceiveDB::configure queue->open(" << data_host << ", " 
+      cerr << "spip::IBVReceiveDB::configure queue.open(" << data_host << ", " 
            << data_port << ")" << endl;
-    queue->open (data_host, data_port);
+    queue.open (data_host, data_port);
   }
 
   // allocate requirement memory resources
-  queue->allocate ();
+  queue.allocate ();
 
+  if (data_mcast.size() > 0)
+    queue.join_multicast (data_host, data_port);
 
   return 0;
 }
@@ -264,19 +267,24 @@ void spip::IBVReceiveDB::stop_stats_thread ()
  */
 void spip::IBVReceiveDB::stats_thread()
 {
-  uint64_t b_recv_total, b_recv_curr, b_recv_10sec;
-  uint64_t b_drop_total, b_drop_curr, b_drop_10sec;
-  uint64_t s_total, s_curr, s_10sec;
+  uint64_t b_recv_total, b_recv_curr, b_recv_base;
+  uint64_t p_recv_total, p_recv_curr, p_recv_base;
+  uint64_t b_drop_total, b_drop_curr, b_drop_base;
+  uint64_t p_drop_total, p_drop_curr, p_drop_base;
+  uint64_t s_total, s_curr, s_base;
   double gb_recv_ps, gb_drop_ps, gb_drop;
+  double kp_recv_ps, kp_drop_ps, kp_drop;
+  double s_ps;
 
   if (verbose)
     cerr << "spip::IBVReceiveDB::stats_thread starting polling" << endl;
 
   int report_time = 0;
+  int report_base = 1;
   while (control_cmd != Quit)
   {
-    b_recv_total = 0;
-    b_drop_total = 0;
+    b_recv_total = p_recv_total = 0;
+    b_drop_total = p_drop_total = 0;
     s_total = 0;
 
 #ifdef _DEBUG
@@ -284,37 +292,57 @@ void spip::IBVReceiveDB::stats_thread()
       cerr << "spip::IBVReceiveDB::stats_thread control_cmd != Quit" << endl;
 #endif
 
-    double gbits = 1e9;
-    double gbits_per_10s = gbits * 10;
+    double gbit = 1e9;
+    double kpkt = 1e3;
+    double gbits_per_base = gbit * report_base;
+    double kpkts_per_base = kpkt * report_base;
+    double sleeps_per_base = double(report_base);
+
     report_time = 0;
 
     while (control_state == Recording)
     {
-      if (report_time >= 10)
+      if (report_time % report_base == 0)
       {
         // get a snapshot of the data as quickly as possible
         b_recv_curr = udp_stats->get_data_transmitted();
+        p_recv_curr = udp_stats->get_packets_transmitted();
         b_drop_curr = udp_stats->get_data_dropped();
+        p_drop_curr = udp_stats->get_packets_dropped();
         s_curr      = udp_stats->get_nsleeps();
 
-        // calc the values for the last second
-        b_recv_10sec = b_recv_curr - b_recv_total;
-        b_drop_10sec = b_drop_curr - b_drop_total;
-        s_10sec      = s_curr - s_total;
+        // calc the values for the last base period
+        b_recv_base = b_recv_curr - b_recv_total;
+        p_recv_base = p_recv_curr - p_recv_total;
+        b_drop_base = b_drop_curr - b_drop_total;
+        p_drop_base = p_drop_curr - p_drop_total;
+        s_base      = s_curr - s_total;
 
         // update the totals
         b_recv_total = b_recv_curr;
+        p_recv_total = p_recv_curr;
         b_drop_total = b_drop_curr;
+        p_drop_total = p_drop_curr;
         s_total      = s_curr;
 
         // calculate current rate
-        gb_recv_ps = double(b_recv_10sec * 8) / gbits_per_10s;
-        gb_drop_ps = double(b_drop_10sec * 8) / gbits_per_10s;
-        gb_drop = double(b_drop_total * 8) / gbits;
+        gb_recv_ps = double(b_recv_base * 8) / gbits_per_base;
+        gb_drop_ps = double(b_drop_base * 8) / gbits_per_base;
+        gb_drop = double(b_drop_total * 8) / gbit;
 
-        fprintf (stderr,"Recv %6.3lf [Gb/s] Dropped %6.3lf [Gb/s] %lf [Gb]\n", 
-                 gb_recv_ps, gb_drop_ps, gb_drop);
-        report_time = 0;
+        kp_recv_ps = double(p_recv_base) / kpkts_per_base;
+        kp_drop_ps = double(p_drop_base) / kpkts_per_base;
+        kp_drop = double(p_drop_total) / kpkt;
+
+        s_ps = double(s_base) / sleeps_per_base;
+
+        if (report_time % (20 * report_base) == 0)
+        {
+          fprintf (stderr, "Received\tDropped \t\tSleeps\n");
+          fprintf (stderr, "Gb/s   (kp/s)\tGb/s   (kp/s)       Gb\n");
+        }
+        fprintf (stderr, "%6.3lf (%6.2lf)\t%6.3lf (%6.2lf) %6.2lf\t%6.0lf\n", 
+                 gb_recv_ps, kp_recv_ps, gb_drop_ps, kp_drop_ps, gb_drop, s_ps);
       }
       sleep (1);
       report_time++;
@@ -347,7 +375,7 @@ bool spip::IBVReceiveDB::open ()
     cerr << "spip::IBVReceiveDB::open no UTC_START in header" << endl;
     time_t now = time(0);
     spip::Time utc_start (now);
-    utc_start.add_seconds (2);
+    utc_start.add_seconds (10);
     std::string utc_str = utc_start.get_gmtime();
     cerr << "Generated UTC_START=" << utc_str  << endl;
     if (header.set ("UTC_START", "%s", utc_str.c_str()) < 0)
@@ -444,8 +472,8 @@ bool spip::IBVReceiveDB::receive (int core)
 
   // configure the overflow buffer
   overflow = new UDPOverflow();
-  uint64_t overflow_bufsz = resolution * 2;
-  while (overflow_bufsz <= 65536)
+  uint64_t overflow_bufsz = format->get_resolution() * 4;
+  while (overflow_bufsz < 8 * 1024 * 1024)
     overflow_bufsz *= 2;
   overflow->resize (overflow_bufsz);
   overflow_block = (char *) overflow->get_buffer();
@@ -468,9 +496,12 @@ bool spip::IBVReceiveDB::receive (int core)
   // we have control command, so start the main loop
   while (spip::IBVQueue::keep_receiving)
   {
+#ifdef _DEBUG
     if (control_cmd != None)
       cerr << "spip::IBVReceiveDB::receive control_cmd=" << control_cmd << endl;
-    // read thecontrol command
+#endif
+
+    // read the control command
     switch (control_cmd)
     {
       case Record:
@@ -558,15 +589,15 @@ void spip::IBVReceiveDB::receive_block (UDPFormat * fmt)
   while (!filled_this_block && spip::IBVQueue::keep_receiving)
   {
     // get a packet from the socket
-    int got = queue->open_packet();
+    int got = queue.open_packet();
     if (got > 0)
     {
-      int64_t byte_offset = fmt->decode_packet ((char *) queue->buf_ptr, &bytes_received);
+      int64_t byte_offset = fmt->decode_packet ((char *) queue.buf_ptr, &bytes_received);
 
       // ignore if byte_offset is -ve
       if (byte_offset < 0)
       {
-        queue->close_packet();
+        queue.close_packet();
 
         // data stream is finished
         if (byte_offset == -2)
@@ -583,19 +614,19 @@ void spip::IBVReceiveDB::receive_block (UDPFormat * fmt)
           bytes_this_buf += bytes_received;
           udp_stats->increment_bytes (bytes_received);
           fmt->insert_last_packet (block + (byte_offset - curr_byte_offset));
-          queue->close_packet();
+          queue.close_packet();
         }
         // packet belongs in overflow buffer
         else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
         {
           fmt->insert_last_packet (overflow_block + (byte_offset - next_byte_offset));
           overflow->copied_from (byte_offset - next_byte_offset, bytes_received);
-          queue->close_packet();
+          queue.close_packet();
         }
         // ignore packets the preceed this buffer
         else if (byte_offset < curr_byte_offset)
         {
-          queue->close_packet();
+          queue.close_packet();
         }
         // packet is beyond overflow buffer
         else
@@ -615,12 +646,13 @@ void spip::IBVReceiveDB::receive_block (UDPFormat * fmt)
              << " overflown=" << overflow->get_last_byte() << endl;
 #endif
         udp_stats->dropped_bytes (data_block_bufsz - bytes_this_buf);
+        udp_stats->sleeps(queue.process_sleeps());
         filled_this_block = true;
       }
     }
     else if (got == 0)
     {
-      cerr << "spip::IBVReceiveDB::receive no packets in queue" << endl;
+      //cerr << "spip::IBVReceiveDB::receive no packets in queue" << endl;
     }
     else
     {
