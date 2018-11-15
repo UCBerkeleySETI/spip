@@ -186,8 +186,12 @@ void spip::UDPReceiver::receive ()
 
   // overflow buffer
   int64_t overflow_bufsz = nchan * ndim * npol;
+  overflow_bufsz = format->get_resolution() * 4;
   while (overflow_bufsz < 4*1024*1024)
     overflow_bufsz *= 2;
+#ifdef _DEBUG
+  cerr << "overflow_bufsz=" << overflow_bufsz << endl;
+#endif
 
   int64_t overflow_lastbyte = 0;
   int64_t overflow_maxbyte = next_byte_offset + overflow_bufsz;
@@ -214,7 +218,7 @@ void spip::UDPReceiver::receive ()
     if (got < packet_size)
     {
       sock->consume_packet();
-      cerr << "Received UDP packet of " << got << " bytes, expected " << packet_size << endl;
+      //cerr << "Received UDP packet of " << got << " bytes, expected " << packet_size << endl;
     }
     else
     {
@@ -283,7 +287,8 @@ void spip::UDPReceiver::receive ()
       else
       {
 #ifdef _DEBUG
-        cerr << "ELSE byte_offset=" << byte_offset << " [" << curr_byte_offset <<" - " << next_byte_offset << " - " << overflow_maxbyte << "] bytes_received=" << bytes_received << " bytes_this_buf=" << bytes_this_buf << endl; 
+        cerr << "ELSE byte_offset=" << byte_offset << " [" << curr_byte_offset <<" - " << next_byte_offset << " - " << overflow_maxbyte << "] bytes_received=" << bytes_received << " bytes_this_buf=" << bytes_this_buf
+  << "overflowed_bytes=" << overflowed_bytes << endl;
 #endif
         need_next_block = true;
       }
