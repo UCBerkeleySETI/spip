@@ -28,7 +28,9 @@
 
 using namespace std;
 
-spip::IBVReceiveMerge2DB::IBVReceiveMerge2DB (const char * key1, const char * key2)
+spip::IBVReceiveMerge2DB::IBVReceiveMerge2DB (const char * key1, const char * key2,
+                                              boost::asio::io_service& io_service)
+                                              : queue1(io_service), queue2(io_service)
 {
   db1 = new DataBlockWrite (key1);
   db2 = new DataBlockWrite (key2);
@@ -48,12 +50,10 @@ spip::IBVReceiveMerge2DB::IBVReceiveMerge2DB (const char * key1, const char * ke
 
   control_cmd = None;
   control_state = Idle;
-  boost::asio::io_service io;
 
   for (unsigned i=0; i<2; i++)
   {
     control_states[i] = Idle;
-    queues[i] = new IBVQueue(io);
 
     pthread_cond_init( &(cond_recvs[i]), NULL);
     pthread_mutex_init( &(mutex_recvs[i]), NULL);
@@ -62,6 +62,9 @@ spip::IBVReceiveMerge2DB::IBVReceiveMerge2DB (const char * key1, const char * ke
     formats[i] = NULL;
     stats[i] = NULL;
   }
+
+  queues[0] = &queue1;
+  queues[1] = &queue2;
 
   pthread_cond_init( &cond_db, NULL);
   pthread_mutex_init( &mutex_db, NULL);
@@ -163,12 +166,14 @@ int spip::IBVReceiveMerge2DB::configure (const char * config_str)
   // packet sizing for buffering
   size_t packet_size = formats[0]->get_packet_size();
   size_t header_size = formats[0]->get_header_size();
-  size_t num_packets = 128;
+  size_t num_packets = 32768;
 
   overflow_bufsz = (formats[0]->get_resolution() + formats[0]->get_resolution()) / 2;
 
   // this appears to be necessary for MeerKAT. More generalized solution required
-  overflow_bufsz *= 4;
+  while (overflow_bufsz < 16 * 1024 * 1024)
+    overflow_bufsz *= 2;
+  overflow_bufsz = 16*1024*1024;
   for (unsigned i=0; i<2; i++)
   {
     stats[i] = new UDPStats (formats[i]->get_header_size(), formats[i]->get_data_size());
@@ -178,9 +183,10 @@ int spip::IBVReceiveMerge2DB::configure (const char * config_str)
     // open the IBV Queue 
     if (data_mcasts[i].size() > 0)
     {
-      cerr << "spip::IBVReceiver::configure queue->open_multicast (" 
-           << data_hosts[i] << ", " << data_mcasts[i] << ", " << data_ports[i]
-           << ")" << endl;
+      if (verbose)
+        cerr << "spip::IBVReceiver::configure queue->open_multicast (" 
+             << data_hosts[i] << ", " << data_mcasts[i] << ", " << data_ports[i]
+             << ")" << endl;
       queues[i]->open_multicast (data_hosts[i], data_mcasts[i], data_ports[i]);
     }
     else
@@ -195,6 +201,9 @@ int spip::IBVReceiveMerge2DB::configure (const char * config_str)
     if (verbose)
       cerr << "spip::IBVReceiver::configure queue->allocate()" << endl;
     queues[i]->allocate ();
+
+    if (data_mcasts[i].size() > 0)
+      queues[i]->join_multicast (data_hosts[i], data_ports[i]);
   }
 
   return 0;
@@ -227,6 +236,9 @@ void spip::IBVReceiveMerge2DB::stop_control_thread ()
 void spip::IBVReceiveMerge2DB::set_control_cmd (spip::ControlCmd cmd)
 {
   pthread_mutex_lock (&mutex_db);
+#ifdef _DEBUG
+  cerr << "spip::IBVReceiveMerge2DB::set_control_cmd cmd=" << cmd << endl;
+#endif
   control_cmd = cmd;
   pthread_cond_signal (&cond_db);
   pthread_mutex_unlock (&mutex_db);
@@ -543,6 +555,8 @@ void spip::IBVReceiveMerge2DB::start_threads (int c1, int c2)
 
 void spip::IBVReceiveMerge2DB::join_threads ()
 {
+  if (verbose)
+    cerr <<" spip::IBVReceiveMerge2DB::join_threads()" << endl;
   void * result;
   pthread_join (datablock_thread_id, &result);
   pthread_join (recv_thread1_id, &result);
@@ -665,12 +679,13 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
       blocks[0] = (char *) (db1->open_block());
       blocks[1] = (char *) (db2->open_block());
       full[0] = full[1] = false;
-     
+  
       // for each of the two sub-bands
       for (unsigned i=0; i<2; i++)
       {
         // copy any overflowed data for subband (from each pol)
         overflow_lastbyte = std::max (overflow_lastbytes[0][i], overflow_lastbytes[1][i]);
+        //cerr << "SB" << i << " P0=" << overflow_lastbytes[0][i] << " P1=" << overflow_lastbytes[1][i] << " ";
         if (overflow_lastbyte > 0)
         {
 #ifdef _DEBUG
@@ -679,6 +694,7 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
           memcpy (blocks[i], overflows[i], overflow_lastbyte);
         }
       }
+      //cerr << endl;
     }
 
     // release the DB mutex now that we have the recv threads locked
@@ -887,10 +903,13 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
         }
         else if (got == 0)
         {
-          set_control_cmd (Stop);
+#ifdef _TRACE
+          cerr << "spip::IBVReceiveMerge2DB::receive no packet at socket" << endl;
+#endif
         }
         else
         {
+          set_control_cmd (Stop);
         }
       }
 
@@ -903,6 +922,8 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
       ibuf++;
       pthread_cond_signal (&cond_db);
       pthread_mutex_unlock (&mutex_db);
+
+      stat->sleeps(queue->process_sleeps());
     }
     else
       pthread_mutex_unlock (mutex_recv);
@@ -929,7 +950,7 @@ void spip::IBVReceiveMerge2DB::stats_thread()
 
   uint64_t s_total[2] = {0, 0};
   uint64_t s_curr[2];
-  //uint64_t s_1sec;
+  uint64_t s_1sec;
 
   uint64_t b_drop_total[2] = {0,0};
   uint64_t b_drop_curr[2];
@@ -938,6 +959,7 @@ void spip::IBVReceiveMerge2DB::stats_thread()
   float gb_recv_ps[2] = {0, 0};
   float mb_recv_ps[2] = {0, 0};
   float gb_drop_ps[2] = {0, 0};
+  uint64_t s_ps[2] = {0, 0};
 
 #ifdef _DEBUG
   cerr << "spip::IBVReceiveMerge2DB::stats_thread starting polling" << endl;
@@ -950,6 +972,7 @@ void spip::IBVReceiveMerge2DB::stats_thread()
     b_drop_total[0] = b_drop_total[1] = 0;
     s_total[0] = s_total[1] = 0;
 
+    uint64_t report_count = 0;
     while (control_state == Active)
     {
       for (unsigned i=0; i<2; i++)
@@ -962,7 +985,7 @@ void spip::IBVReceiveMerge2DB::stats_thread()
         // calc the values for the last second
         b_drop_1sec = b_drop_curr[i] - b_drop_total[i];
         b_recv_1sec = b_recv_curr[i] - b_recv_total[i];
-        //s_1sec = s_curr[i] - s_total[i];
+        s_1sec = s_curr[i] - s_total[i];
 
         // update the totals
         b_drop_total[i] = b_drop_curr[i];
@@ -972,14 +995,19 @@ void spip::IBVReceiveMerge2DB::stats_thread()
         gb_drop_ps[i] = (double) (b_drop_1sec * 8) / 1000000000;
         mb_recv_ps[i] = (double) b_recv_1sec / 1000000;
         gb_recv_ps[i] = (mb_recv_ps[i] * 8)/1000;
+        s_ps[i] = s_1sec;
       }
 
       // determine how much memory is free in the receivers
-      fprintf (stderr,"Recv %6.3f (%6.3f, %6.3f) [Gb/s] Dropped %6.3f (%6.3f + %6.3f) [Gb/s] Total %lu B\n", 
+      if (report_count % 20 == 0)
+        fprintf (stderr,"Received [Gb/s]\t\tDropped [Gb/s] Total Dropped [B]\tSleeps\n");
+      fprintf (stderr,"%6.3f (%6.3f, %6.3f)\t%6.3f (%6.3f + %6.3f) %lu\t %lu (%lu + %lu)\n", 
                gb_recv_ps[0] + gb_recv_ps[1], gb_recv_ps[0], gb_recv_ps[1],
                gb_drop_ps[0] + gb_drop_ps[1], gb_drop_ps[0], gb_drop_ps[1],
-               b_drop_total[0] + b_drop_total[1]);
+               b_drop_total[0] + b_drop_total[1],
+               (s_ps[0] + s_ps[1]), s_ps[0], s_ps[1]);
       sleep (1);
+      report_count++;
     }
     sleep(1);
   }
