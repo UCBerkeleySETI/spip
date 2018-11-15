@@ -24,7 +24,7 @@ namespace spip {
 
     public:
 
-      IBVReceiveDB (const char * key_string);
+      IBVReceiveDB (const char * key_string, boost::asio::io_service& io_service);
 
       ~IBVReceiveDB ();
 
@@ -88,7 +88,7 @@ namespace spip {
 
       int data_port;
 
-      IBVQueue * queue;
+      IBVQueue queue;
 
       UDPFormat * format;
 
