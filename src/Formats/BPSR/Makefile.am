@@ -18,13 +18,7 @@ AM_CXXFLAGS = -I. \
 	-I$(top_builddir)/src/Dada
 
 LDADD = libbpsr.la \
-	$(top_builddir)/src/Network/libspipnet.la \
-	$(top_builddir)/src/Dada/libspipdada.la \
-	$(top_builddir)/src/Util/libspiputil.la \
-	$(top_builddir)/src/libspip.la \
-	-lpthread 
-
-#nodist_EXTRA_libbpsr_la_SOURCES = dummy.cxx
+  $(top_builddir)/src/libspip.la \
+	$(top_builddir)/src/Dada/libspipdada.la 
 
 AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @CUDA_CFLAGS@
-LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@

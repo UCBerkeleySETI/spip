@@ -12,15 +12,12 @@ meerkat_udprecv_SOURCES = meerkat_udprecv.C
 meerkat_dummyserver_SOURCES = meerkat_dummyserver.C
 
 AM_CXXFLAGS = -I. \
-	-I$(top_builddir)/src/Affinity \
 	-I$(top_builddir)/src/Network \
+	-I$(top_builddir)/src/Affinity \
 	-I$(top_builddir)/src/Util
 
 LDADD = libmeerkat.la \
-  $(top_builddir)/src/Network/libspipnet.la \
-  $(top_builddir)/src/Util/libspiputil.la \
-  $(top_builddir)/src/libspip.la \
-  -lpthread
+  $(top_builddir)/src/libspip.la
 
 if HAVE_PSRDADA
 
@@ -66,4 +63,3 @@ endif
 endif
 
 AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @BOOST_CPPFLAGS@ @SPEAD2_CFLAGS@ @CUDA_CFLAGS@
-LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@

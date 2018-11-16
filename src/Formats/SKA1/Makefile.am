@@ -16,8 +16,7 @@ AM_CXXFLAGS = -I. \
 	-I$(top_builddir)/src/Util
 
 LDADD = libska1.la \
-  $(top_builddir)/src/libspip.la \
-	-lpthread 
+  $(top_builddir)/src/libspip.la
 
 if HAVE_PSRDADA
 
@@ -28,5 +27,4 @@ ska1_udpdb_SOURCES = ska1_udpdb.C
 
 endif
 
-AM_CXXFLAGS += @HWLOC_CFLAGS@ @PSRDADA_CFLAGS@ @BOOST_CPPFLAGS@ @SPEAD2_CFLAGS@ @CUDA_CFLAGS@
-LDADD += @HWLOC_LIBS@ @PSRDADA_LIBS@ @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@
+AM_CXXFLAGS += @HWLOC_CFLAGS@ @PSRDADA_CFLAGS@ @CUDA_CFLAGS@

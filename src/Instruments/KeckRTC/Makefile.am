@@ -19,10 +19,8 @@ AM_CXXFLAGS = -I .\
   -I$(top_builddir)/src/Util
 
 LDADD = libinstkeckrtc.la \
-  $(top_builddir)/src/Util/libspiputil.la \
-  $(top_builddir)/src/Network/libspipnet.la \
-  $(top_builddir)/src/Affinity/libspipaffinity.la \
-  -lpthread
+  $(top_builddir)/src/libspip.la \
+  -lrt
 
 keckrtc_client_SOURCES = keckrtc_client.C
 keckrtc_server_SOURCES = keckrtc_server.C

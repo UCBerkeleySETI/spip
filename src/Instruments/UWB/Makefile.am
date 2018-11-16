@@ -27,14 +27,10 @@ AM_CXXFLAGS = -I .\
   -I$(top_builddir)/src/Util
 
 LDADD = libinstuwb.la \
-  $(top_builddir)/src/SignalProcessing/libspipdsp.la \
-  $(top_builddir)/src/Dada/libspipdada.la \
-  $(top_builddir)/src/Util/libspiputil.la \
-  $(top_builddir)/src/Affinity/libspipaffinity.la \
-  -lpthread
+  $(top_builddir)/src/libspip.la
 
 AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @FFTW_CFLAGS@
-LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @FFTW_LIBS@
+#LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @FFTW_LIBS@
 
 uwb_adaptive_filter_combine_SOURCES = uwb_adaptive_filter_combine.C
 uwb_adaptive_filter_test_SOURCES = uwb_adaptive_filter_test.C
@@ -51,7 +47,7 @@ libinstuwb_la_SOURCES += UnpackFloatCUDAUWB.cu
 libinstuwb_headers += spip/UnpackFloatCUDAUWB.h
 
 AM_CXXFLAGS += @CUDA_CFLAGS@
-LDADD += @CUDA_LIBS@
+#LDADD += @CUDA_LIBS@
 
 include $(top_srcdir)/config/Makefile.cuda
 
