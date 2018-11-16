@@ -6,6 +6,7 @@
  ***************************************************************************/
 
 #include "spip/PolSelectCUDA.h"
+#include "spip/Error.h"
 
 #include <iostream>
 #include <stdexcept>
