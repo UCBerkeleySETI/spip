@@ -44,7 +44,7 @@ void spip::SampleFoldRAM::transform_ALL_to_TSPFB ()
   // index on output data
   for (uint64_t idat=0; idat<ndat; idat++)
   {
-    const uint64_t odat    = (idat + dat_offset) / dat_dec;
+    //const uint64_t odat    = (idat + dat_offset) / dat_dec;
     const uint64_t out_bin = (idat + dat_offset) % nfolding_bin;
 
     const uint64_t in_dat_offset  = idat * input->get_dat_stride();
