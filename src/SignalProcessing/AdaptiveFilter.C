@@ -12,9 +12,9 @@
 
 using namespace std;
 
-spip::AdaptiveFilter::AdaptiveFilter (std::string dir) : 
-  output_dir (dir), 
-  Transformation<Container,Container>("AdaptiveFilter", outofplace)
+spip::AdaptiveFilter::AdaptiveFilter (const string& dir) : 
+  Transformation<Container,Container>("AdaptiveFilter", outofplace),
+  output_dir (dir) 
 {
   // default, should be configured [TODO]
   perform_filtering = false;
