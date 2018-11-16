@@ -67,7 +67,7 @@ void spip::IBVQueue::build (const boost::asio::ip::address_v4 interface_address)
   n_slots = int(buffer_size / max_raw_size);
 
 #ifdef _DEBUG
-  cerr << "spip::IBVQueue::build n_slots=" << n_slots << endl;
+  cerr << "spip::IBVQueue::build buffer_size=" << buffer_size << " packet_size=" << packet_size << " n_slots=" << n_slots << endl;
 #endif
 
 #ifdef _DEBUG
@@ -121,8 +121,8 @@ void spip::IBVQueue::configure (size_t _npackets, size_t _packet_size, size_t _h
   max_raw_size = packet_headers + header_size + packet_size;
   buffer_size = _npackets * max_raw_size;
 #ifdef _DEBUG
-  cerr << "spip::IBVQueue::allocate slot_size=" << max_raw_size << endl;
-  cerr << "spip::IBVQueue::allocate buffer_size=" << buffer_size << endl;
+  cerr << "spip::IBVQueue::configure slot_size=" << max_raw_size << endl;
+  cerr << "spip::IBVQueue::configure buffer_size=" << buffer_size << endl;
 #endif
 }
 
@@ -283,19 +283,17 @@ int spip::IBVQueue::open_packet ()
 
   if (ipacket < npackets)
   {
-#ifdef _TRACE
-    cerr << "spip::IBVQueue::open_packet processing " << ipacket << " of " << npackets << " in slots" << endl;
-#endif
     // work request ID indicates which slot the packet is present in
     islot = wc[ipacket].wr_id;
 
 #ifdef _TRACE
-    cerr << "spip::IBVQueue::open_packet islot == wc[" << ipacket << "].wr_id == " << islot << endl;
+    cerr << "spip::IBVQueue::open_packet processing packet " << ipacket << "/" << npackets << " in slot " << islot << endl;
 #endif
 
     if (wc[ipacket].status != IBV_WC_SUCCESS)
     {
       cerr << "Work Request failed with code " <<  wc[ipacket].status << endl;
+      sleep (1);
       islot = -1;
     }
     else

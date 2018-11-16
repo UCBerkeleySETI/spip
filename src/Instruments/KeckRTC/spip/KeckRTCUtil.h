@@ -9,9 +9,9 @@
 double diff_time ( struct timeval time1, struct timeval time2 );
 
 void write_timing_data (const char * filename, std::vector<double>& frame_times,
-                        uint64_t frames_sent);
+                        uint64_t frames_offset, uint64_t frames_sent);
 
-void print_timing_data (std::vector<double>& frame_times, 
+void print_timing_data (std::vector<double>& frame_times, uint64_t frames_offset,
                         uint64_t frames_sent, uint64_t frame_size);
 
 

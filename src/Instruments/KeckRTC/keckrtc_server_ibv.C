@@ -58,6 +58,8 @@ int main(int argc, char *argv[]) try
 
   int verbose = 0;
 
+  unsigned packet_size = KeckRTC_UDP_SIZE;
+
   unsigned frame_size = KeckRTC_HEAP_SIZE;
 
   unsigned frame_rate = 2000;
@@ -81,12 +83,12 @@ int main(int argc, char *argv[]) try
 
 #ifdef HAVE_CUDA
 #ifdef HAVE_GDR
-  while ((c = getopt(argc, argv, "b:d:f:g:hijr:v")) != EOF) 
+  while ((c = getopt(argc, argv, "b:d:f:g:hijp:r:v")) != EOF) 
 #else
-  while ((c = getopt(argc, argv, "b:d:f:g:hir:v")) != EOF) 
+  while ((c = getopt(argc, argv, "b:d:f:g:hip:r:v")) != EOF) 
 #endif // ! HAVE_GDR
 #else
-  while ((c = getopt(argc, argv, "b:d:f:hir:v")) != EOF) 
+  while ((c = getopt(argc, argv, "b:d:f:hip:r:v")) != EOF) 
 #endif
   {
     switch(c) 
@@ -123,6 +125,10 @@ int main(int argc, char *argv[]) try
 
       case 'i':
         process_data = false;
+        break;
+
+      case 'p':
+        packet_size = atoi(optarg);
         break;
 
       case 'r':
@@ -180,9 +186,11 @@ int main(int argc, char *argv[]) try
   client = std::string(argv[optind+2]);
 
   // configure the queue
-  size_t num_packets = 64;
-  size_t packet_size = 8192;
+  size_t num_packets = 8192;
   size_t header_size = 0;
+  if (verbose)
+    cerr << "configuring queue with packet_size=" << packet_size 
+         << " header_size=" << header_size << endl;
   queue->configure (num_packets, packet_size, header_size);
 
   // open the IBV queue
@@ -191,15 +199,12 @@ int main(int argc, char *argv[]) try
   // allocate required memory resources
   queue->allocate ();
 
-  // UDP packet size for send/recv
-  size_t bufsz = KeckRTC_UDP_SIZE;
-
   port++;
 
   spip::UDPSocketSend * sock_send = new spip::UDPSocketSend();
   cerr << "opening send socket to " << client << ":" << port << " from  " << server << endl;
   sock_send->open (client, port, server);
-  sock_send->resize (bufsz);
+  sock_send->resize (packet_size);
 
   void * send_buf_ptr = (void *) sock_send->get_buf();
   void * host_buf;
@@ -209,7 +214,7 @@ int main(int argc, char *argv[]) try
   cudaError_t rval;
 
   // register the udp socket buffers as host memory
-  rval = cudaHostRegister (send_buf_ptr, bufsz, flags);
+  rval = cudaHostRegister (send_buf_ptr, packet_size, flags);
   if (rval != cudaSuccess)
     cerr << "cudaHostRegister failed on sock_send" << endl;
 
@@ -290,7 +295,7 @@ int main(int argc, char *argv[]) try
     {
       // receive a packet
       int got = queue->open_packet ();
-      if (got == KeckRTC_UDP_SIZE)
+      if (got == packet_size)
       {
         if (process_data) 
 	{
@@ -344,9 +349,9 @@ int main(int argc, char *argv[]) try
       }
 
       // perform some sort of operation 
-      keckrtc_dummy (dev_buf, bufsz, stream);
+      // keckrtc_dummy (dev_buf, packet_size, stream);
 
-      rval = cudaMemcpyAsync (send_buf_ptr, dev_buf, bufsz, cudaMemcpyDeviceToHost, stream);
+      rval = cudaMemcpyAsync (send_buf_ptr, dev_buf, packet_size, cudaMemcpyDeviceToHost, stream);
       if (rval != cudaSuccess)
         cerr << "cudaMemcpyAsync failed on sock_recv" << endl;
 
@@ -366,17 +371,20 @@ int main(int argc, char *argv[]) try
     if (keep_receiving)
     {
       if (verbose)
-        cerr << "Sending reply of " << bufsz << " bytes" << endl;
+        cerr << "Sending reply of " << packet_size << " bytes" << endl;
+
       // send a reply
-      sock_send->send (bufsz);
+      sock_send->send (packet_size);
     }
   }
 
-  if (iframe > 0)
+  // skip the first 10 frames
+  uint64_t frames_offset = 10;
+  if (iframe > frames_offset)
   { 
     uint64_t frames_sent = iframe - 1;
-    write_timing_data ("recv_timing.dat", times, frames_sent);
-    print_timing_data (times, frames_sent, frame_size);
+    write_timing_data ("recv_timing.dat", times, frames_offset, frames_sent);
+    print_timing_data (times, frames_offset, frames_sent, frame_size);
   }
 
   sock_send->close_me();
@@ -440,6 +448,7 @@ void usage()
 #endif
     "  -h          print this help text\n"
     "  -i          ignore data processing\n"
+    "  -p bytes    size of a UDP packet in bytes [default " << KeckRTC_UDP_SIZE << "]\n"
     "  -r rate     frame rate of test in Hz [default 2000]\n"
     "  -v          verbose output\n"
     << endl;
