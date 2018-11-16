@@ -20,15 +20,15 @@ namespace spip {
     public:
 
       //! Null constructor
-      FileWrite (std::string);
+      FileWrite (const std::string&);
 
       ~FileWrite();
 
       void configure (const Container *);
 
-      void set_filename (std::string);
+      void set_filename (const std::string&);
 
-      void set_filename_suffix (std::string);
+      void set_filename_suffix (const std::string&);
 
       void set_file_length_seconds (float);
 
