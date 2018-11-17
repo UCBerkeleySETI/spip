@@ -15,7 +15,7 @@ from shutil import copyfile
 from spip.daemons.bases import BeamBased,ServerBased
 from spip.daemons.daemon import Daemon
 from spip.threads.reporting_thread import ReportingThread
-from spip.utils import times,sockets
+from spip.utils import times,sockets,files
 from spip.config import Config
 from spip.plotting import SNRPlot
 
@@ -217,6 +217,10 @@ class RepackDaemon(Daemon):
 
           obs_dir = beam_dir + "/" + observation
 
+          info_age = files.get_file_age (obs_dir + "/obs.info")
+          if info_age < 5:
+            continue
+
           # read the subbands in this observation
           subbands = self.get_subbands (obs_dir)
           (ok, out_cfreq) = self.get_out_cfreq (obs_dir)
@@ -238,18 +242,18 @@ class RepackDaemon(Daemon):
             
               cmd = "find " + obs_dir + "/" + subband + " -mindepth 1 -maxdepth 1 " + \
                     "-type f -name '" + archives_glob + "' -printf '%f\\n'"
-              rval, files = self.system (cmd, 3)
+              rval, filelist = self.system (cmd, 3)
 
-              for file in files:
+              for file in filelist:
                 if not file in archives:
                   archives[file] = 0
                 archives[file] += 1
 
           # if a file meets the subband count it is ripe for processing
-          files = archives.keys()
-          files.sort()
+          filelist = archives.keys()
+          filelist.sort()
 
-          for file in files:
+          for file in filelist:
 
             self.log (2, observation + ": " + file + " has " + str(archives[file]) \
                       + " of " + str(len(subbands)) + " present")
@@ -271,7 +275,7 @@ class RepackDaemon(Daemon):
                 if rval:
                   self.log (-1, "failed to process " + file + ": " + response)
 
-          # if any individual files (from sub-bands) were found, update the monitoring plots etc
+          # if any individual file (from sub-bands) were found, update the monitoring plots etc
           if processed_this_obs > 0:
             # now process the sum files to produce plots etc
             self.log (2, "main: process_observation("+beam+","+utc+","+source+","+obs_dir+")")
@@ -285,7 +289,7 @@ class RepackDaemon(Daemon):
 
           # perhaps a file was produced whilst the previous list was being processed,
           # do another pass
-          if len(files) > 0:
+          if len(filelist) > 0:
             all_done = False
 
           for subband in subbands:
@@ -582,7 +586,11 @@ class RepackDaemon(Daemon):
       psrfits_file = out_dir + "/" + os.path.basename (input_file)
       psrfits_file = string.replace(psrfits_file, ".ar", ".rf")
 
-      self.log (2, "process_archive() psrfits_file=" + psrfits_file)
+      # rename the output file
+      try:
+        shutil.move (input_file, psrfits_file)
+      except OSError, e:
+        return (-1, "failed to rename input_file to psrfits_file: " + str(e))
 
       # update the header parameters in the psrfits file
       (rval, message) = self.patch_psrfits_header (in_dir, psrfits_file)
