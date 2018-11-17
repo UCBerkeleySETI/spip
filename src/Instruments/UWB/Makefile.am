@@ -3,10 +3,12 @@ noinst_LTLIBRARIES = libinstuwb.la
 
 libinstuwb_headers = \
   spip/PreprocessingPipeline.h \
+  spip/UWBCalibrationPipeline.h \
   spip/UnpackFloatRAMUWB.h
 
 libinstuwb_la_SOURCES = \
   PreprocessingPipeline.C \
+  UWBCalibrationPipeline.C \
   UnpackFloatRAMUWB.C
 
 bin_PROGRAMS = uwb_adaptive_filter_pipeline \
@@ -15,6 +17,7 @@ bin_PROGRAMS = uwb_adaptive_filter_pipeline \
   uwb_adaptive_filter_tappend \
   uwb_calibration_pipeline \
   uwb_continuum_pipeline \
+  uwb_continuum_pipeline_float \
   uwb_continuum_scrunch \
   uwb_continuum_tadd \
   uwb_filterbank_pipeline \
@@ -41,6 +44,7 @@ uwb_adaptive_filter_test_SOURCES = uwb_adaptive_filter_test.C
 uwb_adaptive_filter_tappend_SOURCES = uwb_adaptive_filter_tappend.C
 uwb_adaptive_filter_pipeline_SOURCES = uwb_adaptive_filter_pipeline.C
 uwb_continuum_pipeline_SOURCES = uwb_continuum_pipeline.C
+uwb_continuum_pipeline_float_SOURCES = uwb_continuum_pipeline_float.C
 uwb_calibration_pipeline_SOURCES = uwb_calibration_pipeline.C
 uwb_filterbank_pipeline_SOURCES = uwb_filterbank_pipeline.C
 uwb_preprocessing_pipeline_SOURCES = uwb_preprocessing_pipeline.C

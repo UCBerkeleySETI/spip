@@ -6,6 +6,7 @@
  ***************************************************************************/
 
 #include "spip/UnpackFloatRAMUWB.h"
+#include "spip/Types.h"
 
 #include <iostream>
 #include <cstring>
@@ -16,7 +17,9 @@ using namespace std;
 
 spip::UnpackFloatRAMUWB::UnpackFloatRAMUWB ()
 {
-  scale = 1e-4;
+  scale = 1.0;
+  offset = 0.0;
+  output_sideband = Signal::Sideband::Upper;
 }
 
 spip::UnpackFloatRAMUWB::~UnpackFloatRAMUWB ()
@@ -38,7 +41,20 @@ void spip::UnpackFloatRAMUWB::prepare ()
 
   if (nsignal != 1)
     throw Error(InvalidState, "spip::UnpackFloatRAMUWB::prepare", "Expecting 1 input signal"); 
+
+  // check if a change in sideband is required
+  if (sideband != output_sideband)
+  {
+    re_scale = scale;
+    im_scale = scale * -1;
+  }
+  else
+  {
+    re_scale = scale;
+    im_scale = scale;
+  }
 }
+
 
 void spip::UnpackFloatRAMUWB::transform_custom_to_SFPT ()
 {
@@ -57,7 +73,6 @@ void spip::UnpackFloatRAMUWB::transform_custom_to_SFPT ()
   // output strides
   const uint64_t block_stride = ndat_per_block * ndim;
   const uint64_t pol_stride = ndat * ndim;
-  const uint64_t nval = ndat_per_block * ndim;
 
   // input data are in BlockPolTime format, 1 channel, 1 signal
   for (uint64_t iblock=0; iblock<nblock; iblock++)
@@ -66,9 +81,14 @@ void spip::UnpackFloatRAMUWB::transform_custom_to_SFPT ()
     for (unsigned ipol=0; ipol<npol; ipol++)
     {
       const uint64_t pol_offset = block_offset + (ipol * pol_stride);
-      for (uint64_t ival=0; ival<nval; ival++)
+      for (uint64_t idat=0; idat<ndat_per_block; idat++)
       {
-        out[pol_offset + ival] = (convert_twos(*in) + offset) * scale;
+        // real
+        out[pol_offset + (2*idat) + 0] = (convert_twos(*in) + offset) * re_scale;
+        in++;
+
+        // imag
+        out[pol_offset + (2*idat) + 1] = (convert_twos(*in) + offset) * im_scale;
         in++;
       }
     }

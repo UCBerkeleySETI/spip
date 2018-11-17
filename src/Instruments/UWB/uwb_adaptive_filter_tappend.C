@@ -116,19 +116,30 @@ int main(int argc, char *argv[]) try
   // read the header input parameters, determine the container size
   if (verbose)
     cerr << "main: input->read_header()" << endl;
+  uint64_t output_bytes = 0;
   for (unsigned i=0; i<num_inputs; i++)
+  {
     inputs[i]->process_header();
+    output_bytes += inputs[i]->get_size();
+  }
+
+  if (verbose)
+    cerr << "main: output data size=" << output_bytes << endl;
+
+  spip::Ordering output_order = inputs[0]->get_order();
 
   // configure the transform
   if (verbose)
-    cerr << "main: appender->configure()" << endl;
-  appender->configure(inputs[0]->get_order());
+    cerr << "main: appender->configure(" 
+         << spip::Container::get_order_string(output_order) << ")" << endl;
+  appender->configure(output_order);
 
   // configure the output 
   if (verbose)
     cerr << "main: output->process_header()" << endl;
+  output->set_order (output_order);
+  output->set_file_length_bytes(output_bytes);
   output->process_header ();
-  output->set_order (spip::Ordering::TSPF);
 
   // read data from the files
   if (verbose)

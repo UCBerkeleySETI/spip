@@ -24,6 +24,7 @@
 #include "spip/ContainerBufferedRingWrite.h"
 #include "spip/ContainerRingWrite.h"
 #include "spip/ContainerRAM.h"
+#include "spip/ContainerRAMFileWrite.h"
 
 #include "config.h"
 
@@ -39,6 +40,7 @@
 #include "spip/PolSelectCUDA.h"
 #include "spip/RAMtoCUDATransfer.h"
 #include "spip/CUDAtoRAMTransfer.h"
+#include "spip/ContainerCUDAFileWrite.h"
 #include "spip/ContainerRingWriteCUDA.h"
 #endif
 
@@ -56,7 +58,7 @@ namespace spip {
 
       void set_function (bool, bool, bool);
 
-      void set_filtering (int);
+      void set_filtering (int, double);
 
       void set_cal_decimation (unsigned, uint64_t, unsigned);
 
@@ -90,7 +92,7 @@ namespace spip {
 
       DataBlockRead * in_db;
 
-      DataBlockWrite * cal_db;
+      //DataBlockWrite * cal_db;
 
       DataBlockWrite * trans_db;
 
@@ -122,7 +124,8 @@ namespace spip {
 
       Container * filtered;
 
-      ContainerBufferedRingWrite * cal_output;
+      //ContainerBufferedRingWrite * cal_output;
+      ContainerRAMFileWrite * cal_output;
 
       ContainerRingWrite * trans_output;
 
@@ -137,6 +140,8 @@ namespace spip {
       Signal::State cal_output_state;
 
       Signal::State trans_output_state;
+
+      std::string cal_out_dir;
 
       unsigned nfft;
 
@@ -167,7 +172,8 @@ namespace spip {
 
       ContainerCUDADevice * d_input;
 
-      ContainerCUDADevice * d_cal_output; 
+      //ContainerCUDADevice * d_cal_output;
+      ContainerCUDAFileWrite * d_cal_output;
 
       ContainerCUDADevice * d_trans_output; 
 
@@ -187,6 +193,10 @@ namespace spip {
       unsigned out_npol;
       
       int ref_pol;
+
+      double fil_req_mon_tsamp;
+
+      uint64_t input_bytes_per_second;
   };
 
 }

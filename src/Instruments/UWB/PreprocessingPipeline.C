@@ -19,14 +19,17 @@
 using namespace std;
 
 spip::PreprocessingPipeline::PreprocessingPipeline (const char * in_key_string, 
-                                                    const char * cal_key_string,
+                                                    const char * cal_out_path,
                                                     const char * trans_key_string,
                                                     const char * out_key_string)
 {
   output_state = spip::Signal::Analytic;
-  cal_output_state = spip::Signal::Intensity;
+  cal_output_state = spip::Signal::PPQQ;
+  cal_out_dir = string(cal_out_path);
 
   nfft = 128;
+
+  fil_req_mon_tsamp = 1;
 
   cal_dat_dec = 1;
   cal_pol_dec = 1;
@@ -34,7 +37,7 @@ spip::PreprocessingPipeline::PreprocessingPipeline (const char * in_key_string,
   cal_signal_dec = 1;
 
   trans_dat_dec = 1;
-  trans_pol_dec = 1;
+  trans_pol_dec = 2;
   trans_chan_dec = 1;
   trans_signal_dec = 1;
 
@@ -69,20 +72,15 @@ spip::PreprocessingPipeline::PreprocessingPipeline (const char * in_key_string,
   d_input = NULL;
   d_cal_output = NULL;
   d_trans_output = NULL;
-  cuda_to_ram_cal = NULL;
   cuda_to_ram_trans = NULL;
 #endif
 
   in_db  = new DataBlockRead (in_key_string);
-  cal_db = new DataBlockWrite (cal_key_string);
   out_db = new DataBlockWrite (out_key_string);
   trans_db = new DataBlockWrite (trans_key_string);
 
   in_db->connect();
   in_db->lock();
-
-  cal_db->connect();
-  cal_db->lock();
 
   out_db->connect();
   out_db->lock();
@@ -99,10 +97,6 @@ spip::PreprocessingPipeline::~PreprocessingPipeline()
   in_db->disconnect();
   delete in_db;
 
-  cal_db->unlock();
-  cal_db->disconnect();
-  delete cal_db;
-
   out_db->unlock();
   out_db->disconnect();
   delete out_db;
@@ -113,9 +107,10 @@ spip::PreprocessingPipeline::~PreprocessingPipeline()
 }
 
 //! total number of polarisations and the reference pol (-1 for no ref pol)
-void spip::PreprocessingPipeline::set_filtering (int _ref_pol)
+void spip::PreprocessingPipeline::set_filtering (int _ref_pol, double _req_mon_tsamp)
 {
   ref_pol = _ref_pol;
+  fil_req_mon_tsamp = _req_mon_tsamp;
 }
 
 void spip::PreprocessingPipeline::set_channelisation (unsigned _nfft)
@@ -174,8 +169,8 @@ void spip::PreprocessingPipeline::configure (spip::UnpackFloat * unpacker)
   if (calibrate)
   {
     if (verbose)
-      cerr << "spip::PreprocessingPipeline::configure allocating CAL output Ring Buffer" << endl;
-    cal_output = new spip::ContainerBufferedRingWrite (cal_db);
+      cerr << "spip::PreprocessingPipeline::configure allocating CAL output" << endl;
+    cal_output = new spip::ContainerRAMFileWrite (cal_out_dir);
   }
 
   if (transients)
@@ -223,7 +218,7 @@ void spip::PreprocessingPipeline::configure (spip::UnpackFloat * unpacker)
       detect = new spip::DetectionSquareLawRAM();
       detect->set_input (channelised);
       detect->set_output (detected);
-      detect->set_output_state (spip::Signal::Intensity);
+      detect->set_output_state (cal_output_state);
       detect->set_verbose (verbose);
     }
 
@@ -266,7 +261,7 @@ void spip::PreprocessingPipeline::configure (spip::UnpackFloat * unpacker)
     adap_fil = new spip::AdaptiveFilterRAM(output_dir);
     adap_fil->set_input (channelised);
     adap_fil->set_output (filtered);
-    adap_fil->set_filtering (ref_pol);
+    adap_fil->set_filtering (ref_pol, fil_req_mon_tsamp);
     adap_fil->set_verbose (verbose);
 
     if (calibrate || transients)
@@ -276,7 +271,7 @@ void spip::PreprocessingPipeline::configure (spip::UnpackFloat * unpacker)
       detect = new spip::DetectionSquareLawRAM();
       detect->set_input (filtered);
       detect->set_output (detected);
-      detect->set_output_state (spip::Signal::Intensity);
+      detect->set_output_state (cal_output_state);
       detect->set_verbose (verbose);
     }
 
@@ -344,37 +339,40 @@ void spip::PreprocessingPipeline::configure_cuda (spip::UnpackFloat * unpacker)
   d_input = new spip::ContainerCUDADevice ();
 
   if (verbose)
-    cerr << "spip::PreprocessingPipeline::configure allocating output Ring Buffer" << endl;
+    cerr << "spip::PreprocessingPipeline::configure_cuda allocating output Ring Buffer" << endl;
   d_output = new spip::ContainerRingWriteCUDA (out_db);
 
-  if (verbose)
-    cerr << "spip::PreprocessingPipeline::configure allocating d_cal_output" << endl;
-  d_cal_output = new spip::ContainerCUDADevice ();
+  if (calibrate)
+  {
+    if (verbose)
+      cerr << "spip::PreprocessingPipeline::configure_cuda allocating d_cal_output" << endl;
+    d_cal_output = new spip::ContainerCUDAFileWrite (stream, cal_out_dir);
+  }
+
+  if (transients)
+  {
+    if (verbose)
+      cerr << "spip::PreprocessingPipeline::configure_cuda allocating d_trans_output" << endl;
+    d_trans_output = new spip::ContainerCUDADevice ();
+
+    // TODO check if Buffered, perhaps not?
+    if (verbose)
+      cerr << "spip::PreprocessingPipeline::configure_cuda allocating trans_output" << endl;
+    trans_output = new spip::ContainerRingWrite (trans_db);
+    trans_output->register_buffers();
+  }
 
   if (verbose)
-    cerr << "spip::PreprocessingPipeline::configure allocating d_trans_output" << endl;
-  d_trans_output = new spip::ContainerCUDADevice ();
-
-  if (verbose)
-    cerr << "spip::PreprocessingPipeline::configure allocating cal_output" << endl;
-  cal_output = new spip::ContainerBufferedRingWrite (cal_db);
-  cal_output->register_buffers();
-
-  // TODO check if Buffered, perhaps not?
-  if (verbose)
-    cerr << "spip::PreprocessingPipeline::configure allocating trans_output" << endl;
-  trans_output = new spip::ContainerRingWrite (trans_db);
-  trans_output->register_buffers();
-
-  if (verbose)
-    cerr << "spip::PreprocessingPipeline::configure_cuda allocating RAM to CUDA Transfer" << endl;
+    cerr << "spip::PreprocessingPipeline::configure_cuda allocating RAM to "
+         << "CUDA Transfer" << endl;
   ram_to_cuda = new spip::RAMtoCUDATransfer (stream);
   ram_to_cuda->set_input (input);
   ram_to_cuda->set_output (d_input); 
   ram_to_cuda->set_verbose (verbose);
 
   if (verbose)
-    cerr << "spip::PreprocessingPipeline::configure_cuda unpacked container" << endl;
+    cerr << "spip::PreprocessingPipeline::configure_cuda unpacked container" 
+         << endl;
   // unpacked container
   unpacked = new spip::ContainerCUDADevice ();
 
@@ -391,9 +389,10 @@ void spip::PreprocessingPipeline::configure_cuda (spip::UnpackFloat * unpacker)
   // if no filtering is required, remove excess polarisations
   if (!filter)
   {
-    if (verbose)
-      cerr << "spip::PreprocessingPipeline::configure_cuda configuring PolSelectCUDA ref_pol=" << ref_pol << endl;
     // Poln Select
+    if (verbose)
+      cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+           << "PolSelectCUDA ref_pol=" << ref_pol << endl;
     pol_sel = new spip::PolSelectCUDA(stream);
     if (ref_pol > 0)
       pol_sel->set_pol_reduction (1);
@@ -407,7 +406,8 @@ void spip::PreprocessingPipeline::configure_cuda (spip::UnpackFloat * unpacker)
       channelised = new spip::ContainerCUDADevice ();
 
       if (verbose)
-        cerr << "spip::PreprocessingPipeline::configure_cuda configuring ForwardFFTCUDA" << endl;
+        cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+             << "ForwardFFTCUDA" << endl;
       fwd_fft = new spip::ForwardFFTCUDA(stream);
       fwd_fft->set_input (d_output);
       fwd_fft->set_output (channelised);
@@ -417,36 +417,32 @@ void spip::PreprocessingPipeline::configure_cuda (spip::UnpackFloat * unpacker)
       detected = new spip::ContainerCUDADevice();
 
       if (verbose)
-        cerr << "spip::PreprocessingPipeline::configure_cuda configuring DetectionSquareLawCUDA" << endl;
+        cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+             << "DetectionSquareLawCUDA" << endl;
       detect = new spip::DetectionSquareLawCUDA (stream);
       detect->set_input (channelised);
       detect->set_output (detected);
-      detect->set_output_state (spip::Signal::Intensity);
+      detect->set_output_state (cal_output_state);
       detect->set_verbose (verbose);
     }
 
     if (calibrate)
     {
       if (verbose)
-        cerr << "spip::PreprocessingPipeline::configure_cuda configuring IntegrationBinnedCUDA" << endl;
+        cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+             << "IntegrationBinnedCUDA" << endl;
       integrate_cal = new spip::IntegrationBinnedCUDA(stream);
       integrate_cal->set_input (detected);
       integrate_cal->set_output (d_cal_output);
       integrate_cal->set_decimation (cal_dat_dec, cal_pol_dec, cal_chan_dec, cal_signal_dec);
       integrate_cal->set_verbose (verbose);
-
-      if (verbose)
-        cerr << "spip::PreprocessingPipeline::configure_cuda configuring calibration CUDAtoRAMTransfer" << endl;
-      cuda_to_ram_cal = new spip::CUDAtoRAMTransfer (stream);
-      cuda_to_ram_cal->set_input (d_cal_output);
-      cuda_to_ram_cal->set_output (cal_output);
-      cuda_to_ram_cal->set_verbose (verbose);
     }
 
     if (transients)
     {
       if (verbose)
-        cerr << "spip::PreprocessingPipeline::configure_cuda configuring IntegrationCUDA" << endl;
+        cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+             << "IntegrationCUDA" << endl;
       integrate_trans = new spip::IntegrationCUDA(stream);
       integrate_trans->set_input (detected);
       integrate_trans->set_output (d_trans_output);
@@ -454,7 +450,8 @@ void spip::PreprocessingPipeline::configure_cuda (spip::UnpackFloat * unpacker)
       integrate_trans->set_verbose (verbose);
 
       if (verbose)
-        cerr << "spip::PreprocessingPipeline::configure_cuda configuring transients CUDAtoRAMTransfer" << endl;
+        cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+             << "transients CUDAtoRAMTransfer" << endl;
       cuda_to_ram_trans = new spip::CUDAtoRAMTransfer (stream);
       cuda_to_ram_trans->set_input (d_trans_output);
       cuda_to_ram_trans->set_output (trans_output);
@@ -467,7 +464,8 @@ void spip::PreprocessingPipeline::configure_cuda (spip::UnpackFloat * unpacker)
 
     // forward FFT operation
     if (verbose)
-      cerr << "spip::PreprocessingPipeline::configure_cuda configuring ForwardFFTCUDA" << endl;
+      cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+           << "ForwardFFTCUDA" << endl;
     fwd_fft = new spip::ForwardFFTCUDA(stream);
     fwd_fft->set_input (unpacked);
     fwd_fft->set_output (channelised);
@@ -479,13 +477,14 @@ void spip::PreprocessingPipeline::configure_cuda (spip::UnpackFloat * unpacker)
 
     string output_dir = string(".");
 
-    // The filtering pipeline will filter pols 1+2 against pol3
+    // The filtering pipeline will filter pols 1+2 against 3
     if (verbose)
-      cerr << "spip::PreprocessingPipeline::configure_cuda configuring AdaptiveFilterCUDA" << endl;
+      cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+           << "AdaptiveFilterCUDA" << endl;
     adap_fil = new spip::AdaptiveFilterCUDA(stream, output_dir);
     adap_fil->set_input (channelised);
     adap_fil->set_output (filtered);
-    adap_fil->set_filtering (ref_pol);
+    adap_fil->set_filtering (ref_pol, fil_req_mon_tsamp);
     adap_fil->set_verbose (verbose);
 
     if (calibrate || transients)
@@ -493,37 +492,32 @@ void spip::PreprocessingPipeline::configure_cuda (spip::UnpackFloat * unpacker)
       detected = new spip::ContainerCUDADevice();
 
       if (verbose)
-        cerr << "spip::PreprocessingPipeline::configure_cuda configuring DetectionSquareLawCUDA" << endl;
+        cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+             << "DetectionSquareLawCUDA" << endl;
       detect = new spip::DetectionSquareLawCUDA (stream);
       detect->set_input (filtered);
       detect->set_output (detected);
-      detect->set_output_state (spip::Signal::Intensity);
+      detect->set_output_state (cal_output_state);
       detect->set_verbose (verbose);
     }
 
     if (calibrate)
     {
       if (verbose)
-        cerr << "spip::PreprocessingPipeline::configure_cuda configuring IntegrationBinnedCUDA" << endl;
+        cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+             << "IntegrationBinnedCUDA" << endl;
       integrate_cal = new spip::IntegrationBinnedCUDA(stream);
       integrate_cal->set_input (detected);
       integrate_cal->set_output (d_cal_output);
       integrate_cal->set_decimation (cal_dat_dec, cal_pol_dec, cal_chan_dec, cal_signal_dec);
       integrate_cal->set_verbose (verbose);
-
-      // transfer device to host
-      if (verbose)
-        cerr << "spip::PreprocessingPipeline::configure_cuda configuring calibration CUDAtoRAMTransfer" << endl;
-      cuda_to_ram_cal = new spip::CUDAtoRAMTransfer (stream);
-      cuda_to_ram_cal->set_input (d_cal_output);
-      cuda_to_ram_cal->set_output (cal_output);
-      cuda_to_ram_cal->set_verbose (verbose);
     }
 
     if (transients)
     {
       if (verbose)
-        cerr << "spip::PreprocessingPipeline::configure_cuda configuring IntegrationCUDA" << endl;
+        cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+             << "IntegrationCUDA" << endl;
       integrate_trans = new spip::IntegrationCUDA(stream);
       integrate_trans->set_input (detected);
       integrate_trans->set_output (d_trans_output);
@@ -532,22 +526,22 @@ void spip::PreprocessingPipeline::configure_cuda (spip::UnpackFloat * unpacker)
 
       // transfer device to host
       if (verbose)
-        cerr << "spip::PreprocessingPipeline::configure_cuda configuring transients CUDAtoRAMTransfer" << endl;
+        cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+             << "transients CUDAtoRAMTransfer" << endl;
       cuda_to_ram_trans = new spip::CUDAtoRAMTransfer (stream);
       cuda_to_ram_trans->set_input (d_trans_output);
       cuda_to_ram_trans->set_output (trans_output);
       cuda_to_ram_trans->set_verbose (verbose);
     }
 
-
     if (verbose)
-      cerr << "spip::PreprocessingPipeline::configure_cuda configuring BackwardFFTCUDA" << endl;
+      cerr << "spip::PreprocessingPipeline::configure_cuda configuring "
+           << "BackwardFFTCUDA" << endl;
     bwd_fft = new spip::BackwardFFTCUDA(stream);
     bwd_fft->set_input (filtered);
     bwd_fft->set_output (d_output);
     bwd_fft->set_nfft (nfft);
     bwd_fft->set_verbose (verbose);
-
   }
 }
 
@@ -564,6 +558,9 @@ void spip::PreprocessingPipeline::open ()
   // read from the input
   input->process_header();
 
+  // get the input data rate in bytes per second
+  input_bytes_per_second = input->calculate_bytes_per_second();
+
 #ifdef HAVE_CUDA
   if (device >= 0)
   {
@@ -576,7 +573,7 @@ void spip::PreprocessingPipeline::open ()
   // configure the unpacker
   if (verbose)
     cerr << "spip::PreprocessingPipeline::open unpack_float->configure(SFPT)" << endl;
-  unpack_float->set_scale (1.0f / 100.0f);
+  //unpack_float->set_scale (0.0001);
   unpack_float->configure(spip::Ordering::SFPT);
  
   if (!filter)
@@ -614,22 +611,33 @@ void spip::PreprocessingPipeline::open ()
         cerr << "spip::PreprocessingPipeline::open integrate_cal->configure(TSPFB)" << endl;
       integrate_cal->configure(spip::Ordering::TSPFB);
 
+      int64_t cal_size = integrate_cal->get_sample_size ();
 #ifdef HAVE_CUDA
       if (device >= 0)
       {
         if (verbose)
-          cerr << "spip::PreprocessingPipeline::open cuda_to_ram_cal->configure(TSPFB)" << endl;
-        cuda_to_ram_cal->configure(spip::Ordering::TSPFB);
+          cerr << "spip::PreprocessingPipeline::open d_cal_output->process_header()" << endl;
+        d_cal_output->set_file_length_bytes (cal_size);
+        d_cal_output->process_header ();
+        d_cal_output->set_filename_suffix ("cal");
       }
+      else
 #endif
-      cal_output->process_header();
+      {
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::open cal_output->process_header()" << endl;
+        cal_output->set_file_length_bytes (cal_size);
+        cal_output->process_header ();
+        cal_output->set_filename_suffix ("cal");
+      }
+      //cal_output->process_header();
     }
 
-    if (calibrate)
+    if (transients)
     {
       if (verbose)
-        cerr << "spip::PreprocessingPipeline::open integrate_trans->configure(TSPFB)" << endl;
-      integrate_trans->configure(spip::Ordering::TSPFB);
+        cerr << "spip::PreprocessingPipeline::open integrate_trans->configure(TSPF)" << endl;
+      integrate_trans->configure(spip::Ordering::TSPF);
 
 #ifdef HAVE_CUDA
       if (device >= 0)
@@ -683,13 +691,6 @@ void spip::PreprocessingPipeline::close ()
     cerr << "spip::PreprocessingPipeline::close in_db->close()" << endl;
   in_db->close();
 
-  if (calibrate)
-  {
-    if (verbose)
-      cerr << "spip::PreprocessingPipeline::close cal_db->close()" << endl;
-    cal_db->close();
-  }
-
   if (transients)
   {
     if (verbose)
@@ -704,7 +705,6 @@ void spip::PreprocessingPipeline::close ()
   if (verbose)
     cerr << "spip::PreprocessingPipeline::close done" << endl;
 }
-
 // process blocks of input data until the end of the data stream
 bool spip::PreprocessingPipeline::process ()
 {
@@ -718,13 +718,6 @@ bool spip::PreprocessingPipeline::process ()
     cerr << "spip::PreprocessingPipeline::out_db->open()" << endl;
   out_db->open();
 
-  if (calibrate)
-  {
-    if (verbose)
-      cerr << "spip::PreprocessingPipeline::cal_db->open()" << endl;
-    cal_db->open();
-  }
-
   if (transients)
   {
     if (verbose)
@@ -734,6 +727,15 @@ bool spip::PreprocessingPipeline::process ()
 
   uint64_t input_bufsz = in_db->get_data_bufsz();
   uint64_t nbytes_input, nbytes_output;
+
+  unsigned blocks_processed = 0;
+  unsigned blocks_per_mon_tsamp = 0;
+  if (filter)
+  {
+    blocks_per_mon_tsamp = adap_fil->get_blocks_per_mon_tsamp();
+    if (verbose)
+      cerr << "spip::PreprocessingPipeline::process blocks_per_mon_tsamp=" << blocks_per_mon_tsamp << endl;
+  }
 
   while (keep_processing)
   {
@@ -751,18 +753,36 @@ bool spip::PreprocessingPipeline::process ()
 #ifdef HAVE_CUDA
       if (device >= 0)
       {
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::process d_output->open_block()" << endl;
         nbytes_output = d_output->open_block();
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::process nbytes_output=" << nbytes_output <<
+endl;
+
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::process ram_to_cuda->prepare()" << endl;
         ram_to_cuda->prepare();
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::process ram_to_cuda->transformation()" << endl;
         ram_to_cuda->transformation();
       }
       else
 #endif
       {
-        output->open_block();
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::process output->open_block()" << endl;
+        nbytes_output = output->open_block();
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::process nbytes_output=" << nbytes_output << endl;
       }
 
       if (transients)
+      {
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::process trans_output->open_block()" << endl;
         trans_output->open_block();
+      }
 
       if (verbose)
         cerr << "spip::PreprocessingPipeline::process unpack_float->transformation()" << endl;
@@ -797,18 +817,27 @@ bool spip::PreprocessingPipeline::process ()
             integrate_cal->prepare();
             integrate_cal->transformation ();
 
+            uint64_t cal_ndat = 0;
 #ifdef HAVE_CUDA
             if (device >= 0)
             {
+              cal_ndat = d_cal_output->get_ndat();
               if (verbose)
-                cerr << "spip::PreprocessingPipeline::process cuda_to_ram_cal->transformation()" << endl;
-              cuda_to_ram_cal->prepare();
-              cuda_to_ram_cal->transformation();
+                cerr << "spip::PreprocessingPipeline::process cal_ndat=" << cal_ndat << endl;
+              if (cal_ndat > 0)
+              {
+                if (verbose)
+                  cerr << "spip::PreprocessingPipeline::process d_cal_output->write(" << cal_ndat << ")" << endl;
+                d_cal_output->write (cal_ndat);
+              }
             }
+            else
 #endif
-            if (verbose)
-              cerr << "spip::PreprocessingPipeline::process cal_output->write_buffer()" << endl;
-            cal_output->write_buffer();
+            {
+              cal_ndat = cal_output->get_ndat();
+              if (cal_ndat > 0)
+                cal_output->write (cal_ndat);
+            }
           }
 
           if (transients)
@@ -842,8 +871,23 @@ bool spip::PreprocessingPipeline::process ()
         fwd_fft->prepare();
         fwd_fft->transformation();
 
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::process adap_fil->transform()" << endl;
         adap_fil->prepare();
         adap_fil->transformation();
+
+        // count the bytes processed
+        blocks_processed++;
+        if (blocks_processed % blocks_per_mon_tsamp == 0)
+        {
+          if (verbose)
+            cerr << "spip::PreprocessingPipeline::process writing adaptive file output" << endl;
+          adap_fil->write_gains ();
+          adap_fil->write_dirty ();
+          adap_fil->write_cleaned ();
+        }
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::process bwd_fft->transform()" << endl;
 
         bwd_fft->prepare();
         bwd_fft->transformation();
@@ -862,18 +906,27 @@ bool spip::PreprocessingPipeline::process ()
           integrate_cal->prepare();
           integrate_cal->transformation ();
 
+          uint64_t cal_ndat = 0;
 #ifdef HAVE_CUDA
           if (device >= 0)
           {
+            cal_ndat = d_cal_output->get_ndat();
             if (verbose)
-              cerr << "spip::PreprocessingPipeline::process cuda_to_ram_cal->transformation()" << endl;
-            cuda_to_ram_cal->prepare();
-            cuda_to_ram_cal->transformation();
+              cerr << "spip::PreprocessingPipeline::process cal_ndat=" << cal_ndat << endl;
+            if (cal_ndat > 0)
+            {
+              if (verbose)
+                cerr << "spip::PreprocessingPipeline::process d_cal_output->write(" << cal_ndat << ")" << endl;
+              d_cal_output->write (cal_ndat);
+            }
           }
+          else
 #endif
-          if (verbose)
-            cerr << "spip::PreprocessingPipeline::process cal_output->write_buffer()" << endl;
-          cal_output->write_buffer();
+          {
+            cal_ndat = cal_output->get_ndat();
+            if (cal_ndat > 0)
+              cal_output->write (cal_ndat);
+          }
         }
 
         if (transients)
@@ -894,14 +947,13 @@ bool spip::PreprocessingPipeline::process ()
             cuda_to_ram_trans->transformation();
           }
 #endif
-          if (verbose)
-            cerr << "spip::PreprocessingPipeline::process trans_output->close_block()" << endl;
-          trans_output->close_block();
         }
       }
+
 #ifdef HAVE_CUDA
       if (device >= 0)
       {
+        cudaStreamSynchronize(stream);
         if (verbose)
           cerr << "spip::PreprocessingPipeline::process d_output->close_block()" << endl;
         d_output->close_block();
@@ -912,6 +964,21 @@ bool spip::PreprocessingPipeline::process ()
         if (verbose)
           cerr << "spip::PreprocessingPipeline::process output->close_block()" << endl;
         output->close_block();
+      }
+
+/*
+      if (calibrate)
+      {
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::process cal_output->write_buffer()" << endl;
+        cal_output->write_buffer();
+      }
+*/
+      if (transients)
+      {
+        if (verbose)
+          cerr << "spip::PreprocessingPipeline::process trans_output->close_block()" << endl;
+        trans_output->close_block();
       }
     }
 
