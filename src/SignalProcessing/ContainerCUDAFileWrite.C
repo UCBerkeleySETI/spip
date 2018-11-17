@@ -17,7 +17,7 @@
 
 using namespace std;
 
-spip::ContainerCUDAFileWrite::ContainerCUDAFileWrite (const string& _dir) : ContainerCUDADevice(), FileWrite (_dir)
+spip::ContainerCUDAFileWrite::ContainerCUDAFileWrite (cudaStream_t _stream, const string& _dir) : ContainerCUDADevice(), FileWrite (_dir)
 {
   stream = _stream;
   host_buffer = NULL;
