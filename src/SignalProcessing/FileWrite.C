@@ -18,7 +18,7 @@
 
 using namespace std;
 
-spip::FileWrite::FileWrite (std::string _dir)
+spip::FileWrite::FileWrite (const string& _dir)
 {
   dir = _dir;
   file_number = 0;
@@ -95,13 +95,13 @@ void spip::FileWrite::configure (const spip::Container * input)
   idat_written = 0;
 }
 
-void spip::FileWrite::set_filename (std::string _filename)
+void spip::FileWrite::set_filename (const string& _filename)
 {
   filename = _filename;
   fixed_filename = true;
 }
 
-void spip::FileWrite::set_filename_suffix (std::string suffix)
+void spip::FileWrite::set_filename_suffix (const string& suffix)
 {
   filename_suffix = suffix;
 }
@@ -171,7 +171,7 @@ void spip::FileWrite::open_file (const char * utc_start_str, uint64_t obs_offset
     prev_obs_offset = int64_t(obs_offset);
 
     char filename_buf[FILENAME_MAX];
-    snprintf (filename_buf, FILENAME_MAX, "%s_%016" PRIu64 ".%06lu.%s", 
+    snprintf (filename_buf, FILENAME_MAX, "%s_%016lu.%06lu.%s", 
               utc_start_str, obs_offset, file_number, filename_suffix.c_str());
     filename = dir + "/" + string(filename_buf);
     temporary_filename = dir + "/." + string(filename_buf) + ".tmp";

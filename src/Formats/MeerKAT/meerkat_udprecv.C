@@ -171,7 +171,7 @@ void usage()
   cout << "meerkat_udprecv [options] config\n"
     "  header      ascii file contain config and header\n"
 #ifdef HAVE_SPEAD2
-    "  -f format   receive UDP data of format [simple spead]\n"
+    "  -f format   receive UDP data of format [simple spead spead1k]\n"
 #else
     "  -f format   receive UDP data of format [simple]\n"
 #endif

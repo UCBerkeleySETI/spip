@@ -28,23 +28,32 @@ void spip::AppendFrequencyRAM::combine_SFPT_to_SFPT ()
   if (verbose)
     cerr << "spip::AppendFrequencyRAM::combine_SFPT_to_SFPT" << endl;
   if (nbit == 8)
-    combine_sfpt_to_sfpt (int8_t dummy);
+  {
+    int8_t dummy;
+    combine_sfpt_to_sfpt (dummy);
+  }
   else if (nbit == 16)
-    combine_sfpt_to_sfpt (int16_t dummy);
+  {
+    int16_t dummy;
+    combine_sfpt_to_sfpt (dummy);
+  }
   else if (nbit == 32)
-    combine_sfpt_to_sfpt (int32_t dummy);
+  {
+    int32_t dummy;
+    combine_sfpt_to_sfpt (dummy);
+  }
   else
     throw Error (InvalidState, "spip::AppendFrequencyRAM::combine_SFPT_to_SFPT", "input nbit [%u] must be 8, 16 or 32", nbit);
 }
 
 void spip::AppendFrequencyRAM::combine_TSPF_to_TSPF ()
 {
-  throw Error (InvalidSTFPS_to_TFPState, "spip::AppendFrequencyRAM::combine_TSPF_to_TSPF", "not yet implemented");
+  throw Error (InvalidState, "spip::AppendFrequencyRAM::combine_TSPF_to_TSPF", "not yet implemented");
 }
 
 void spip::AppendFrequencyRAM::combine_TSPFB_to_TSPFB ()
 {
-  throw Error (InvalidSTFPS_to_TFPState, "spip::AppendFrequencyRAM::combine_TSPFB_to_TSPFB", "not yet implemented");
+  throw Error (InvalidState, "spip::AppendFrequencyRAM::combine_TSPFB_to_TSPFB", "not yet implemented");
 }
 
 void spip::AppendFrequencyRAM::combine_TFPS_to_TFPS ()
@@ -52,11 +61,20 @@ void spip::AppendFrequencyRAM::combine_TFPS_to_TFPS ()
   if (verbose)
     cerr << "spip::AppendFrequencyRAM::combine_TFPS_to_TFPS" << endl;
   if (nbit == 8)
-    combine_tfps_to_tfps (int8_t dummy);
+  {
+    int8_t dummy;
+    combine_tfps_to_tfps (dummy);
+  }
   else if (nbit == 16)
-    combine_tfps_to_tfps (int16_t dummy);
+  {
+    int16_t dummy;
+    combine_tfps_to_tfps (dummy);
+  }
   else if (nbit == 32)
-    combine_tfps_to_tfps (int32_t dummy);
+  {
+    int32_t dummy;
+    combine_tfps_to_tfps (dummy);
+  }
   else
     throw Error (InvalidState, "spip::AppendFrequencyRAM::combine_TFPS_to_TFPS", "input nbit [%u] must be 8, 16 or 32", nbit);
 }

@@ -3,7 +3,7 @@ noinst_LTLIBRARIES = libspipdsp.la
 
 libspipdsp_headers = \
   spip/Add.h spip/AddTime.h spip/AddTimeRAM.h \
-  spip/Append.h spip/AppendFrequency.h spip/AppendTime.h spip/AppendTimeRAM.h\
+  spip/Append.h spip/AppendFrequency.h spip/AppendFrequnecyRAM.h spip/AppendTime.h spip/AppendTimeRAM.h\
   spip/CalibrationPipeline.h \
   spip/Combination.h \
   spip/ContinuumPipeline.h spip/ContinuumPipelineFloat.h \
@@ -29,11 +29,12 @@ libspipdsp_headers = \
 	spip/RAMtoRAMTransfer.h \
 	spip/ReverseFrequency.h spip/ReverseFrequencyRAM.h \
   spip/SampleFold.h spip/SampleFoldRAM.h\
-	spip/Transformation.h
+	spip/Transformation.h \
+  spip/AdaptiveFilterPipeline.h
 
 libspipdsp_la_SOURCES = \
   Add.C AddTime.C AddTimeRAM.C \
-  Append.C AppendFrequency.C AppendTime.C AppendTimeRAM.C \
+  Append.C AppendFrequency.C AppendFrequencyRAM.C AppendTime.C AppendTimeRAM.C \
   CalibrationPipeline.C \
   ContinuumPipeline.C ContinuumPipelineFloat.C \
   Container.C \
@@ -51,10 +52,7 @@ libspipdsp_la_SOURCES = \
   FoldTime.C \
 	Integration.C IntegrationRAM.C \
 	IntegrationBinned.C IntegrationBinnedRAM.C \
-	AdaptiveFilter.C \
-	AdaptiveFilterRAM.C \
-	AdaptiveFilterPipeline.C \
-	AdaptiveFilterTest.C \
+	AdaptiveFilter.C AdaptiveFilterRAM.C \
   BatchedBackwardFFT.C \
   ForwardFFT.C \
   BackwardFFT.C \
@@ -64,20 +62,16 @@ libspipdsp_la_SOURCES = \
   RAMtoRAMTransfer.C \
   ReverseFrequency.C ReverseFrequencyRAM.C \
   SampleFold.C SampleFoldRAM.C \
-  UnpackFloat.C UnpackFloatRAM.C
+  UnpackFloat.C UnpackFloatRAM.C \
+  AdaptiveFilterPipeline.C  \
+  AdaptiveFilterTest.C
 
 AM_CXXFLAGS = @PSRDADA_CFLAGS@ \
 	-I$(top_builddir)/src/Affinity\
 	-I$(top_builddir)/src/Util \
 	-I$(top_builddir)/src/Dada
 
-LDADD = libspipdsp.la \
-	$(top_builddir)/src/Affinity/libspipaffinity.la \
-	$(top_builddir)/src/Dada/libspipdada.la \
-	$(top_builddir)/src/Util/libspiputil.la \
-	@PSRDADA_LIBS@
-
-libspipdsp_la_LIBADD = @PSRDADA_LIBS@
+libspipdsp_la_LIBADD = 
 
 if HAVE_FFTW3
 
@@ -88,7 +82,6 @@ libspipdsp_la_SOURCES += ForwardFFTFFTW.C \
 AM_CXXFLAGS += @FFTW_CFLAGS@
 
 libspipdsp_la_LIBADD += @FFTW_LIBS@
-LDADD += @FFTW_LIBS@
 
 endif
 
@@ -107,7 +100,6 @@ libspipdsp_headers += \
 AM_CXXFLAGS += @CUFFT_CFLAGS@
 
 libspipdsp_la_LIBADD += @CUFFT_LIBS@
-LDADD += @CUFFT_LIBS@
 
 endif
 
@@ -131,7 +123,6 @@ libspipdsp_headers += \
   spip/UnpackFloatCUDA.h \
   spip/AdaptiveFilterCUDA.h
 
-
 libspipdsp_la_SOURCES += \
   CUDARingtoCUDATransfer.C \
   CUDAtoCUDATransfer.C \
@@ -152,7 +143,6 @@ libspipdsp_la_SOURCES += \
 
 AM_CXXFLAGS += @CUDA_CFLAGS@
 libspipdsp_la_LIBADD += @CUDA_LIBS@
-LDADD += @CUDA_LIBS@
 
 include $(top_srcdir)/config/Makefile.cuda
 

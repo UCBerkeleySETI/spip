@@ -142,6 +142,10 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
   const uint64_t in_sig_stride  = nchan * in_chan_stride;
   const uint64_t out_sig_stride = nchan * out_chan_stride;
 
+  current_factor = 0;
+  cleaned_power = 0;
+  dirty_power = 0;
+
   // loop over the dimensions of the input block
   for (unsigned isig=0; isig<nsignal; isig++)
   {

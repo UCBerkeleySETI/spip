@@ -93,13 +93,7 @@ void spip::IBVReceiver::configure (const char * config_str)
 
   // determine the resolution of the format 
   uint64_t resolution = format->get_resolution();
-  uint64_t buffer_size = resolution;
-  while (buffer_size < 128*1024)
-    buffer_size *= 2;
-  while (buffer_size > 256*1024)
-    buffer_size /= 2;
-
-  size_t npackets = 2 * (buffer_size / format->get_packet_size());
+  size_t npackets = 16384;
   // configure the queue
   packet_size = format->get_packet_size();
   header_size = format->get_header_size();
@@ -125,6 +119,12 @@ void spip::IBVReceiver::configure (const char * config_str)
     cerr << "spip::IBVReceiver::configure queue->allocate()" << endl;
   queue->allocate ();
 
+  if (data_mcast.size() > 0)
+  {
+    if (verbose)
+      cerr << "spip::IBVReceiver::configure queue->join_multicast()" << endl;
+    queue->join_multicast (data_host, data_port);
+  }
 }
 
 void spip::IBVReceiver::prepare ()
@@ -144,7 +144,7 @@ void spip::IBVReceiver::prepare ()
       cerr << "spip::IBVReceiver::open no UTC_START in header" << endl;
       time_t now = time(0);
       spip::Time utc_start (now);
-      utc_start.add_seconds (2);
+      utc_start.add_seconds (5);
       std::string utc_str = utc_start.get_gmtime();
       cerr << "spip::IBVReceiver::open UTC_START=" << utc_str  << endl;
       if (header.set ("UTC_START", "%s", utc_str.c_str()) < 0)
@@ -188,9 +188,11 @@ void spip::IBVReceiver::receive ()
 
   // configure the overflow buffer
   overflow = new UDPOverflow();
-  overflow_bufsz = format->get_resolution() * 2;
-  while (overflow_bufsz <= 65536)
+  overflow_bufsz = format->get_resolution() * 4 * 4;
+  while (overflow_bufsz <= 1024 * 1024)
     overflow_bufsz *= 2;
+
+  cerr << "spip::IBVReceiver::receive overflow_bufsz=" << overflow_bufsz << endl;
   overflow->resize (overflow_bufsz);
   overflow_block = (char *) overflow->get_buffer();
 
@@ -274,6 +276,11 @@ void spip::IBVReceiver::receive ()
 #endif
         close_block();
         stats->dropped_bytes (data_bufsz - bytes_this_buf);
+
+        // update stats for any sleeps
+        uint64_t nsleeps = queue->process_sleeps();
+        stats->sleeps(nsleeps);
+
       }
     }
     else if (got == 0)
@@ -302,6 +309,7 @@ void spip::IBVReceiver::open_block ()
 
   // copy any data from the overflow into the new block
   bytes_this_buf = overflow->copy_to (block);
+  stats->increment_bytes (bytes_this_buf);
 
 #ifdef _DEBUG
   cerr << "spip::UDPReceiveDB::open_block filling buffer ["
@@ -320,7 +328,7 @@ void spip::IBVReceiver::close_block ()
 
 void spip::IBVReceiver::stop_receiving ()
 {
-  //keep_receiving = false;
+  spip::IBVQueue::keep_receiving = false;
   if (format)
     format->conclude();
 }

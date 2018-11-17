@@ -11,6 +11,7 @@
 
 #include "spip/AppendFrequency.h"
 
+#include <inttypes.h>
 #include <cstring>
 
 namespace spip {
@@ -36,7 +37,7 @@ namespace spip {
         {
           for (unsigned ichan=0; ichan<nchan; ichan++)
           {
-            const uint64_t input_chan_offset = 0;
+            uint64_t input_chan_offset = 0;
             for (unsigned i=0;i<inputs.size(); i++)
             {
               const uint64_t in_stride = inputs[i]->get_pol_stride() * sizeof (T);
@@ -68,7 +69,7 @@ namespace spip {
             const uint64_t out_dat_offset = idat * output->get_dat_stride();
             for (unsigned ichan=0; ichan<nchan; ichan++)
             {
-              const uint64_t in_chan_offset = in_dat_offset + ichan * inputs[i]->get_chan_stride();
+              uint64_t in_chan_offset = in_dat_offset + ichan * inputs[i]->get_chan_stride();
               const uint64_t out_chan_offset = out_dat_offset + ichan * output->get_chan_stride() + input_chan_offset;
               for (unsigned ipol=0; ipol<npol; ipol++)
               {

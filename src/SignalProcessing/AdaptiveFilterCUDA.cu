@@ -355,7 +355,7 @@ __global__ void AdaptiveFilterKernel_FPT (const __restrict__ cuFloatComplex * in
 }
 
 
-spip::AdaptiveFilterCUDA::AdaptiveFilterCUDA (cudaStream_t _stream, string dir) : AdaptiveFilter (dir)
+spip::AdaptiveFilterCUDA::AdaptiveFilterCUDA (cudaStream_t _stream, const string& dir) : AdaptiveFilter (dir)
 {
   stream = _stream;
   processed_first_block = false;
@@ -396,7 +396,6 @@ spip::AdaptiveFilterCUDA::~AdaptiveFilterCUDA ()
 // configure the pipeline prior to runtime
 void spip::AdaptiveFilterCUDA::configure (spip::Ordering output_order)
 {
-  std::string output_dir(".");
   if (!gains)
     gains = new spip::ContainerCUDAFileWrite(stream, output_dir);
 

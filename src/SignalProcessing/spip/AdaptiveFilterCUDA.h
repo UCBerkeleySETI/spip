@@ -22,7 +22,7 @@ namespace spip {
   {
     public:
     
-      AdaptiveFilterCUDA (cudaStream_t, std::string);
+      AdaptiveFilterCUDA (cudaStream_t, const std::string&);
       
       ~AdaptiveFilterCUDA ();
 

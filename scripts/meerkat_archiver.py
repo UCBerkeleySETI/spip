@@ -117,7 +117,7 @@ class MeerKATArchiverDaemon(Daemon):
 
   def main (self):
 
-    self.ftp_server = "hdd-pod2.kat.ac.za"
+    self.ftp_server = "10.98.52.103"
     self.ftp_username = "kat"
     self.ftp_password = "kat"
     self.local_path = self.completed_dir
@@ -127,7 +127,7 @@ class MeerKATArchiverDaemon(Daemon):
 
     try:
       self.ftp_agent = katsdptransfer.ftp_transfer.AuthenticatedFtpTransfer (server=self.ftp_server, username=self.ftp_username, password=self.ftp_password, local_path=self.local_path,remote_path=self.remote_path, tx_md5=False)
-    except gaierror as e:
+    except Exception as e:
       self.log (0, "main: katsdtransfer failed to initialize: " + str(e))
       self.quit_event.set()
 

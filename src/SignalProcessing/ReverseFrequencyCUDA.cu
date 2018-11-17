@@ -9,7 +9,6 @@
 
 #include <iostream>
 #include <cstring>
-#include <stdexcept>
 #include <cmath>
 #include <cstdio>
 
@@ -124,7 +123,7 @@ void spip::ReverseFrequencyCUDA::transform_TFPS_to_TFPS ()
   //dim3 blocks (nchan_work / nthread, ndat, 1);
   
   //ReverseFrequency_TFPS_Kernel<<<blocks, nthread, 0, stream>>> (in, out, nchan, dat_stride, sigpol_stride);
-  throw invalid_argument ("spip::ReverseFrequencyCUDA::transform_TFPS_to_TFPS not implemented (yet)");
+  throw Error (InvalidState, "spip::ReverseFrequencyCUDA::transform_TFPS_to_TFPS", "not implemented (yet)");
 }
 
 void spip::ReverseFrequencyCUDA::transform_copy ()

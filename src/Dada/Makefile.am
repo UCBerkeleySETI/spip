@@ -4,7 +4,10 @@ noinst_LTLIBRARIES = libspipdada.la
 libspipdada_headers = 
 libspipdada_la_SOURCES = 
 libspipdada_la_LIBADD = 
-AM_CXXFLAGS =
+
+AM_CXXFLAGS = \
+	-I$(top_builddir)/src/Network \
+	-I$(top_builddir)/src/Util
 
 if HAVE_PSRDADA
 
@@ -54,11 +57,4 @@ endif
  
 endif
 
-AM_CXXFLAGS += \
-	-I$(top_builddir)/src/Network \
-	-I$(top_builddir)/src/Util
-
-LDADD = \
-  $(top_srcdir)/src/Network/libspipnet.la \
-  $(top_srcdir)/src/Util/libspiputil.la
 

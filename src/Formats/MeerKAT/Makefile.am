@@ -12,15 +12,12 @@ meerkat_udprecv_SOURCES = meerkat_udprecv.C
 meerkat_dummyserver_SOURCES = meerkat_dummyserver.C
 
 AM_CXXFLAGS = -I. \
-	-I$(top_builddir)/src/Affinity \
 	-I$(top_builddir)/src/Network \
+	-I$(top_builddir)/src/Affinity \
 	-I$(top_builddir)/src/Util
 
 LDADD = libmeerkat.la \
-  $(top_builddir)/src/Network/libspipnet.la \
-  $(top_builddir)/src/Util/libspiputil.la \
-  $(top_builddir)/src/libspip.la \
-  -lpthread
+  $(top_builddir)/src/libspip.la
 
 if HAVE_PSRDADA
 
@@ -42,16 +39,23 @@ libmeerkat_headers += spip/UDPFormatMeerKATSPEAD.h spip/UDPFormatMeerKATSPEAD1k.
 
 libmeerkat_la_SOURCES += UDPFormatMeerKATSPEAD.C UDPFormatMeerKATSPEAD1k.C
 
-bin_PROGRAMS += meerkat_speadrecv meerkat_speadrecvmerge meerkat_speadmeta meerkat_ibvrecv meerkat_ibvmerge2db
+bin_PROGRAMS += meerkat_speadrecv \
+	meerkat_speadrecvmerge \
+  meerkat_speadmeta \
+	meerkat_ibvrecv \
+  meerkat_ibvmerge2db \
+	meerkat_speadtimestamp
 
 meerkat_speadrecv_SOURCES = meerkat_speadrecv.C
 meerkat_speadrecvmerge_SOURCES = meerkat_speadrecvmerge.C
 meerkat_speadmeta_SOURCES = meerkat_speadmeta.C
-# meerkat_speadtimestamp_SOURCES = meerkat_speadtimestamp.C
+meerkat_speadtimestamp_SOURCES = meerkat_speadtimestamp.C
 
 if HAVE_PSRDADA 
 
-bin_PROGRAMS += meerkat_speaddb
+bin_PROGRAMS += meerkat_speaddb \
+	meerkat_ibvdb
+
 meerkat_speaddb_SOURCES = meerkat_speaddb.C
 
 endif
@@ -59,4 +63,3 @@ endif
 endif
 
 AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @BOOST_CPPFLAGS@ @SPEAD2_CFLAGS@ @CUDA_CFLAGS@
-LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@

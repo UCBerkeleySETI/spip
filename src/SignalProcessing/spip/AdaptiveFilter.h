@@ -18,7 +18,7 @@ namespace spip {
   {
     public:
      
-      AdaptiveFilter (std::string);
+      AdaptiveFilter (const std::string&);
 
       ~AdaptiveFilter ();
 
@@ -50,6 +50,8 @@ namespace spip {
       virtual void write_cleaned () = 0;
 
     protected:
+
+      std::string output_dir;
 
       unsigned nchan;
 
@@ -98,8 +100,6 @@ namespace spip {
       unsigned blocks_per_mon_tsamp;
 
       bool perform_filtering;
-
-      std::string output_dir;
 
     private:
 

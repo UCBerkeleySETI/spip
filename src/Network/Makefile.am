@@ -9,12 +9,11 @@ libspipnet_la_SOURCES = Socket.C C UDPSocket.C UDPSocketReceive.C UDPSocketSend.
                         UDPGenerator.C UDPReceiver.C UDPStats.C UDPOverflow.C \
                         UDPFormat.C TCPDummyServer.C TCPSocket.C TCPSocketServer.C
 
-AM_CXXFLAGS = -I$(top_builddir)/src/Affinity \
-							-I$(top_builddir)/src/Util \
-  						-I/opt/cross/include -std=c++0x
+libspipnet_la_LIBADD =
 
-LDADD = $(top_builddir)/src/Affinity/libspipaffinity.la \
-			  $(top_builddir)/src/Util/libspiputil.la
+AM_CXXFLAGS = -I$(top_builddir)/src/Affinity \
+              -I$(top_builddir)/src/Util \
+              -I/opt/cross/include -std=c++0x
 
 if HAVE_PSRDADA
 
@@ -23,7 +22,8 @@ libspipnet_headers += spip/UDPReceiveDB.h spip/UDPReceiveDBStats.h spip/UDPRecei
 libspipnet_la_SOURCES += UDPReceiveDB.C UDPReceiveDBStats.C UDPReceiveMergeDB.C UDPReceiveMerge2DB.C
 
 AM_CXXFLAGS += @PSRDADA_CFLAGS@ -I$(top_builddir)/src/Dada
-LDADD += $(top_builddir)/src/Dada/libspipdada.la
+
+libspipnet_la_LIBADD += @PSRDADA_LIBS@
 
 endif
 
@@ -45,7 +45,7 @@ libspipnet_headers += \
   spip/IBVReceiveMerge2DB.h
 
 AM_CXXFLAGS += @BOOST_CPPFLAGS@ @SPEAD2_CFLAGS@
-LDADD += @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@
+libspipnet_la_LIBADD += @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@
 
 if HAVE_PSRDADA
 
@@ -58,7 +58,7 @@ endif
 if HAVE_CUDA
 
 AM_CXXFLAGS += @CUDA_CFLAGS@
-LDADD += @CUDA_LIBS@
+libspipnet_la_LIBADD += @CUDA_LIBS@
 
 endif
 
@@ -69,3 +69,4 @@ libspipnet_la_SOURCES += UDPSocketReceiveVMA.C
 libspipnet_headers += spip/UDPSocketReceiveVMA.h
 
 endif
+

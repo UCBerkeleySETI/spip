@@ -114,13 +114,14 @@ int main(int argc, char *argv[])
     int64_t timestamp = 0;
     time_t adc_sync_time = 0;
     time_t now;
+    unsigned size;    
 
     if (got > 0)
     {
-      format->decode_spead (sock->get_buf());
+      format->decode_packet_dirty (sock->get_buf(), &size);
       if (verbose > 1)
         format->print_packet_header();
-      timestamp = format->get_timestamp_fast();
+      timestamp = format->get_timestamp();
       now = time(0);
     }
 

@@ -17,7 +17,7 @@
 
 using namespace std;
 
-spip::ContainerCUDAFileWrite::ContainerCUDAFileWrite (cudaStream_t _stream, std::string _dir) : FileWrite (_dir)
+spip::ContainerCUDAFileWrite::ContainerCUDAFileWrite (const string& _dir) : ContainerCUDADevice(), FileWrite (_dir)
 {
   stream = _stream;
   host_buffer = NULL;
@@ -47,7 +47,7 @@ void spip::ContainerCUDAFileWrite::write (uint64_t ndat)
     // open the file if required
     if (fd == -1)
     {
-      std::string utc_start_str = utc_start->get_gmtime();
+      string utc_start_str = utc_start->get_gmtime();
       if (spip::Container::verbose)
         cerr << "spip::FileWrite::write open_file (" << utc_start 
              << ", " << obs_offset << ") for idat=" << idat << endl;
