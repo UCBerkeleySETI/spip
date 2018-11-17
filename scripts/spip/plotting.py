@@ -184,7 +184,10 @@ class TimeseriesPlot (InlinePlot):
     self.ax.set_ylim(ymin, ymax)
 
     for i in range(len(ts)):
-      self.ax.plot(xvals, ts[i], label=labels[i], color=colors[i])
+      if plain:
+        self.ax.plot(xvals, ts[i], color=colors[i])
+      else:
+        self.ax.plot(xvals, ts[i], label=labels[i], color=colors[i])
     if not plain:
       self.ax.legend()
     self.closePlot()
@@ -274,7 +277,10 @@ class BandpassPlot (InlinePlot):
       spectra[:,0] = 0
     if self.transpose:
       for i in range(len(spectra)):
-        self.ax.plot(self.xvals, spectra[i], label=labels[i])
+        if plain:
+          self.ax.plot(self.xvals, spectra[i])
+        else:
+          self.ax.plot(self.xvals, spectra[i], label=labels[i])
       self.ax.set_ylim((0, nchan))
     else:
       ymax = numpy.amax(spectra)
@@ -286,11 +292,78 @@ class BandpassPlot (InlinePlot):
         ymax = ymin + 1
         spectra[:,0] = 1
       for i in range(len(spectra)):
-        self.ax.plot(self.xvals, spectra[i], label=labels[i])
+        if plain:
+          self.ax.plot(self.xvals, spectra[i])
+        else:
+          self.ax.plot(self.xvals, spectra[i], label=labels[i])
       self.ax.set_xlim((self.xmin, self.xmax))
       self.ax.set_ylim((ymin, ymax))
+    if not plain:
+      self.ax.legend()
 
-    self.ax.legend()
+    self.closePlot()
+
+class CalPlot (InlinePlot):
+
+  def __init__(self):
+    super(CalPlot, self).__init__()
+    self.setLabels ('Power Spectral Density', 'Frequency (MHz)', 'Power (Arbitrary Units)')
+    self.nchan = 1
+    self.xvals = numpy.arange (0, 1, self.nchan, dtype=float)
+    self.configure (False, False, False)
+
+  def configure (self, log, zap, transpose):
+    self.log = log
+    self.zap = zap
+    self.transpose = transpose
+
+  def plot_npol (self, xres, yres, plain, nchan, freq, bw, spectra, labels):
+
+    if self.nchan != nchan or self.xmin != freq-(bw/2) or self.xmax != freq+(bw/2):
+      self.xmin = freq-(bw/2)
+      self.xmax = freq+(bw/2)
+      self.xstep = bw/nchan
+
+      self.nchan = nchan
+      self.xvals = numpy.arange (self.xmin, self.xmax, \
+                                 self.xstep, dtype=float)
+
+    self.openPlot (xres, yres, plain)
+    if self.log:
+      self.ax.set_yscale ('log', nonposy='clip')
+    else:
+      self.ax.set_yscale ('linear')
+    if self.zap:
+      spectra[:,0] = 0
+
+    if self.transpose:
+      for ipol in range(len(spectra)):
+        for ibin in range(len(spectra[ipol])):
+          if plain:
+            self.ax.plot(self.xvals, spectra[ipol][ibin])
+          else:
+            self.ax.plot(self.xvals, spectra[ipol][ibin], label=labels[ipol][ibin])
+      self.ax.set_ylim((0, nchan))
+    else:
+      ymax = numpy.amax(spectra)
+      ymin = 1e100
+      for ipol in range(min(2, len(spectra))):
+        for ibin in range(len(spectra[ipol])):
+          ymin = min(ymin, numpy.amin(spectra[ipol][ibin]))
+
+      if ymax == ymin:
+        ymax = ymin + 1
+        spectra[:,0] = 1
+      for ipol in range(len(spectra)):
+        for ibin in range(len(spectra[ipol])):
+          if plain:
+            self.ax.plot(self.xvals, spectra[ipol][ibin])
+          else:
+            self.ax.plot(self.xvals, spectra[ipol][ibin], label=labels[ipol][ibin])
+      self.ax.set_xlim((self.xmin, self.xmax))
+      self.ax.set_ylim((ymin, ymax))
+    if not plain:
+      self.ax.legend()
 
     self.closePlot()
 
