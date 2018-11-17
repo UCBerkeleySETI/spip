@@ -171,9 +171,10 @@ class RepackFoldDaemon(Daemon):
     new["be:phase"]     = header["BACKEND_PHASE"] # Phase convention of backend
 
     # need to know what these mean!
+    new["rcvr:hand"]    = header["RCVR_HAND"] # handedness of the receiver
     new["rcvr:sa"]      = "0"     # Advised by D.Manchester
     new["be:tcycle"]    = "8"     # Correlator cycle time
-    new["be:dcc"]       = "0"     # Downconversion conjugation corrected
+    new["be:dcc"]       = "1"
     new["sub:nsblk"]    = "1"     # Samples/row (SEARCH mode, else 1)
   
     # this needs to come from CAM, hack for now
@@ -182,9 +183,12 @@ class RepackFoldDaemon(Daemon):
     new["ext:bmaj"]     = "0" # Beam major axis [degrees]
     new["ext:bmin"]     = "0" # Beam minor axis [degrees]
 
-    new["ext:obsfreq"]  = header["FREQ"]
-    new["ext:obsbw"]    = header["BW"]
-    new["ext:obsnchan"] = header["NCHAN"]
+    # 31-10-2018 Dick Manchester requested that these parameters be set to 
+    # the values output by the PFB FPGAs, not what DSPSR sees in the header
+    (freq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + str(self.id)].split(":")
+    new["ext:obsfreq"]  = freq
+    new["ext:obsbw"]    = bw
+    new["ext:obsnchan"] = nchan
 
     new["ext:stp_crd1"] = header["RA"]
     new["ext:stp_crd2"] = header["DEC"]
@@ -253,14 +257,6 @@ class RepackFoldDaemon(Daemon):
       rval, lines = self.system(cmd, 2)
       if rval:
         return (rval, "failed to copy obs.header to out_dir: " + str(lines[0]))
-
-    # convert all upper sideband archives to lower sideband
-    if float(self.bw) > 0:
-      cmd = "pam --reverse_freqs -m " + input_file
-      rval, lines = self.system (cmd, 2)
-      if rval:
-        self.log (-1, "RepackFoldDaemon::process_archive " + cmd + " failed: " + str(lines))
-        return (rval, "failed to convert upper sideband to lower sideband")
 
     # convert the timer archive file to psrfits in the output directory
     cmd = "psrconv " + input_file + " -O " + out_dir
@@ -361,12 +357,27 @@ class RepackFoldDaemon(Daemon):
     # count the number of other sub-band directories
     src_dir = os.path.dirname (in_dir)
     self.log (2, "RepackFoldDaemon::fail_observation src_dir=" + src_dir)
-    subdir_count = len(os.listdir(src_dir))
-    self.log (2, "RepackFoldDaemon::fail_observation src_dir subdir_count=" + str(subdir_count))
+    subdir_count = 0
+    try:
+      subdir_count = len(os.listdir(src_dir))
+      self.log (2, "RepackFoldDaemon::fail_observation src_dir subdir_count=" + str(subdir_count))
+    except OSError, e:
+      self.log (2, "RepackFoldDaemon::fail_observation src_dir already deleted")
+      return (0, "")
+
     if subdir_count == 0:
-      os.rmdir(src_dir)
+      try:
+        os.rmdir(src_dir)
+      except OSError, e:
+        self.log(1, "fail_observation: could not remove src_dir: " + str(e))
+        return (0, "")
+
       utc_dir = os.path.dirname (src_dir)
-      os.rmdir(utc_dir)
+      try:
+        os.rmdir(utc_dir)
+      except OSError, e:
+        self.log (1, "fail_observation: could not remove utc_dir: " + str(e))
+        return (0, "")
 
     return (0, "")
 
@@ -414,14 +425,22 @@ class RepackFoldDaemon(Daemon):
 
     # count the number of other sub-band directories
     src_dir = os.path.dirname (in_dir)
+    subdir_count = 0
     self.log (2, "RepackFoldDaemon::finalise_observation src_dir=" + src_dir)
-    subdir_count = len(os.listdir(src_dir))
-    self.log (2, "RepackFoldDaemon::finalise_observation src_dir subdir_count=" + str(subdir_count))
+    try:
+      subdir_count = len(os.listdir(src_dir))
+      self.log (2, "RepackFoldDaemon::finalise_observation src_dir " + \
+                "subdir_count=" + str(subdir_count))
+    except OSError, e:
+      self.log (2, "RepackFoldDaemon::finalise_observation src_dir already deleted")
+      return (0, "")
+
     if subdir_count == 0:
       try:
         os.rmdir(src_dir)
       except OSError, e:
-        self.log (1, "finalise_observation: could not remove src_dir [" + src_dir + "]: " + str(e))
+        self.log(1, "finalise_observation: could not remove src_dir" + \
+                 " [" + src_dir + "]: " + str(e))
         return (0, "")
 
       utc_dir = os.path.dirname (src_dir)
@@ -492,7 +511,7 @@ if __name__ == "__main__":
   else:
     script = RepackFoldStreamDaemon ("uwb_repack_fold", stream_id)
 
-  state = script.configure (DAEMONIZE, DL, "uwb_repack_fold", "uwb_repack_fold") 
+  state = script.configure (DAEMONIZE, DL, "repack_fold", "repack_fold") 
   if state != 0:
     script.quit_event.set()
     sys.exit(state)

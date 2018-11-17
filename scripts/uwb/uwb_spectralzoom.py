@@ -45,7 +45,7 @@ class UWBSpectralZoomDaemon (UWBProcDaemon):
 
     # check if SPECTRALZOOM mode has been requested in the header
     try:
-      spectralzoom = (header["PERFORM_SPECTRALZOOM"] == "1")
+      spectralzoom = (header["PERFORM_SPECTRALZOOM"] in ["1", "true"])
     except KeyError as e:
       spectralzoom = False
 

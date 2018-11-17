@@ -44,7 +44,7 @@ class UWBTransientsDaemon (UWBProcDaemon):
 
     # check if TRANSIENTS mode has been requested in the header
     try:
-      transients = (header["PERFORM_TRANSIENTS"] == "1")
+      transients = (header["PERFORM_TRANSIENTS"] in ["1", "true"])
     except KeyError as e:
       transients = False
 
@@ -67,7 +67,7 @@ class UWBTransientsDaemon (UWBProcDaemon):
     self.out_dir = self.cfg["CLIENT_TRANSIENTS_DIR"] + "/processing/" + beam + "/" + utc_start + "/" + source + "/" + self.cfreq
 
     # configure the command to be run, TODO work out configuration
-    # self.cmd = ""
+    self.cmd = "dada_dbnull -k " + db_key_in + " -s -z"
 
     self.log_prefix = "transients_src"
 

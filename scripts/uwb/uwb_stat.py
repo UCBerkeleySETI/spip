@@ -11,6 +11,7 @@ import sys
 import traceback
 
 from spip_stat import StatDaemon, StatReportingThread
+from spip.config import Config
 
 DAEMONIZE = True
 DL = 1
@@ -28,6 +29,25 @@ class UWBStatDaemon(StatDaemon):
 
         self.histogram_abs_xmax = 1024
 
+    def build_cmd (self):
+
+        # determine the number of channels to be processed by this stream
+        (cfreq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + stream_id].split(":")
+
+        # npol may vary from stream to stream
+        npol = Config.getStreamParam (self.cfg, "NPOL", self.id)
+
+        # this stat command will not change from observation to observation
+        stat_cmd = self.cfg["STREAM_STATS_BINARY"] + \
+                " -k " + self.db_key + \
+                " " + self.stream_config_file + \
+                " -D " + self.stat_dir + \
+                " -n " + nchan + \
+                " -p " + npol 
+
+        return stat_cmd
+
+
 
 ###############################################################################
 
@@ -40,7 +60,7 @@ if __name__ == "__main__":
     # this should come from command line argument
     stream_id = sys.argv[1]
 
-    script = UWBStatDaemon("spip_stat", stream_id)
+    script = UWBStatDaemon("uwb_stat", stream_id)
 
     state = script.configure(DAEMONIZE, DL, "stat", "stat")
 

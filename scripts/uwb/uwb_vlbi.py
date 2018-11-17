@@ -45,7 +45,7 @@ class UWBVlbiDaemon (UWBProcDaemon):
 
     # check if VLBI mode has been requested in the header
     try:
-      vlbi = (header["PERFORM_VLBI"] == "1")
+      vlbi = (header["PERFORM_VLBI"] in ["1", "true"])
     except KeyError as e:
       vlbi = False
 

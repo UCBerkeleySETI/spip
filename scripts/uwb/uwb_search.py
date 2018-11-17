@@ -40,7 +40,7 @@ class UWBSearchDaemon (UWBProcDaemon):
 
     # check if SEARCH mode has been requested in the header
     try:
-      search = (self.header["PERFORM_SEARCH"] == "1")
+      search = (self.header["PERFORM_SEARCH"] in ["1", "true"])
     except KeyError as e:
       search = False
 
@@ -100,10 +100,10 @@ class UWBSearchDaemon (UWBProcDaemon):
     except:
       dm = -1
 
-    nsblk = 1024
+    block_size = 4096
 
     # configure the command to be run
-    self.cmd = "digifits -Q " + db_key_filename + " -cuda " + self.gpu_id + " -nsblk " + str(nsblk)
+    self.cmd = "digifits -Q " + db_key_filename + " -cuda " + self.gpu_id + " -U " + str(block_size)
 
     # handle detection options
     if out_npol == 1 or out_npol == 2 or out_npol == 4:
@@ -115,10 +115,26 @@ class UWBSearchDaemon (UWBProcDaemon):
     else:
       self.log(-1, "ignoring invalid out_npol of " + str(out_npol))
 
+    #channelisation_factor = 1
     # handle channelisation
     if out_nchan > in_nchan:
+      #channelisation_factor = out_nchan / in_nchan
       if out_nchan % in_nchan == 0:
-        self.cmd = self.cmd + " -F " + str(out_nchan) + ":1024"
+        if dm > 0:
+          # get the required channelisation from dmsmear
+          cmd = "dmsmear -d " + str(dm) + " -f " + self.header["FREQ"] + \
+                " -n " + str(out_nchan) + " -b " + self.header["BW"] + \
+                " 2>&1 | grep 'Optimal' | awk '{print $4}'"
+          rval, lines = self.system (cmd, 2)
+          freq_res = int(lines[0])
+          # 16M is a limit
+          while freq_res <= 1024:
+            freq_res = freq_res * 2
+          while (out_nchan * freq_res) > 33554432:
+            freq_res = freq_res / 2
+          self.cmd = self.cmd + " -F " + str(out_nchan) + ":D -x " + str(freq_res)
+        else:
+          self.cmd = self.cmd + " -F " + str(out_nchan) + ":1024"
       else:
         self.log(-1, "Invalid output channelisation")
 
@@ -129,7 +145,23 @@ class UWBSearchDaemon (UWBProcDaemon):
     # handle temporal integration
     out_tsamp_secs = float(out_tsamp) / 1000000
     self.cmd = self.cmd +  " -t " + str(out_tsamp_secs)
+    tscrunch_factor = int(float(out_tsamp) / float(self.header["TSAMP"]))
 
+    # determine nsblk based on output samples per block
+    bytes_per_input_sample = int(self.header["NBIT"]) * int(self.header["NPOL"]) * int(self.header["NDIM"]) * in_nchan
+    self.log(0, "UWBSearchDaemon::prepare bytes_per_input_sample=" + str(bytes_per_input_sample))
+
+    input_samples_per_block = (block_size * 1024 * 1024) / bytes_per_input_sample
+    self.log(0, "UWBSearchDaemon::prepare input_samples_per_block=" + str(input_samples_per_block))
+
+    output_samples_per_block = input_samples_per_block / tscrunch_factor
+    self.log(0, "UWBSearchDaemon::prepare output_samples_per_block=" + str(output_samples_per_block))
+
+    nsblk = int(output_samples_per_block) * 2
+    self.log(0, "UWBSearchDaemon::prepare nsblk=" + str(nsblk))
+
+    self.cmd = self.cmd + " -nsblk " + str(nsblk)
+    
     # handle output sub-int length, need lots of precision
     block_length_seconds = out_tsamp_secs * nsblk
     blocks_per_subint = int(math.floor(out_tsubint / block_length_seconds))
@@ -137,10 +169,8 @@ class UWBSearchDaemon (UWBProcDaemon):
     self.cmd = self.cmd + " -L " + format(subint_length_seconds, ".16f")
 
     # handle a custom DM
-    if dm >= 0:
+    if dm > 0:
       self.cmd = self.cmd + " -do_dedisp true -D " + str(dm)
-      # set a minimum kernel length
-      self.cmd = self.cmd + " -x 2048"
 
     self.log(1, self.cmd)
     self.log_prefix = "search_src"

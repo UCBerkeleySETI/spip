@@ -40,7 +40,7 @@ class UWBBasebandDaemon (UWBProcDaemon):
 
     # check if BASEBAND mode has been requested in the header
     try:
-      baseband = (self.header["PERFORM_BASEBAND"] == "1")
+      baseband = (self.header["PERFORM_BASEBAND"] in ["1", "true"])
     except KeyError as e:
       baseband = False
     

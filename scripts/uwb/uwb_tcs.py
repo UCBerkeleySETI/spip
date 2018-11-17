@@ -24,6 +24,7 @@ class UWBTCSServerDaemon(TCSServerDaemon):
 
   def __init__ (self, name):
     TCSServerDaemon.__init__(self, name)
+    self.valid_pulsars = []
 
   def range_inclusive (self, lower, upper, value):
     """ Test if value is between range of lower to upper inclusive. """
@@ -37,8 +38,12 @@ class UWBTCSServerDaemon(TCSServerDaemon):
   def power_of_two (self, value):
     """ Test if value is a power of two. """
 
-    if value == math.pow(math.log(value,2),2):
-      return (False, str(value) + " was not a lower of two")
+    log2_value = math.log (value,2)
+    power2_value = math.pow(2, int(log2_value))
+    self.log(2, "UWBTCSServerDaemon::power_of_two value=" + str(value) + \
+             " log2_value=" + str(log2_value) + " power2_value=" + str(power2_value))
+    if not int(value) == int(power2_value):
+      return (False, str(value) + " was not a power of two")
     return (True, "")
 
   def power_of_two_range_inclusive (self, lower, upper, value):
@@ -85,7 +90,8 @@ class UWBTCSServerDaemon(TCSServerDaemon):
 
   def validate_continuum_configuration (self, config):
 
-    if config["processing_modes"]["continuum"]["#text"] != "1":
+    mode_active = config["processing_modes"]["continuum"]["#text"]
+    if not ((mode_active == "1") or (mode_active == "true")):
       return (True, "")
 
     c = config["continuum_processing_parameters"]
@@ -111,29 +117,29 @@ class UWBTCSServerDaemon(TCSServerDaemon):
     # validate the maximum data rate
     nchan = int(c["output_nchan"]["#text"])
     nbit = 32
-    tsamp = int(c["output_tsamp"]["#text"])
+    tsamp = float(c["output_tsamp"]["#text"])
     npol = int(c["output_npol"]["#text"])
 
-    data_rate_bits_per_second = (nchan * nbit * npol) / tsamp
+    data_rate_bits_per_second = float (nchan * nbit * npol) / tsamp
     self.log (1, "UWBTCSServerDaemon::validate_continuum_configuration data_rate=" + str(data_rate_bits_per_second/1e9) + " Gb/s")
-    data_rate_limit = 1073741824
+    data_rate_limit = 536870912
     if data_rate_bits_per_second > data_rate_limit:
-      return (False, prefix + " data rate [" + str(data_rate_bits_per_second/1e9) + "] exceeds limit [" +
-str(data_rate_limit/1e9) + "]")
+      return (False, prefix + " data rate [" + str(data_rate_bits_per_second/1e9) + "] exceeds limit [" + str(data_rate_limit/1e9) + "]")
 
 
     return (True, "")
 
   def validate_search_configuration (self, config):
 
-    if config["processing_modes"]["search"]["#text"] != "1":
+    mode_active = config["processing_modes"]["search"]["#text"]
+    if not ((mode_active == "1") or (mode_active == "true")):
       return (True, "")
 
     c = config["search_processing_parameters"]
 
     prefix = "stream0, search, "
 
-    (ok, message) = self.power_of_two_range_inclusive (64, 4096, int(c["output_nchan"]["#text"]))
+    (ok, message) = self.power_of_two_range_inclusive (8, 4096, int(c["output_nchan"]["#text"]))
     if not ok:
       return (False, prefix + "output_nchan: " + message)
 
@@ -149,7 +155,7 @@ str(data_rate_limit/1e9) + "]")
     if not ok:
       return (False, prefix + "output_tsamp: " + message)
 
-    (ok, message) = self.range_inclusive (10, 3600, int(c["output_tsubint"]["#text"]))
+    (ok, message) = self.range_inclusive (15, 3600, int(c["output_tsubint"]["#text"]))
     if not ok:
       return (False, prefix + "output_tsubint: " + message)
 
@@ -179,8 +185,10 @@ str(data_rate_limit/1e9) + "]")
 
   def validate_fold_configuration (self, config, source_config):
 
-    if config["processing_modes"]["fold"]["#text"] != "1":
+    mode_active = config["processing_modes"]["fold"]["#text"]
+    if not ((mode_active == "1") or (mode_active == "true")):
       return (True, "")
+
     c = config["fold_processing_parameters"]
 
     (ok, message) = self.power_of_two_range_inclusive (64, 4096, int(c["output_nchan"]["#text"]))
@@ -195,9 +203,13 @@ str(data_rate_limit/1e9) + "]")
     if not ok:
       return (False, "stream0, fold, output_nbin: " + message)
 
-    (ok, message) = self.in_list([1,2,4], int(c["output_npol"]["#text"]))
+    (ok, message) = self.in_list([-1,1,2,3,4], int(c["output_npol"]["#text"]))
     if not ok:
       return (False, "stream0, fold, output_npol: " + message)
+
+    (ok, message) = self.range_inclusive (8, 60, int(c["output_tsubint"]["#text"]))
+    if not ok:
+      return (False, "stream0, fold, output_tsubint: " + message)
 
     (ok, message) = self.in_list(["PSR", "CAL"], c["mode"]["#text"])
     if not ok:
@@ -226,9 +238,12 @@ str(data_rate_limit/1e9) + "]")
     # test validity of target name
     target = source_config["name"]["#text"]
     if c["mode"]["#text"] == "PSR":
-      (ok, message) = catalog.test_pulsar_valid (target)
-      if not ok:
-        return (False, "target " + target + " did not exist in pulsar catalgoue")
+      if not target in self.valid_pulsars:
+        (ok, message) = catalog.test_pulsar_valid (target)
+        if not ok:
+          return (False, "target " + target + " did not exist in pulsar catalgoue")
+        else:
+          self.valid_pulsars.append(target)
     #else:
     #  fluxcal_on_file = self.script.cfg["CONFIG_DIR"] + "/fluxcal.on"
     #  fluxcal_off_file = self.script.cfg["CONFIG_DIR"] + "/fluxcal.off"
@@ -256,7 +271,7 @@ if __name__ == "__main__":
 
   # ensure the recv daemons can bind as they see fit
   script.cpu_list = "-1"
-  state = script.configure (DAEMONIZE, DL, "uwb_tcs", "uwb_tcs")
+  state = script.configure (DAEMONIZE, DL, "tcs", "tcs")
   if state != 0:
     sys.exit(state)
 

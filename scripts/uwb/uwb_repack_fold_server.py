@@ -16,7 +16,7 @@ import sys
 import traceback
 
 # import from spip_repack
-from spip.repack import RepackServerDaemon, RepackReportingThread
+from spip_repack import RepackServerDaemon, RepackReportingThread
 
 DAEMONIZE = True
 DL = 1
@@ -46,7 +46,7 @@ if __name__ == "__main__":
         print "ERROR: UWBRepackFoldServerDaemon can only operate on server"
         sys.exit(1)
     else:
-        script = UWBRepackFoldServerDaemon("uwb_repack_fold")
+        script = UWBRepackFoldServerDaemon("uwb_repack_fold_server")
 
     state = script.configure(DAEMONIZE, DL, "uwb_repack_fold",
                              "uwb_repack_fold")

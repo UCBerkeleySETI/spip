@@ -525,7 +525,7 @@ class RepackContinuumServerDaemon (RepackContinuumDaemon, ServerBased):
         header_sub = Config.readCFGFileIntoDict (subband_header_file)
         header = Config.mergeHeaderFreq (header, header_sub)
       else:
-        return (1, "not all sub-band header files present")
+          return (1, "not all sub-band header files present: missing " + subband_header_file)
 
     # write the combined header
     self.log (2, "RepackContinuumServerDaemon::acquire_obs_header writing header to " + in_dir + "/" + "obs.header")
@@ -1264,7 +1264,7 @@ if __name__ == "__main__":
   else:
     script = RepackContinuumStreamDaemon ("uwb_repack_continuum", stream_id)
 
-  state = script.configure (DAEMONIZE, DL, "uwb_repack_continuum", "uwb_repack_continuum") 
+  state = script.configure (DAEMONIZE, DL, "repack_continuum", "repack_continuum") 
   if state != 0:
     script.quit_event.set()
     sys.exit(state)
