@@ -80,29 +80,49 @@ class TCSReportingThread (ReportingThread):
       xml += "<expected_length units='seconds'>" + o["tobs"]["#text"] + "</expected_length>"
       xml += "</observation_parameters>"
 
-      try:
-        modes = c["processing_modes"]
-        for k in modes.keys():
-          key = modes[k]["@key"]
-          val = modes[k]["#text"]
+      o = c["calibration_parameters"]
+      xml += "<calibration_parameters>"
+      xml += "<signal>" + o["signal"]["#text"] + "</signal>"
+      xml += "<freq units='seconds'>" + o["freq"]["#text"] + "</freq>"
+      xml += "<phase units='periods'>" + o["phase"]["#text"] + "</phase>"
+      xml += "<duty_cycle units='periods'>" + o["duty_cycle"]["#text"] + "</duty_cycle>"
+      xml += "<epoch>" + o["epoch"]["#text"] + "</epoch>"
+      xml += "</calibration_parameters>"
 
-          mode_xml = ""
-          # inject processing parameters into header
-          if val == "true" or val == "1":
-            mode_xml += "<" + k + "_processing_parameters>"
-            p = c[k + "_processing_parameters"]
-            for l in p.keys():
-              try:
-                pval = p[l]["#text"]
-              except KeyError as e:
-                val = ''
-              mode_xml += "<" + l + ">" + pval + "</" + l + ">"
-            mode_xml += "</" + k + "_processing_parameters>"
-          xml += mode_xml
-      except:
-        self.script.log (2, "TCSReportingThread::parse_message exception")
+      # extract the stream informatiom
+      s = c["stream_configuration"]
+
+      # determine the number of streams present
+      nstream = s["nstream"]["#text"]
+
+      xml += "<stream_configuration>"
+      xml += "<nstream>" + nstream + "</nstream>"
+      xml += "</stream_configuration>"
+
+      try:
+        proc_modes = {"fold": False, "search": False, "continuum": False}
+        for istream in range(int(nstream)):
+          stream_xml = c["stream" + str(istream)]
+
+          modes = stream_xml["processing_modes"]
+          self.script.log(2, "modes=" + str(modes))
+          for k in modes.keys():
+            key = modes[k]["@key"]
+            val = modes[k]["#text"]
+            self.script.log(2, "evaluating k=" + str(k) + " key=" + str(key) + " val=" + str(val))
+            # inject processing parameters into header
+            if val == "true" or val == "1":
+              proc_modes[k] = True
+      except Exception as e:
+        self.script.log(1, "TCSReportingThread::parse_message " + str(e))
+
+      xml += "<processing_modes>"
+      for proc_mode in proc_modes.keys():
+        xml += "<" + proc_mode + ">" + str(proc_modes[proc_mode]) + "</" + proc_mode + ">"
+      xml += "</processing_modes>"
+
       xml += "</beam>"
-      
+
       self.beam_states[beam]["lock"].release()
 
     xml += "</tcs_state>\r\n"
@@ -160,7 +180,24 @@ class TCSDaemon(Daemon):
         self.beam_states[b]["config"]["observation_parameters"]["tobs"]["#text"] = header["TOBS"]
         self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"] = header["UTC_START"]
         self.beam_states[b]["config"]["observation_parameters"]["utc_stop"]["#text"] = ""
-        #self.beam_states[b]["config"]["observation_parameters"]["utc_stop"]["#text"] = header["UTC_STOP"]
+
+        self.beam_states[b]["config"]["calibration_parameters"]["signal"]["#text"] = ""
+        self.beam_states[b]["config"]["calibration_parameters"]["freq"]["#text"] = ""
+        self.beam_states[b]["config"]["calibration_parameters"]["phase"]["#text"] = ""
+        self.beam_states[b]["config"]["calibration_parameters"]["duty_cycle"]["#text"] = ""
+        self.beam_states[b]["config"]["calibration_parameters"]["epoch"]["#text"] = ""
+        self.beam_states[b]["config"]["calibration_parameters"]["tsys_avg_time"]["#text"] = ""
+        self.beam_states[b]["config"]["calibration_parameters"]["tsys_freq_resolution"]["#text"] = ""
+
+        self.beam_states[b]["config"]["calibration_parameters"]["signal"]["#text"] = header["CAL_SIGNAL"]
+        self.beam_states[b]["config"]["calibration_parameters"]["freq"]["#text"] = header["CAL_FREQ"]
+        self.beam_states[b]["config"]["calibration_parameters"]["phase"]["#text"] = header["CAL_PHASE"]
+        self.beam_states[b]["config"]["calibration_parameters"]["duty_cycle"]["#text"] = header["CAL_DUTY_CYCLE"]
+        self.beam_states[b]["config"]["calibration_parameters"]["epoch"]["#text"] = header["CAL_EPOCH"]
+        self.beam_states[b]["config"]["calibration_parameters"]["tsys_avg_time"]["#text"] = header["TSYS_AVG_TIME"]
+        self.beam_states[b]["config"]["calibration_parameters"]["tsys_freq_resolution"]["#text"] = header["TSYS_FREQ_RES"]
+
+        self.beam_states[b]["config"]["stream_configuration"]["nstream"]["#text"] = "0"
 
         self.beam_states[b]["state"] = "Idle"
 
@@ -213,27 +250,43 @@ class TCSDaemon(Daemon):
           # an accepted connection must have generated some data
           else:
             try:
-              raw = handle.recv(131072)
 
-              message = raw.strip()
+              to_read = 4096
+              raw = handle.recv(to_read)
+              self.log(2, "TCSDaemon::commandThread handle.recv returned " + str(len(raw)) + " bytes")
+              message = raw
+              while not raw.endswith("\n") and len(raw) > 0:
+                self.log(2, "TCSDaemon::commandThread handle.recv(" + str(to_read) + ")")
+                raw = handle.recv(to_read)
+                self.log(2, "TCSDaemon::commandThread handle.recv returned " + str(len(raw)) + " bytes")
+                message = message + raw
+
+              self.log(2, "TCSDaemon::commandThread handle.recv message received")
+              message = message.strip()
+              self.log(2, "TCSDaemon::commandThread handle.recv message len " + str(len(message)))
 
               if len(message) > 0:
                 self.log(2, "TCSDaemon::commandThread message='" + message+"'")
                 try:
+                  self.log(2, "xmltodict.parse(message)")
                   xml = xmltodict.parse(message)
 
                   self.log(3, "<- " + str(xml))
                   # Parse XML for correctness
+                  self.log(2, "parse_obs_cmd (xml, id)")
                   (valid, command, error) = self.parse_obs_cmd (xml, id)
+                  self.log(1, "valid=" + str(valid) + " command=" + str(command))
+                  self.log(1, "<- " + command)
 
                 except ExpatError as e:
-                  self.log(2, "TCSDaemon::commandThread message unparseable '" + message + "'")
+                  self.log(1, "TCSDaemon::commandThread message unparseable '" + message + "'")
+                  error = str(e)
+                  self.log(1, "TCSDaemon::commandThread parse error=" + error)
                   valid = False
+                  self.log(1, "<- unknown, XML parse error")
 
                 self.log(2, "TCSDaemon::commandThread valid=" + str(valid) \
                          + " command=" + command + " error=" + str(error))
-
-                self.log(1, "<- " + command)
 
                 if valid :
                   if command == "start":
@@ -304,9 +357,10 @@ class TCSDaemon(Daemon):
               self.log(2, "TCSDaemon::parse_obs_cmd received configuration for beam " + b)
               self.beam_states[b]["lock"].acquire()
               self.beam_states[b]["config"] = copy.deepcopy(xml['obs_cmd'])
-              self.log (2, "TCSDaemon::parse_obs_cmd command==configure UTC_START=" + self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"])
+              self.log (1, "TCSDaemon::parse_obs_cmd command==configure UTC_START=" + 
+                        self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"])
               (ok, message) = self.validate_config (self.beam_states[b]["config"])
-              self.log (2, "TCSDaemon::parse_obs_cmd ok=" + str(ok) + " message=" + message)
+              self.log (1, "TCSDaemon::parse_obs_cmd ok=" + str(ok) + " message=" + message)
               if ok:
                 self.beam_states[b]["state"] = "Configured"
                 self.beam_states[b]["lock"].release()
@@ -323,10 +377,12 @@ class TCSDaemon(Daemon):
 
               self.beam_states[b]["lock"].acquire()
               self.beam_states[b]["state"] = "Starting"
-              self.log (2, "TCSDaemon::parse_obs_cmd command==start config UTC_START=" + self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"])
+              self.log (2, "TCSDaemon::parse_obs_cmd command==start config UTC_START=" + 
+                        self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"])
               utc_start = xml['obs_cmd']['observation_parameters']['utc_start']['#text']
               self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"] = utc_start
-              self.log (2, "TCSDaemon::parse_obs_cmd command==start config UTC_START=" + self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"])
+              self.log (2, "TCSDaemon::parse_obs_cmd command==start config UTC_START=" + 
+                        self.beam_states[b]["config"]["observation_parameters"]["utc_start"]["#text"])
               self.beam_states[b]["lock"].release()
 
             elif command == "stop":
@@ -365,7 +421,7 @@ class TCSDaemon(Daemon):
         self.log(2, "TCSDaemon::issue_start_cmd beam name=" + b)
         if b in self.beam_states.keys():
 
-          self.log(1, "TCSDaemon::issue_start_cmd config=" + str(self.beam_states[b]["config"].keys()))
+          self.log(2, "TCSDaemon::issue_start_cmd config=" + str(self.beam_states[b]["config"].keys()))
 
           obs_config = {}
 
@@ -396,7 +452,7 @@ class TCSDaemon(Daemon):
             self.log(1, "TCSDaemon::issue_start_cmd utc_start=" + utc_start)
 
           else:
-            self.log(1, "TCSDaemon::issue_start_cmd utc_start already set to =" + o["utc_start"]["#text"])
+            self.log(1, "TCSDaemon::issue_start_cmd utc_start already set " + o["utc_start"]["#text"])
 
           for k in o.keys():
             key = o[k]["@key"]
@@ -406,6 +462,21 @@ class TCSDaemon(Daemon):
               val = ''
             obs_config[key] = val
             self.log(1, key + "=" + val)
+
+          # add the calibration parameters
+          o = self.beam_states[b]["config"]["calibration_parameters"]
+          for k in o.keys():
+            key = o[k]["@key"]
+            try:
+              val = o[k]["#text"]
+            except KeyError as e:
+              val = ''
+            obs_config[key] = val
+            self.log(1, key + "=" + val)
+
+            # hack for DSPSR requiring this parameter
+            if key == "CAL_FREQ":
+              obs_config["CALFREQ"] = val
 
           # extract the stream informatiom
           s = self.beam_states[b]["config"]["stream_configuration"]
@@ -421,6 +492,7 @@ class TCSDaemon(Daemon):
           # work out which streams correspond to these beams
           for istream in range(int(nstream)):
 
+            stream_active = False
             stream_xml = self.beam_states[b]["config"]["stream" + str(istream)]
 
             # make a deep copy of the common configuration
@@ -435,21 +507,22 @@ class TCSDaemon(Daemon):
               except KeyError as e:
                 val = ''
               stream_config[key] = val
-              self.log(1, key + "=" + val)
+              self.log(2, key + "=" + val)
 
             modes = stream_xml["processing_modes"]
             for k in modes.keys():
               key = modes[k]["@key"]
               val = modes[k]["#text"]
               stream_config[key] = val
-              self.log(1, key + "=" + val)
+              self.log(2, key + "=" + val)
 
               # inject processing parameters into header
               if val == "true" or val == "1":
                 if not (k in stream_modes.keys()):
                   stream_modes[k] = []
                 stream_modes[k].append(istream)
-                self.log (1, "TCSDaemon::issue_start_cmd mode=" + k)
+                stream_active = True
+                self.log (2, "TCSDaemon::issue_start_cmd mode=" + k)
                 p = stream_xml[k + "_processing_parameters"]
                 for l in p.keys():
                   pkey = p[l]["@key"]
@@ -458,7 +531,7 @@ class TCSDaemon(Daemon):
                   except KeyError as e:
                     val = ''
                   stream_config[pkey] = pval
-                  self.log(1, pkey + "=" + pval)
+                  self.log(2, pkey + "=" + pval)
 
             # ensure the start command is set
             stream_config["COMMAND"] = "START"
@@ -469,15 +542,15 @@ class TCSDaemon(Daemon):
 
             (host, beam_idx, subband) = self.cfg["STREAM_"+str(istream)].split(":")
             beam = self.cfg["BEAM_" + beam_idx]
-            self.log(2, "TCSDaemon::issue_start_cmd host="+host+" beam="+beam+" subband="+subband)
 
             # connect to streams for this beam only
-            if beam == b:
+            if stream_active and beam == b:
+              self.log(2, "TCSDaemon::issue_start_cmd host="+host+" beam="+beam+" subband="+subband)
 
               # control port the this recv stream
               ctrl_port = int(self.cfg["STREAM_CTRL_PORT"]) + istream
 
-              self.log(1, host + ":"  + str(ctrl_port) + " <- start")
+              self.log(2, host + ":"  + str(ctrl_port) + " <- start")
 
               # connect to recv agent and provide observation configuration
               self.log(2, "TCSDaemon::issue_start_cmd openSocket("+host+","+str(ctrl_port)+")")
@@ -636,8 +709,10 @@ class TCSServerDaemon (TCSDaemon, ServerBased):
 
       self.beam_states[b]["config"]["source_parameters"] = {}
       self.beam_states[b]["config"]["observation_parameters"] = {}
+      self.beam_states[b]["config"]["calibration_parameters"] = {}
       self.beam_states[b]["config"]["custom_parameters"] = {}
       self.beam_states[b]["config"]["processing_modes"] = {}
+      self.beam_states[b]["config"]["stream_configuration"] = {}
 
       self.beam_states[b]["config"]["source_parameters"]["name"] = {"@key":"SOURCE", "@epoch":"J2000", "#text":""}
       self.beam_states[b]["config"]["source_parameters"]["ra"] = {"@key":"RA", "@units":"hhmmss", "#text":""}
@@ -649,6 +724,14 @@ class TCSServerDaemon (TCSDaemon, ServerBased):
       self.beam_states[b]["config"]["observation_parameters"]["tobs"] = {"@key":"TOBS", "#text":""}
       self.beam_states[b]["config"]["observation_parameters"]["mode"] = {"@key":"MODE", "#text":""}
       self.beam_states[b]["config"]["observation_parameters"]["calfreq"] = {"@key":"CALFREQ", "#text":""}
+      self.beam_states[b]["config"]["calibration_parameters"]["signal"] = {"@key":"CAL_SIGNAL", "#text":""}
+      self.beam_states[b]["config"]["calibration_parameters"]["freq"] = {"@key":"CAL_FREQ", "#text":""}
+      self.beam_states[b]["config"]["calibration_parameters"]["phase"] = {"@key":"CAL_PHASE", "#text":""}
+      self.beam_states[b]["config"]["calibration_parameters"]["duty_cycle"] = {"@key":"CAL_DUTY_CYCLE", "#text":""}
+      self.beam_states[b]["config"]["calibration_parameters"]["epoch"] = {"@key":"CAL_EPOCH", "#text":""}
+      self.beam_states[b]["config"]["calibration_parameters"]["tsys_avg_time"] = {"@key":"TSYS_AVG_TIME", "#text":""}
+      self.beam_states[b]["config"]["calibration_parameters"]["tsys_freq_resolution"] = {"@key":"TSYS_FREQ_RES", "#text":""}
+      self.beam_states[b]["config"]["stream_configuration"]["nstream"] = {"@key":"NSTREAM", "#text":"0"}
 
       self.beam_states[b]["state"] = "Idle"
       self.beam_states[b]["lock"] = threading.Lock()
@@ -669,6 +752,7 @@ class TCSBeamDaemon (TCSDaemon, BeamBased):
     self.beam_states[b]["config"]["observation_parameters"] = {}
     self.beam_states[b]["config"]["custom_parameters"] = {}
     self.beam_states[b]["config"]["processing_parameters"] = {}
+    self.beam_states[b]["config"]["stream_configuration"] = {}
 
     self.beam_states[b]["config"]["source_parameters"]["name"] = {"@key":"SOURCE", "@epoch":"J2000", "#text":""}
     self.beam_states[b]["config"]["source_parameters"]["ra"] = {"@key":"RA", "@units":"hhmmss", "#text":""}
@@ -680,6 +764,15 @@ class TCSBeamDaemon (TCSDaemon, BeamBased):
     self.beam_states[b]["config"]["observation_parameters"]["tobs"] = {"@key":"TOBS", "#text":""}
     self.beam_states[b]["config"]["observation_parameters"]["mode"] = {"@key":"MODE", "#text":""}
     self.beam_states[b]["config"]["observation_parameters"]["calfreq"] = {"@key":"CALFREQ", "#text":""}
+    self.beam_states[b]["config"]["calibration_parameters"]["signal"] = {"@key":"CAL_SIGNAL", "#text":""}
+    self.beam_states[b]["config"]["calibration_parameters"]["freq"] = {"@key":"CAL_FREQ", "#text":""}
+    self.beam_states[b]["config"]["calibration_parameters"]["phase"] = {"@key":"CAL_PHASE", "#text":""}
+    self.beam_states[b]["config"]["calibration_parameters"]["duty_cycle"] = {"@key":"CAL_DUTY_CYCLE", "#text":""}
+    self.beam_states[b]["config"]["calibration_parameters"]["epoch"] = {"@key":"CAL_EPOCH", "#text":""}
+    self.beam_states[b]["config"]["calibration_parameters"]["tsys_avg_time"] = {"@key":"TSYS_AVG_TIME", "#text":""}
+    self.beam_states[b]["config"]["calibration_parameters"]["tsys_freq_resolution"] = {"@key":"TSYS_FREQ_RES", "#text":""}
+    self.beam_states[b]["config"]["stream_configuration"]["nstream"] = {"@key":"NSTREAM", "#text":"0"}
+
 
     self.beam_states[b]["state"] = "Idle"
     self.beam_states[b]["lock"] = threading.Lock()
