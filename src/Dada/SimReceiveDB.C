@@ -79,16 +79,22 @@ int spip::SimReceiveDB::configure (const char * config_str)
 
   // now write new params to header
   uint64_t resolution = format->get_resolution();
+  if (verbose)
+    cerr << "spip::SimReceiveDB::configure resolution=" << resolution << endl;
+
   if (config.set("RESOLUTION", "%lu", resolution) < 0)
     throw invalid_argument ("failed to write RESOLUTION to config");
 
   const uint64_t data_bufsz = db->get_data_bufsz();
+  if (verbose)
+    cerr << "spip::SimReceiveDB::configure datablock bufsz=" << data_bufsz << endl;
 
   // generate a buffer full of noise that is twice as large as out block size
+  const uint64_t noise_buffer_size = 2 * data_bufsz;
   if (verbose)
-    cerr << "spip::SimReceiveDB::configure generating noise buffer" << endl;
-
-  format->set_noise_buffer_size (2 * data_bufsz);
+    cerr << "spip::SimReceiveDB::configure generating noise buffer "
+         << noise_buffer_size << " bytes"<< endl;
+  format->set_noise_buffer_size (noise_buffer_size);
   format->generate_noise_buffer (nbit);
 
   if (verbose)

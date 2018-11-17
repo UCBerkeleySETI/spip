@@ -44,6 +44,8 @@ namespace spip
       const char * get_header() { return reinterpret_cast<const char *>(header); } ;
 
 #ifdef HAVE_CUDA
+      int get_device() { return device_id; };
+
       void register_cuda();
 
       void unregister_cuda();

@@ -157,6 +157,10 @@ void spip::UDPFormat::fill_noise (char * buf, size_t nbytes)
   int remainder = start_byte % noise_buffer_alignment;
   start_byte -= remainder;
 
+  // but don't rewind
+  if (start_byte < 0)
+    start_byte = 0;
+
   // copy from the buffer
   memcpy (buf, noise_buffer + start_byte, nbytes);
 }

@@ -14,7 +14,7 @@ namespace spip {
 
       UDPSocketSend ();
 
-      ~UDPSocketSend ();
+      virtual ~UDPSocketSend ();
 
       // open the socket
       void open (std::string, int, std::string);
