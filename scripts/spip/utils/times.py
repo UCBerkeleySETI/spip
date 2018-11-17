@@ -26,6 +26,10 @@ def getCurrentTime(toadd=0):
   now_str = now.strftime("%Y-%m-%d-%H:%M:%S")
   return now_str
 
+def getCurrentTimeUnix():
+  now = datetime.today()
+  return mktime(now.timetuple())
+
 def getUTCTime(toadd=0):
   now = datetime.utcnow()
   if (toadd > 0):
