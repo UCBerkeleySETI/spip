@@ -93,9 +93,14 @@ class RecvSimDaemon(Daemon,StreamBased):
 
   def main (self):
 
+    db_id = self.cfg["RECEIVING_DATA_BLOCK"]
+    db_prefix = self.cfg["DATA_BLOCK_PREFIX"]
+    num_stream = self.cfg["NUM_STREAM"]
+    self.db_key = SMRBDaemon.getDBKey (db_prefix, self.id, num_stream, db_id)
+
     # wait for the SMRB to exist before continuing
-    self.log(2, "main: self.waitForSMRB()")
-    smrb_exists = self.waitForSMRB()
+    self.log(2, "main: SMRBDaemon.waitForSMRB()")
+    smrb_exists = SMRBDaemon.waitForSMRB(self.db_key, self)
 
     # don't proceed without an SMRB
     if not smrb_exists:
@@ -163,37 +168,6 @@ class RecvSimDaemon(Daemon,StreamBased):
           self.log (-2, cmd + " failed with return value " + str(rval))
 
       log_pipe.close ()
-
-  # wait for the SMRB to be created
-  def waitForSMRB (self):
-
-    db_id = self.cfg["RECEIVING_DATA_BLOCK"]
-    db_prefix = self.cfg["DATA_BLOCK_PREFIX"]
-    num_stream = self.cfg["NUM_STREAM"]
-    self.db_key = SMRBDaemon.getDBKey (db_prefix, self.id, num_stream, db_id)
-
-    # port of the SMRB daemon for this stream
-    smrb_port = SMRBDaemon.getDBMonPort(self.id)
-
-    # wait up to 30s for the SMRB to be created
-    smrb_wait = 60
-
-    smrb_exists = False
-    while not smrb_exists and smrb_wait > 0 and not self.quit_event.isSet():
-
-      self.log(2, "trying to open connection to SMRB")
-      smrb_sock = sockets.openSocket (DL, "localhost", smrb_port, 1)
-      if smrb_sock:
-        smrb_sock.send ("smrb_status\r\n")
-        junk = smrb_sock.recv (65536)
-        smrb_sock.close()
-        smrb_exists = True
-      else:
-        sleep (1)
-        smrb_wait -= 1
-
-    return smrb_exists
-
 
   def getConfiguration (self):
 
