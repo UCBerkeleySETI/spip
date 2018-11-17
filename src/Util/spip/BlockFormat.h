@@ -57,6 +57,9 @@ namespace spip {
 
       double bw;
 
+      // output bandwidth, may be changed by flipping sideband
+      double out_bw;
+
       double tsamp;
 
       unsigned nbin;
