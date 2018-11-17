@@ -167,13 +167,17 @@ class StatDaemon(Daemon,StreamBased):
     self.results["lock"] = threading.Lock()
     self.results["valid"] = False
 
+    self.results["hg_npol"] = self.cfg["NPOL"]
+    self.results["hg_ndim"] = self.cfg["NDIM"]
+
+
     (host, beam_id, subband_id) = self.cfg["STREAM_" + id].split(":")
     self.beam_name = self.cfg["BEAM_" + beam_id]
 
     (cfreq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + subband_id].split(":")
     self.cfreq = cfreq
 
-    self.gen_timeseries = False
+    self.gen_timeseries = True
     self.gen_freqtime = True
     self.gen_bandpass = True
     self.gen_histogram = True
@@ -195,19 +199,19 @@ class StatDaemon(Daemon,StreamBased):
 
     if self.gen_histogram:
       self.hg_plot = HistogramPlot()
-      self.valid_plots.appen("histogram")
+      self.valid_plots.append("histogram")
 
     if self.gen_bandpass:
       self.bp_plot = BandpassPlot()
-      self.valid_plots.appen("bandpass")
+      self.valid_plots.append("bandpass")
 
     if self.gen_timeseries:
       self.ts_plot = TimeseriesPlot()
-      self.valid_plots.appen("timeseries")
+      self.valid_plots.append("timeseries")
 
     if self.gen_freqtime:
       self.ft_plot = FreqTimePlot()
-      self.valid_plots.appen("freqtime")
+      self.valid_plots.append("freqtime")
 
     # stats files are stored in flat directory structure
     # stats_dir / beam / cfreq
@@ -217,18 +221,18 @@ class StatDaemon(Daemon,StreamBased):
 
     # get the data block keys
     db_prefix  = self.cfg["DATA_BLOCK_PREFIX"]
-    db_id      = self.cfg["PROCESSING_DATA_BLOCK"]
+    db_id      = self.cfg["RECEIVING_DATA_BLOCK"]
     num_stream = self.cfg["NUM_STREAM"]
     stream_id  = str(self.id)
     self.log (2, "StatDaemon::main stream_id=" + str(self.id))
-    db_key     = SMRBDaemon.getDBKey (db_prefix, stream_id, num_stream, db_id)
-    self.log (2, "StatDaemon::main db_key=" + db_key)
+    self.db_key = SMRBDaemon.getDBKey (db_prefix, stream_id, num_stream, db_id)
+    self.log (2, "StatDaemon::main db_key=" + self.db_key)
 
     # start dbstats in a separate thread
-    stat_dir = self.processing_dir + "/" + self.beam_name + "/" + self.cfreq
+    self.stat_dir = self.processing_dir + "/" + self.beam_name + "/" + self.cfreq
 
-    if not os.path.exists(stat_dir):
-      os.makedirs(stat_dir, 0755)
+    if not os.path.exists(self.stat_dir):
+      os.makedirs(self.stat_dir, 0755)
 
     # configure the histogram plot with all channels included
     self.hg_plot.configure (-1, self.histogram_abs_xmax)
@@ -249,13 +253,13 @@ class StatDaemon(Daemon,StreamBased):
     log_port = int(self.cfg["SERVER_LOG_PORT"])
 
     # stat will use the stream config file created for the recv command
-    stream_config_file = "/tmp/spip_stream_" + str(self.id) + ".cfg"
-    while (not os.path.exists(stream_config_file)):
-      self.log (2, "StatDaemon::main waiting for stream_config file [" + stream_config_file +"] to be created by recv")
+    self.stream_config_file = "/tmp/spip_stream_" + str(self.id) + ".cfg"
+    while (not os.path.exists(self.stream_config_file)):
+      self.log (2, "StatDaemon::main waiting for stream_config file [" + self.stream_config_file +"] to be created by recv")
       time.sleep(1)    
 
-    self.log(2, "main: self.waitForSMRB()")
-    smrb_exists = self.waitForSMRB()
+    self.log (2, "StatDaemon::main wait_for_smrb()")
+    smrb_exists = SMRBDaemon.waitForSMRB(self.db_key, self)
 
     if not smrb_exists:
       self.log(-2, "smrb["+str(self.id)+"] no valid SMRB with " +
@@ -263,12 +267,7 @@ class StatDaemon(Daemon,StreamBased):
       self.quit_event.set()
       return
 
-    # determine the number of channels to be processed by this stream
-    (cfreq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + stream_id].split(":")
-
-    # this stat command will not change from observation to observation
-    stat_cmd = self.cfg["STREAM_STATS_BINARY"] + " -k " + db_key + \
-               " " + stream_config_file + " -D  " + stat_dir + " -n " + nchan
+    stat_cmd = self.build_cmd()
 
     while (not self.quit_event.isSet()):
 
@@ -280,12 +279,14 @@ class StatDaemon(Daemon,StreamBased):
       stat_log_pipe.connect()
 
       # add this binary to the list of active commands
-      self.binary_list.append (self.cfg["STREAM_STATS_BINARY"] + " -k " + db_key)
+      kill_cmd = self.cfg["STREAM_STATS_BINARY"] + " -k " + self.db_key
+      self.info("kill_cmd=" + kill_cmd)
+      self.binary_list.append (kill_cmd)
 
       self.log (1, "START " + stat_cmd)
 
        # initialize the threads
-      stat_thread = dbstatsThread (stat_cmd, stat_dir, stat_log_pipe.sock, 2)
+      stat_thread = dbstatsThread (stat_cmd, self.stat_dir, stat_log_pipe.sock, 2)
 
       self.log (2, "StatDaemon::main cmd=" + stat_cmd)
 
@@ -298,21 +299,21 @@ class StatDaemon(Daemon,StreamBased):
       while stat_thread.is_alive() and not self.quit_event.isSet():
 
         # get a list of all the files in stat_dir
-        files = os.listdir (stat_dir)
+        files = os.listdir (self.stat_dir)
 
-        self.log (2, "StatDaemon::main found " + str(len(files)) + " in " + stat_dir)
+        self.log (2, "StatDaemon::main found " + str(len(files)) + " in " + self.stat_dir)
 
         # if stat files exist in the directory
         if len(files) > 0:
           if self.gen_histogram:
-            self.process_hg (stat_dir, pref_freq)
+            self.process_hg (pref_freq)
           if self.gen_bandpass:
-            self.process_bp (stat_dir, pref_freq)
+            self.process_bp (pref_freq)
           if self.gen_freqtime:
-            self.process_ft (stat_dir, pref_freq)
+            self.process_ft (pref_freq)
           if self.gen_timeseries:
-            self.process_ts (stat_dir)
-          self.process_ms (stat_dir)
+            self.process_ts ()
+          self.process_ms ()
 
           self.results["lock"].acquire()
 
@@ -342,11 +343,22 @@ class StatDaemon(Daemon,StreamBased):
         self.log (-2, "stat thread failed")
         self.quit_event.set()
 
+  def build_cmd (self):
+
+    # determine the number of channels to be processed by this stream
+    (cfreq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + stream_id].split(":")
+
+    # this stat command will not change from observation to observation
+    stat_cmd = self.cfg["STREAM_STATS_BINARY"] + " -k " + self.db_key + \
+               " " + self.stream_config_file + " -D " + self.stat_dir + " -n " + nchan
+
+    return stat_cmd
+
   
-  def process_hg (self, stat_dir, ifreq=-1):
+  def process_hg (self, ifreq=-1):
 
     # find the most recent HG stats file
-    files = [file for file in os.listdir(stat_dir) if file.lower().endswith(".hg.stats")]
+    files = [file for file in os.listdir(self.stat_dir) if file.lower().endswith(".hg.stats")]
 
     if len(files) > 0:
 
@@ -355,7 +367,7 @@ class StatDaemon(Daemon,StreamBased):
       self.log (2, "StatDaemon::process_hg hg_file=" + str(hg_file))
 
       # only 1 channel in the histogram
-      hg_fptr = open (stat_dir + "/" + str(hg_file), "rb")
+      hg_fptr = open (self.stat_dir + "/" + str(hg_file), "rb")
       npol = np.fromfile(hg_fptr, dtype=np.uint32, count=1)[0]
       nfreq = np.fromfile(hg_fptr, dtype=np.uint32, count=1)[0]
       ndim = np.fromfile(hg_fptr, dtype=np.uint32, count=1)[0]
@@ -401,53 +413,23 @@ class StatDaemon(Daemon,StreamBased):
       self.results["lock"].release()
 
       for file in files:
-        os.remove (stat_dir + "/" + file)
-
-  # wait for the SMRB to be created
-  def waitForSMRB (self):
-
-    db_id = self.cfg["PROCESSING_DATA_BLOCK"]
-    db_prefix = self.cfg["DATA_BLOCK_PREFIX"]
-    num_stream = self.cfg["NUM_STREAM"]
-    self.db_key = SMRBDaemon.getDBKey (db_prefix, self.id, num_stream, db_id)
-
-    # port of the SMRB daemon for this stream
-    smrb_port = SMRBDaemon.getDBMonPort(self.id)
-
-    # wait up to 30s for the SMRB to be created
-    smrb_wait = 60
-
-    smrb_exists = False
-    while not smrb_exists and smrb_wait > 0 and not self.quit_event.isSet():
-
-      self.log(2, "trying to open connection to SMRB")
-      smrb_sock = sockets.openSocket (DL, "localhost", smrb_port, 1)
-      if smrb_sock:
-        smrb_sock.send ("smrb_status\r\n")
-        junk = smrb_sock.recv (65536)
-        smrb_sock.close()
-        smrb_exists = True
-      else:
-        time.sleep (1)
-        smrb_wait -= 1
-
-    return smrb_exists
+        os.remove (self.stat_dir + "/" + file)
 
   #############################################################################
   # StatDaemon::process_bp
-  def process_bp (self, stat_dir, ifreq=-1):
+  def process_bp (self, ifreq=-1):
     """ Process Bandpass stats files. """
-    self.log (2, "StatDaemon::process_bp("+stat_dir+")")
+    self.log (2, "StatDaemon::process_bp("+self.stat_dir+")")
 
     # read the most recent freq_vs_time stats file
-    files = [file for file in os.listdir(stat_dir) if file.lower().endswith(".bp.stats")]
+    files = [file for file in os.listdir(self.stat_dir) if file.lower().endswith(".bp.stats")]
     if len(files) > 0:
 
       self.log (3, "StatDaemon::process_bp files=" + str(files))
       bp_file = files[-1]
       self.log (2, "StatDaemon::process_bp bp_file=" + str(bp_file))
 
-      bp_fptr = open (stat_dir + "/" + str(bp_file), "rb")
+      bp_fptr = open (self.stat_dir + "/" + str(bp_file), "rb")
       npol = np.fromfile(bp_fptr, dtype=np.uint32, count=1)[0]
       nfreq = np.fromfile(bp_fptr, dtype=np.uint32, count=1)[0]
       freq = np.fromfile(bp_fptr, dtype=np.float64, count=1)[0]
@@ -480,24 +462,24 @@ class StatDaemon(Daemon,StreamBased):
       self.results["lock"].release()
 
       for file in files:
-        os.remove (stat_dir + "/" + file)
+        os.remove (self.stat_dir + "/" + file)
 
 
   #############################################################################
   # StatDaemon::process_ft
-  def process_ft (self, stat_dir, ifreq=-1):
+  def process_ft (self, ifreq=-1):
     """ Process Freq vs Time stats files. """ 
-    self.log (2, "StatDaemon::process_ft("+stat_dir+")")
+    self.log (2, "StatDaemon::process_ft("+self.stat_dir+")")
 
     # read the most recent freq_vs_time stats file
-    files = [file for file in os.listdir(stat_dir) if file.lower().endswith(".ft.stats")]
+    files = [file for file in os.listdir(self.stat_dir) if file.lower().endswith(".ft.stats")]
     if len(files) > 0:
 
       self.log (3, "StatDaemon::process_ft files=" + str(files))
       ft_file = files[-1]
       self.log (2, "StatDaemon::process_ft ft_file=" + str(ft_file))
 
-      ft_fptr = open (stat_dir + "/" + str(ft_file), "rb")
+      ft_fptr = open (self.stat_dir + "/" + str(ft_file), "rb")
       npol = np.fromfile(ft_fptr, dtype=np.uint32, count=1)[0]
       ndim = 2
       nfreq = np.fromfile(ft_fptr, dtype=np.uint32, count=1)[0]
@@ -543,23 +525,23 @@ class StatDaemon(Daemon,StreamBased):
       self.results["lock"].release()
 
       for file in files:
-        os.remove (stat_dir + "/" + file)
+        os.remove (self.stat_dir + "/" + file)
 
   #############################################################################
   # StatDaemon::process_ts
-  def process_ts (self, stat_dir):
+  def process_ts (self):
     """ Process Timeseries stats files. """
-    self.log (2, "StatDaemon::process_ts("+stat_dir+")")
+    self.log (2, "StatDaemon::process_ts()")
 
     # read the most recent time series stats file
-    files = [file for file in os.listdir(stat_dir) if file.lower().endswith(".ts.stats")]
+    files = [file for file in os.listdir(self.stat_dir) if file.lower().endswith(".ts.stats")]
     self.log (2, "StatDaemon::process_ts files=" + str(files))
     if len(files) > 0:
 
       ts_file = files[-1]
       self.log (3, "StatDaemon::process_ts ts_file=" + str(ts_file))
 
-      ts_fptr = open (stat_dir + "/" + str(ts_file), "rb")
+      ts_fptr = open (self.stat_dir + "/" + str(ts_file), "rb")
       npol = np.fromfile(ts_fptr, dtype=np.uint32, count=1)[0]
       ntime = np.fromfile(ts_fptr, dtype=np.uint32, count=1)[0]
       tsamp = np.fromfile(ts_fptr, dtype=np.float64, count=1)[0]
@@ -589,25 +571,25 @@ class StatDaemon(Daemon,StreamBased):
         self.results[prefix + "_hires"] = self.ts_plot.getRawImage()
 
       for file in files:
-        os.remove (stat_dir + "/" + file)
+        os.remove (self.stat_dir + "/" + file)
 
       self.ts_valid = True
       self.results["lock"].release()
     
   #############################################################################
   # StatDaemon::process_ms
-  def process_ms (self, stat_dir):
+  def process_ms (self):
     """ Process Mean and Standard Deviation stats files. """
-    self.log (2, "StatDaemon::process_ms("+stat_dir+")")
+    self.log (2, "StatDaemon::process_ms("+self.stat_dir+")")
 
     # find the most recent Mean/Stddev stats files
-    files = [file for file in os.listdir(stat_dir) if file.lower().endswith(".ms.stats")]
+    files = [file for file in os.listdir(self.stat_dir) if file.lower().endswith(".ms.stats")]
     if len(files) > 0:
 
       self.log (3, "StatDaemon::process_ms files=" + str(files))
       ms_file = files[-1]
       self.log (2, "StatDaemon::process_ms ms_file=" + str(ms_file))
-      ms_fptr = open (stat_dir + "/" + str(ms_file), "rb")
+      ms_fptr = open (self.stat_dir + "/" + str(ms_file), "rb")
       npol = np.fromfile(ms_fptr, dtype=np.uint32, count=1)[0]
       ndim = np.fromfile(ms_fptr, dtype=np.uint32, count=1)[0]
 
@@ -630,7 +612,7 @@ class StatDaemon(Daemon,StreamBased):
       self.results["lock"].release()
 
       for file in files:
-        os.remove (stat_dir + "/" + file)
+        os.remove (self.stat_dir + "/" + file)
 
 
 ###############################################################################
