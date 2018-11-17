@@ -8,30 +8,30 @@ include_once("../spip_webpage.lib.php");
 include_once("../spip_socket.lib.php");
 include_once("../tcs.lib.php");
 
-class search extends spip_webpage
+class preproc extends spip_webpage
 {
 
-  function search()
+  function preproc()
   {
     spip_webpage::spip_webpage();
 
-    $this->title = "Search";
-    $this->nav_item = "search";
+    $this->title = "preproc";
+    $this->nav_item = "preproc";
 
     $this->tcs = new tcs();
     $this->config = spip::get_config();
     $this->streams = array();
     $this->beams = array();
 
-    $this->plot_width = 300;
-    $this->plot_height = 225;
+    $this->plot_width = 240;
+    $this->plot_height = 180;
 
     for ($istream=0; $istream<$this->config["NUM_STREAM"]; $istream++)
     {
       list ($host, $ibeam, $subband) = explode (":", $this->config["STREAM_".$istream]);
       list ($freq, $bw, $nchan) = explode (":", $this->config["SUBBAND_CONFIG_".$subband]);
       $beam_name = $this->config["BEAM_".$ibeam];
-      $port = $this->config["BEAM_REPACK_SEARCH_PORT"] + $istream;
+      $port = $this->config["STREAM_PREPROC_PORT"] + $istream;
       $this->streams[$istream] = array("beam_name" => $beam_name, "host" => $host, "port" => $port, "subband" => $subband, "freq" => $freq);
     }
 
@@ -59,7 +59,7 @@ class search extends spip_webpage
 
   function javaScriptCallback()
   {
-    return $this->tcs->javaScriptCallback()." search_request();";
+    return $this->tcs->javaScriptCallback()." preproc_request();";
   }
 
   function printJavaScriptHead()
@@ -68,19 +68,21 @@ class search extends spip_webpage
 ?>
     <script type='text/javascript'>
 
-      function handle_search_request(s_xml_request)
+      function handle_preproc_request(s_xml_request)
       {
         if (s_xml_request.readyState == 4)
         {
           var xmlDoc = s_xml_request.responseXML;
+          var tcs_utcs = new Array();
+
           if (xmlDoc != null)
           {
             var xmlObj = xmlDoc.documentElement;
 
-            var h, i, j, k;
+            var h, i, j, k;      
             var observation;
 
-            var repack_states = xmlObj.getElementsByTagName("repack_search_state");
+            var repack_states = xmlObj.getElementsByTagName("preproc_state");
             for (h=0; h<repack_states.length; h++)
             {
               var repack_state = repack_states[h];
@@ -103,9 +105,9 @@ class search extends spip_webpage
                   for (j=0; j<plots.length; j++)
                   {
                     var plot = plots[j]
-                    var plot_type = plots[j].getAttribute("type")
-                    var plot_timestamp = plots[j].getAttribute("timestamp")
-
+                    var plot_type = plots[j].getAttribute("type")  
+                    var plot_timestamp = plots[j].getAttribute("timestamp")  
+    
                     var plot_id = beam_name + "_" + stream_id + "_" + plot_type
                     var plot_ts = beam_name + "_" + stream_id + "_" + plot_type + "_ts"
                     var plot_link = beam_name + "_" + stream_id + "_" + plot_type + "_link"
@@ -114,11 +116,11 @@ class search extends spip_webpage
                     //alert (plot_timestamp + " ?=? " + document.getElementById(plot_ts).value)
                     if (plot_timestamp != document.getElementById(plot_ts).value)
                     {
-                      url = "/spip/search/index.php?update=true&stream="+stream_id+"&type=plot&plot="+plot_type+"&res=lo&ts="+plot_timestamp;
+                      url = "/spip/preproc/index.php?update=true&stream="+stream_id+"&type=plot&plot="+plot_type+"&res=lo&ts="+plot_timestamp;
                       document.getElementById(plot_id).src = url;
                       document.getElementById(plot_ts).value = plot_timestamp;
 
-                      url = "/spip/search/index.php?update=true&stream="+stream_id+"&type=plot&plot="+plot_type+"&res=hi&ts="+plot_timestamp;
+                      url = "/spip/preproc/index.php?update=true&stream="+stream_id+"&type=plot&plot="+plot_type+"&res=hi&ts="+plot_timestamp;
                       document.getElementById(plot_link).href= url;
 
                     }
@@ -130,7 +132,7 @@ class search extends spip_webpage
         }
       }
 
-      function search_request()
+      function preproc_request() 
       {
         var url = "?update=true";
 
@@ -141,7 +143,7 @@ class search extends spip_webpage
 
         s_xml_request.onreadystatechange = function()
         {
-          handle_search_request(s_xml_request)
+          handle_preproc_request(s_xml_request)
         };
         s_xml_request.open("GET", url, true);
         s_xml_request.send(null);
@@ -193,22 +195,22 @@ class search extends spip_webpage
       $this->renderImage($get);
       return;
     }
-
+    
     $xml = XML_DEFINITION;
-    $xml .= "<search_update>";
+    $xml .= "<preproc_update>";
 
     $xml_req  = XML_DEFINITION;
-    $xml_req .= "<repack_search_request>";
-    $xml_req .= "<requestor>search page</requestor>";
+    $xml_req .= "<preproc_request>";
+    $xml_req .= "<requestor>preproc page</requestor>";
     $xml_req .= "<type>state</type>";
-    $xml_req .= "</repack_search_request>";
+    $xml_req .= "</preproc_request>";
 
     foreach ($this->streams as $istream => $stream)
     {
       $repack_socket = new spip_socket();
       $host = $stream["host"];
       $port = $stream["port"];
-
+            
       if ($repack_socket->open ($host, $port, 0) == 0)
       {
         $repack_socket->write ($xml_req."\r\n");
@@ -222,7 +224,7 @@ class search extends spip_webpage
       }
     }
 
-    $xml .= "</search_update>";
+    $xml .= "</preproc_update>";
 
     header('Content-type: text/xml');
     echo $xml;
@@ -239,28 +241,29 @@ class search extends spip_webpage
       return;
     }
 
-    if (($get["plot"] == "histogram") ||
-        ($get["plot"] == "freqtime") ||
-        ($get["plot"] == "timeseries"))
+    if (($get["plot"] == "gainstime") || 
+        ($get["plot"] == "gainsfreq") || 
+        ($get["plot"] == "dirty") || 
+        ($get["plot"] == "cleaned"))
     {
       $host      = $this->streams[$istream]["host"];
-      $port      = $this->config["BEAM_REPACK_SEARCH_PORT"] + $istream;
+      $port      = $this->config["STREAM_PREPROC_PORT"] + $istream;
 
       $xml_req  = XML_DEFINITION;
-      $xml_req .= "<repack_search_request>";
-      $xml_req .= "<requestor>search page</requestor>";
+      $xml_req .= "<preproc_request>";
+      $xml_req .= "<requestor>preproc page</requestor>";
       $xml_req .= "<type>plot</type>";
       $xml_req .= "<plot>".$get["plot"]."</plot>";
       $xml_req .= "<res>".$get["res"]."</res>";
-      $xml_req .= "</repack_search_request>";
+      $xml_req .= "</preproc_request>";
 
-      $repack_search_socket = new spip_socket();
+      $repack_preproc_socket = new spip_socket();
       $rval = 0;
       $reply = 0;
-      if ($repack_search_socket->open ($host, $port, 0) == 0)
+      if ($repack_preproc_socket->open ($host, $port, 0) == 0)
       {
-        $repack_search_socket->write ($xml_req."\r\n");
-        list ($rval, $reply) = $repack_search_socket->read_raw();
+        $repack_preproc_socket->write ($xml_req."\r\n");
+        list ($rval, $reply) = $repack_preproc_socket->read_raw();
       }
       else
       {
@@ -268,7 +271,7 @@ class search extends spip_webpage
         echo "ERROR: could not connect to ".$host.":".$port."<BR>\n";
         return;
       }
-      $repack_search_socket->close();
+      $repack_preproc_socket->close();
 
       if ($rval == 0)
       {
@@ -283,41 +286,19 @@ class search extends spip_webpage
     }
   }
 
-  function renderObsTable ($beam)
-  {
-    $cols = 4;
-    $fields = array(
-      $beam."_source" => "Source",
-      $beam."_start" => "UTC_START",
-      $beam."_project_id" => "Project ID",
-      $beam."_tobs" => "Tobs",
-      $beam."_ra" => "RAJ",
-      $beam."_observer" => "Observer",
-      $beam."_elapsed" => "Elapsed",
-      $beam."_dec" => "DECJ"
-    );
-
-    echo "<table id='obsTable' width='100%'>\n";
-
-    $keys = array_keys($fields);
-    for ($i=0; $i<count($keys); $i++)
-    {
-      if ($i % $cols == 0)
-        echo "  <tr>\n";
-      echo "    <th>".$fields[$keys[$i]]."</th>\n";
-      echo "    <td><span id='".$keys[$i]."'>--</span></td>\n";
-      if (($i+1) % $cols == 0)
-        echo "  </tr>\n";
-    }
-    echo "</table>\n";
-  }
-
   function renderPlotTable ($beam)
   {
     $img_params = "src='/spip/images/blankimage.gif' width='".$this->plot_width."px' height='".$this->plot_height."px'";
     $full_img_params = "src='/spip/images/blankimage.gif' width='800px' height='600px'";
 
+    echo "<h1>Adaptive Filter</h1>\n";
     echo "<table width='100%' id='plotTable'>\n";
+    echo "<tr>\n";
+    echo   "<td>Freq. [MHz]</td>\n";
+    echo   "<td>Max Gain v Time</td>\n";
+    echo   "<td>Curr. Gain v Freq</td>\n";
+    echo   "<td>Input Bandpass</td>\n";
+    echo   "<td>Output Bandpass</td>\n";
 
     foreach ($this->streams as $istream => $stream)
     {
@@ -326,40 +307,81 @@ class search extends spip_webpage
       $subband = $stream["subband"];
       echo "<tr>\n";
 
-      echo   "<td>Subband ".$subband."<br/>Centre Freq: ".$freq." MHz</td>";
+      echo   "<td>".$freq."</td>";
 
       $prefix = $beam."_".$istream;
       echo   "<td>";
-      echo     "<a id='".$prefix."_freqtime_link'>";
-      echo       "<img id='".$prefix."_freqtime' ".$img_params."/>";
+      echo     "<a id='".$prefix."_gainstime_link'>";
+      echo       "<img id='".$prefix."_gainstime' ".$img_params."/>";
       echo     "</a>";
-      echo     "<input type='hidden' id='".$prefix."_freqtime_ts' value='not set'/>";
+      echo     "<input type='hidden' id='".$prefix."_gainstime_ts' value='not set'/>";
       echo   "</td>\n";
 
-
       echo   "<td>";
-      echo     "<a id='".$prefix."_histogram_link'>";
-      echo       "<img id='".$prefix."_histogram' ".$img_params."/>";
+      echo     "<a id='".$prefix."_gainsfreq_link'>";
+      echo       "<img id='".$prefix."_gainsfreq' ".$img_params."/>";
       echo     "</a>";
-      echo     "<input type='hidden' id='".$prefix."_histogram_ts' value='not set'/>";
+      echo     "<input type='hidden' id='".$prefix."_gainsfreq_ts' value='not set'/>";
       echo   "</td>\n";
 
+      echo   "<td>";
+      echo     "<a id='".$prefix."_dirty_link'>";
+      echo       "<img id='".$prefix."_dirty' ".$img_params."/>";
+      echo     "</a>";
+      echo     "<input type='hidden' id='".$prefix."_dirty_ts' value='not set'/>";
+      echo   "</td>\n";
 
       echo   "<td>";
-      echo     "<a id='".$prefix."_timeseries_link'>";
-      echo       "<img id='".$prefix."_timeseries' ".$img_params."/>";
+      echo     "<a id='".$prefix."_cleaned_link'>";
+      echo       "<img id='".$prefix."_cleaned' ".$img_params."/>";
       echo     "</a>";
-      echo     "<input type='hidden' id='".$prefix."_timeseries_ts' value='not set'/>";
+      echo     "<input type='hidden' id='".$prefix."_cleaned_ts' value='not set'/>";
       echo   "</td>\n";
 
       echo "</tr>\n";
     }
 
     echo "</table>\n";
-  }
 
+    echo "<h1>System Temperature</h1>\n";
+
+    echo "<table width='100%' id='plotTable'>\n";
+    echo "<tr>\n";
+    echo   "<td>Freq. [MHz]</td>\n";
+    echo   "<td>TSYS</td>\n";
+    echo "</tr>\n";
+
+    $img_params = "src='/spip/images/blankimage.gif' width='900px' height='".$this->plot_height."px'";
+    $full_img_params = "src='/spip/images/blankimage.gif' width='800px' height='600px'";
+
+    foreach ($this->streams as $istream => $stream)
+    {
+      $beam = $stream["beam_name"];
+      $freq = $stream["freq"];
+      $subband = $stream["subband"];
+      echo "<tr>\n";
+
+      echo   "<td>".$freq."</td>";
+
+      $prefix = $beam."_".$istream;
+
+      echo   "<td>";
+      echo     "<a id='".$prefix."_tsys_link'>";
+      echo       "<img id='".$prefix."_tsys' ".$img_params."/>";
+      echo     "</a>";
+      echo     "<input type='hidden' id='".$prefix."_tsys_ts' value='not set'/>";
+      echo   "</td>\n";
+
+      echo "</tr>\n";
+    }
+
+    echo "</table>\n";
+
+
+  }
+    
 }
 if (!isset($_GET["update"]))
   $_GET["single"] = "true";
-handleDirect("search");
+handleDirect("preproc");
 

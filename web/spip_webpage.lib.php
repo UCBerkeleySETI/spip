@@ -80,7 +80,6 @@ class spip_webpage
     echo "       <span id='".$id."_progress_bar'>[ ... ]</span>\n";
   }
 
-
 } // END CLASS DEFINITION
 
 
@@ -148,6 +147,7 @@ function handleDirect($child_class)
     if ($obj->nav_item != "")
     {
       $nav_items = array ("/spip/timing/" => "Timing", 
+                          "/spip/search/" => "Search",
                           "/spip/continuum/" => "Continuum",
                           "/spip/stats/" => "Stats",
                           "/spip/status/" => "Status",

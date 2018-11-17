@@ -201,7 +201,7 @@ class status extends spip_webpage
     echo "<h1>Status Page</h1>\n";
 
     // list information on all the hardware and software elements of the system
-    echo "<table width=80%>\n";
+    echo "<table width=98% border=0>\n";
 
     echo "<tr>\n";
     echo "<td><b>Host</b></td>\n";

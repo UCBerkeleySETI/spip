@@ -237,7 +237,7 @@ class continuum extends spip_webpage
 
       $this->renderObsTable($beam["name"]);
 
-      $this->renderPlotTable($beam["name"], $this->streams[$beam["name"]]);
+      $this->renderPlotTable($beam["name"]);
     }
   }
 
@@ -466,7 +466,7 @@ class continuum extends spip_webpage
     echo "</table>\n";
   }
 
-  function renderPlotTable ($beam, $stream)
+  function renderPlotTable ($beam)
   {
     $img_params = "src='/spip/images/blankimage.gif' width='".$this->plot_width."px' height='".$this->plot_height."px'";
     $full_img_params = "src='/spip/images/blankimage.gif' width='900px' height='300px'";
