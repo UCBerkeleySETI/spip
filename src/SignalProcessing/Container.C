@@ -126,6 +126,8 @@ void spip::Container::read_header()
   }
 
   // update the calculated parameters
+  if (spip::Container::verbose)
+    cerr << "spip::Container::read_header recalculate()" << endl;
   recalculate();
 
   // assume little endian, unless specified
@@ -345,6 +347,9 @@ double spip::Container::calculate_bytes_per_second ()
   typedef std::numeric_limits< double > dbl;
   cerr.precision(dbl::max_digits10);
   double nbit_per_samp = double(calculate_nbits_per_sample());
+  if (spip::Container::verbose)
+    cerr << "spip::Container::calculate_bytes_per_second (" << nsignal << " * " << nchan << " * " 
+         << nbit << " * " << npol << " * " << nbin << " * " << ndim << ") nbit_per_samp=" << nbit_per_samp << endl;
   double nsamp_per_second = double(1000000) / tsamp;
   double nbit_per_second = nbit_per_samp * nsamp_per_second;
   double bytes_ps = nbit_per_second / 8.0;
@@ -383,10 +388,11 @@ void spip::Container::recalculate ()
   // compute the new bytes per second
   bytes_per_second = calculate_bytes_per_second ();
 
-#ifdef _DEBUG
-  cerr << "spip::Container::recalculate bits_per_sample=" << bits_per_sample << endl;
-  cerr << "spip::Container::recalculate bytes_per_second=" << bytes_per_second << endl;
-#endif
+  if (verbose)
+  {
+    cerr << "spip::Container::recalculate bits_per_sample=" << bits_per_sample << endl;
+    cerr << "spip::Container::recalculate bytes_per_second=" << bytes_per_second << endl;
+  }
 
   // determine the resolution, based on the ordering
   if ((order == spip::Ordering::TFPS) || (order == spip::Ordering::TSPF) || (order == spip::Ordering::TSPFB))
@@ -452,3 +458,13 @@ void spip::Container::calculate_strides()
   if (spip::Container::verbose)
     cerr << "spip::Container::calculate_strides order=" << get_order_string(order) << " bin=" << bin_stride << " chan=" << chan_stride << " pol=" << pol_stride << " sig=" << sig_stride << " dat=" << dat_stride << endl;
 }
+
+void spip::Container::set_sideband (spip::Signal::Sideband sb)
+{
+  sideband = sb; 
+  if (sb == spip::Signal::Sideband::Lower && bandwidth > 0) 
+    bandwidth *= -1;
+  if (sb == spip::Signal::Sideband::Upper && bandwidth < 0) 
+    bandwidth *= -1;
+}
+

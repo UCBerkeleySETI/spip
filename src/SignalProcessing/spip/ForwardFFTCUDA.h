@@ -30,7 +30,8 @@ namespace spip {
 
       void configure_plan ();
       
-      void fft_shift ();
+      void condition ();
+      //void fft_shift ();
 
       void transform_SFPT_to_TFPS ();
 
@@ -38,8 +39,7 @@ namespace spip {
 
       void transform_SFPT_to_SFPT ();
 
-      void normalize_output ();
-
+      //void normalize_output ();
 
     protected:
     

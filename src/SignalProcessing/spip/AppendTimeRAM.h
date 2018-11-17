@@ -26,8 +26,6 @@ namespace spip {
       void reserve ();
 
       void combine_SFPT_to_SFPT();
-
-      void combine_TFPS_to_TFPS();
  
       template <class T>
       void combine_sfpt_to_sfpt (T dummy)
@@ -66,6 +64,8 @@ namespace spip {
         }
       }
 
+      void combine_TFPS_to_TFPS();
+
       template <class T>
       void combine_tfps_to_tfps (T dummy)
       {
@@ -86,7 +86,27 @@ namespace spip {
         }
       }
 
-      void combine_TSPF_to_TSPF ();
+      void combine_TSPF_to_TSPF();
+
+      template <class T>
+      void combine_tspf_to_tspf (T dummy)
+      {
+        T * out = (T *) output->get_buffer();
+
+        for (unsigned i=0;i<inputs.size(); i++)
+        {
+          T * in  = ((T *) inputs[i]->get_buffer());
+
+          // size of data to copy from inputs[i]
+          const uint64_t input_ndat = inputs[i]->get_ndat();
+          const uint64_t input_nval = input_ndat * inputs[i]->get_dat_stride();
+          const uint64_t in_stride = input_nval * sizeof(T);
+
+          memcpy ((void *) out, (void *) in, in_stride);
+
+          out += input_nval;
+        }
+      }
 
       void combine_TSPFB_to_TSPFB ();
 

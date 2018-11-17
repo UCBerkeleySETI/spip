@@ -6,6 +6,9 @@
  *
  ***************************************************************************/
 
+#ifndef __Types_h
+#define __Types_h
+
 namespace spip {
 
   //! Defines various signal types
@@ -50,3 +53,5 @@ namespace spip {
     };
   }
 }
+
+#endif // __Types_h

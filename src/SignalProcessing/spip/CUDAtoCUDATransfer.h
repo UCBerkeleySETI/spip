@@ -6,21 +6,23 @@
  *
  ***************************************************************************/
 
-#ifndef __RAMtoRAMTransfer_h
-#define __RAMtoRAMTransfer_h
+#ifndef __CUDAtoCUDATransfer_h
+#define __CUDAtoCUDATransfer_h
 
-#include "spip/ContainerRAM.h"
+#include "spip/ContainerCUDA.h"
 #include "spip/Transformation.h"
+
+#include <cuda_runtime.h>
 
 namespace spip {
 
-  class RAMtoRAMTransfer: public Transformation<Container, Container>
+  class CUDAtoCUDATransfer: public Transformation <ContainerCUDADevice, ContainerCUDADevice>
   {
     public:
      
-      RAMtoRAMTransfer ();
+      CUDAtoCUDATransfer (cudaStream_t);
 
-      ~RAMtoRAMTransfer ();
+      ~CUDAtoCUDATransfer ();
 
       void set_output_reblock (unsigned);
 
@@ -37,6 +39,8 @@ namespace spip {
     protected:
 
     private:
+
+      cudaStream_t stream;
 
       uint64_t ndat;
 

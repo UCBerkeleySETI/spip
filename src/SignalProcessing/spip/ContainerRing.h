@@ -26,6 +26,10 @@ namespace spip {
 
       virtual void process_header () = 0;
 
+      virtual uint64_t open_block () = 0;
+
+      virtual void close_block () = 0;
+
       //! resize the buffer to match the input dimensions
       void resize ();
 

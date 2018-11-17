@@ -42,6 +42,8 @@ namespace spip {
       //! Required data transformations
       virtual void transform_TSPF_to_TSPFB () = 0;
 
+      size_t get_sample_size ();
+
     protected:
 
       Container * buffer;

@@ -5,50 +5,49 @@
  *
  ***************************************************************************/
 
-#ifndef __ContinuumPipeline_h
-#define __ContinuumPipeline_h
+#ifndef __ContinuumPipelineFloat_h
+#define __ContinuumPipelineFloat_h
 
 #include "spip/AsciiHeader.h"
 #include "spip/Time.h"
 #include "spip/DataBlockRead.h"
 #include "spip/DataBlockWrite.h"
-#include "spip/UnpackFloatRAM.h"
 #include "spip/ForwardFFTFFTW.h"
 #include "spip/DetectionPolarimetryRAM.h"
 #include "spip/DetectionSquareLawRAM.h"
 #include "spip/IntegrationRAM.h"
 #include "spip/RAMtoRAMTransfer.h"
+#include "spip/ReverseFrequencyRAM.h"
 #include "spip/ContainerRingRead.h"
-#include "spip/ContainerFileWrite.h"
+#include "spip/ContainerRAMFileWrite.h"
 #include "spip/ContainerRAM.h"
-#include "spip/ContainerTransfer.h"
 
 #include "config.h"
 
 #ifdef HAVE_CUDA
 #include "spip/ContainerCUDA.h"
-#include "spip/UnpackFloatCUDA.h"
+#include "spip/ContainerRingReadCUDA.h"
+#include "spip/ContainerCUDAFileWrite.h"
 #include "spip/ForwardFFTCUDA.h"
 #include "spip/DetectionPolarimetryCUDA.h"
 #include "spip/DetectionSquareLawCUDA.h"
 #include "spip/IntegrationCUDA.h"
-#include "spip/RAMtoCUDATransfer.h"
-#include "spip/ContainerRingReadCUDA.h"
+#include "spip/ReverseFrequencyCUDA.h"
+#include "spip/RINGtoCUDATransfer.h"
 #include "spip/CUDAtoRAMTransfer.h"
-#include "spip/CUDARingtoCUDATransfer.h"
 #endif
 
 #include <vector>
 
 namespace spip {
 
-  class ContinuumPipeline {
+  class ContinuumPipelineFloat {
 
     public:
 
-      ContinuumPipeline (const char *, const char *);
+      ContinuumPipelineFloat (const char *, const char *);
 
-      ~ContinuumPipeline ();
+      ~ContinuumPipelineFloat ();
 
       void set_channelisation (int);
 
@@ -60,12 +59,12 @@ namespace spip {
 
       void set_output_state (Signal::State);
 
-      void configure (UnpackFloat *);
+      void configure ();
 
 #ifdef HAVE_CUDA
       void set_device (int _device);
 
-      void configure_cuda (UnpackFloat *);
+      void configure_cuda ();
 #endif
 
       void open ();
@@ -84,21 +83,15 @@ namespace spip {
 
       DataBlockRead * in_db;
 
-      RAMtoRAMTransfer * ram_to_ram; 
-
-      UnpackFloat * unpack_float;
-
       ForwardFFT * fwd_fft;
 
       Detection * detector;
 
       Integration * integrator;
 
-      ContainerRing * input_ring;
+      ReverseFrequency * reverser;
 
       ContainerRingRead * input;
-
-      Container * unpacked;
 
       Container * reblocked;
 
@@ -108,7 +101,7 @@ namespace spip {
 
       Container * integrated;
 
-      ContainerFileWrite * output;
+      ContainerRAMFileWrite * output;
 
       Signal::State output_state;
 
@@ -131,24 +124,16 @@ namespace spip {
 #ifdef HAVE_CUDA
       int device;
 
-      bool input_ring_ram;
-
       cudaStream_t stream;
 
-      ContainerRingReadCUDA * d_input;
+      ContainerCUDAFileWrite * d_output; 
 
-      ContainerCUDADevice * d_output; 
-
-      RAMtoCUDATransfer * ram_to_cuda; 
-
-      CUDAtoRAMTransfer * cuda_to_ram; 
-
-      CUDARingtoCUDATransfer * cuda_to_cuda; 
+      RINGtoCUDATransfer * ring_to_cuda; 
 #endif
 
-      unsigned reblock_factor;
+      RAMtoRAMTransfer * ram_to_ram; 
 
-      bool unpack;
+      unsigned reblock_factor;
   };
 
 }

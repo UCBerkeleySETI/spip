@@ -9,19 +9,19 @@
 #include "spip/ContainerRing.h"
 #include "spip/DataBlockRead.h"
 
-#ifndef __ContainerRingRead_h
-#define __ContainerRingRead_h
+#ifndef __ContainerRingReadCUDA_h
+#define __ContainerRingReadCUDA_h
 
 namespace spip {
 
-  class ContainerRingRead : public ContainerRing
+  class ContainerRingReadCUDA : public ContainerRing
   {
     public:
 
       //! Null constructor
-      ContainerRingRead (DataBlockRead *);
+      ContainerRingReadCUDA (DataBlockRead *);
 
-      ~ContainerRingRead();
+      ~ContainerRingReadCUDA();
 
       void process_header ();
 
@@ -29,12 +29,8 @@ namespace spip {
 
       void close_block ();
 
-#ifdef HAVE_CUDA
-      void register_buffers();
-
       int get_db_device () { return db->get_device(); };
       int get_db_device () const { return db->get_device(); };
-#endif
 
     protected:
 
@@ -42,7 +38,13 @@ namespace spip {
 
       DataBlockRead * db;
 
+      uint64_t nbits_per_sample;
+
       uint64_t curr_buf_bytes;
+
+    protected:
+
+    private:
 
   };
 }

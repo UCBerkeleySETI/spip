@@ -6,21 +6,24 @@
  *
  ***************************************************************************/
 
-#ifndef __RAMtoRAMTransfer_h
-#define __RAMtoRAMTransfer_h
+#ifndef __RINGtoCUDATransfer_h
+#define __RINGtoCUDATransfer_h
 
-#include "spip/ContainerRAM.h"
+#include "spip/ContainerRingRead.h"
+#include "spip/ContainerCUDA.h"
 #include "spip/Transformation.h"
+
+#include <cuda_runtime.h>
 
 namespace spip {
 
-  class RAMtoRAMTransfer: public Transformation<Container, Container>
+  class RINGtoCUDATransfer: public Transformation <ContainerRingRead, ContainerCUDADevice>
   {
     public:
      
-      RAMtoRAMTransfer ();
+      RINGtoCUDATransfer (cudaStream_t);
 
-      ~RAMtoRAMTransfer ();
+      ~RINGtoCUDATransfer ();
 
       void set_output_reblock (unsigned);
 
@@ -32,17 +35,22 @@ namespace spip {
 
       void reserve ();
 
+      //! Perform a forward FFT on input block
       void transformation ();
 
     protected:
 
     private:
 
+      cudaStream_t stream;
+
       uint64_t ndat;
 
       unsigned iblock_out;
 
       unsigned nblock_out;
+
+      cudaMemcpyKind kind;
 
   };
 

@@ -48,7 +48,7 @@ namespace spip {
 
       void configure (UnpackFloat *);
 
-      void set_filtering (int);
+      void set_filtering (int, double);
 
 #ifdef HAVE_CUDA
       void set_device (int _device);
@@ -113,6 +113,8 @@ namespace spip {
 #endif
 
       double input_bytes_per_second;
+
+      double req_mon_tsamp;
 
   };
 

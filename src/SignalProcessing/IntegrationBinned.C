@@ -183,6 +183,12 @@ void spip::IntegrationBinned::prepare_output ()
   output->resize();
 }
 
+size_t spip::IntegrationBinned::get_sample_size ()
+{
+  size_t nbytes = (nchan/chan_dec) * (npol/pol_dec) * (nsignal/signal_dec) * nbin * sizeof(float);
+  return nbytes;
+}
+
 /*
 void spip::IntegrationBinned::prepare_binplan ()
 {

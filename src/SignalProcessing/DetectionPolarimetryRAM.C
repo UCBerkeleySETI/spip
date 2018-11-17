@@ -6,6 +6,7 @@
  ***************************************************************************/
 
 #include "spip/DetectionPolarimetryRAM.h"
+#include "spip/Error.h"
 
 #include <iostream>
 #include <cstring>
@@ -105,6 +106,10 @@ void spip::DetectionPolarimetryRAM::transform_SFPT_to_SFPT ()
   }
 }
 
+void spip::DetectionPolarimetryRAM::transform_SFPT_to_TSPF ()
+{
+  throw Error (InvalidState, "spip::DetectionPolarimetryRAM::transform_SFPT_to_TSPF", "not implemented");
+}
 
 void spip::DetectionPolarimetryRAM::transform_TSPF_to_TSPF ()
 {

@@ -22,6 +22,16 @@ spip::AppendTime::~AppendTime ()
 {
 }
 
+void spip::AppendTime::prepare ()
+{
+  ndat = 0;
+  for (unsigned i=0; i<inputs.size(); i++)
+    ndat += inputs[i]->get_ndat ();
+  if (verbose)
+    cerr << "spip::AppendTime::prepare ndat=" << ndat << endl;
+}
+
+
 void spip::AppendTime::set_output_state (spip::Signal::State _state)
 {
   if ((state == spip::Signal::Intensity) || (state == spip::Signal::PPQQ))
@@ -65,10 +75,12 @@ void spip::AppendTime::configure (spip::Ordering output_order)
     ndat_sum += inputs[i]->get_ndat();
   }
 
+  ndat = ndat_sum;
+
   bool order_same = true;
   for (unsigned i=0; i<inputs.size(); i++)
   {
-    if (inputs[i]->get_order() != output->get_order())
+    if (inputs[i]->get_order() != output_order)
       order_same = false;
   }
 

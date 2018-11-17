@@ -82,6 +82,9 @@ spip::Transformation<In,Out>::Transformation (const char* _name, Behaviour _type
 {
   verbose = false;
   type = _type;
+  operation_name = std::string(_name);
+  this->input = NULL;
+  this->output = NULL;
 }
 
 //! Return false if the input doesn't have enough data to proceed
@@ -104,8 +107,11 @@ void spip::Transformation<In, Out>::set_input (const In* _input)
 
   if ( type == outofplace && this->input && this->output
        && (const void*)this->input == (const void*)this->output )
+  {
+    std::cerr << "input=" << (const void*)this->input << " output=" << (const void*)this->output << std::endl;
     throw Error (InvalidState, "spip::Transformation["+this->get_name()+"]::set_input",
      "input must != output");
+  }
 
   if( type==inplace )
     this->output = (Out*)_input;
@@ -131,7 +137,6 @@ void spip::Transformation<In, Out>::set_output (Out* _output)
 
   if( type == inplace && !this->has_input() )
     this->input = (In*)_output;
-
 }
 
 template <class In, class Out>

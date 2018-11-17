@@ -19,6 +19,7 @@ spip::ForwardFFT::ForwardFFT () : Transformation<Container,Container>("ForwardFF
   normalize = true;
   apply_fft_shift = false;
   scale_fac = 1.0f;
+  conditioned = NULL;
 }
 
 spip::ForwardFFT::~ForwardFFT ()
@@ -100,14 +101,28 @@ void spip::ForwardFFT::configure (spip::Ordering output_order)
   if (dsb == 1)
     apply_fft_shift = true;
 
-  // copy input header to output
-  output->clone_header (input->get_header());
+  // if we need to shift or scale the data prior to Forward FFT
+  if ((normalize) || (apply_fft_shift))
+  {
+    // copy input header to output
+    conditioned->clone_header (input->get_header());
+
+    // read newly cloned header params
+    conditioned->read_header();
+
+    conditioned->set_dual_sideband (0);
+    conditioned->set_order (input->get_order());
+    conditioned->write_header();
+
+    output->clone_header (conditioned->get_header());
+  }
+  else
+    output->clone_header (input->get_header());
 
   // output will read the newly cloned header parameters
   output->read_header ();
 
   // update the parameters that this transformation will affect
-  output->set_dual_sideband (0);
   output->set_nchan (nchan * nfft);
   output->set_tsamp (tsamp * nfft);
   output->set_order (output_order);
@@ -201,6 +216,12 @@ void spip::ForwardFFT::prepare ()
 //! ensure meta-data is correct in output
 void spip::ForwardFFT::prepare_output ()
 {
+  if ((normalize) || (apply_fft_shift))
+  {
+    conditioned->set_ndat (ndat);
+    conditioned->resize();
+  }
+
   // update the output parameters that may change from block to block
   output->set_ndat (ndat / nfft);
 
@@ -226,12 +247,22 @@ void spip::ForwardFFT::transformation ()
   if (verbose)
     cerr << "spip::ForwardFFT::transform nfft=" << nfft << endl;
     
+  if (apply_fft_shift || normalize)
+  {
+    if (verbose)
+      cerr << "spip::ForwardFFT::transform condition()" << endl;
+    // condition the data
+    condition ();
+  }
+
+/*
   if (apply_fft_shift)
   {
     if (verbose)
       cerr << "spip::ForwardFFT::transform fft_shift()" << endl;
     fft_shift();
   }
+*/
 
   // apply data transformation
   if ((input->get_order() == SFPT) && (output->get_order() == TFPS))
@@ -257,11 +288,13 @@ void spip::ForwardFFT::transformation ()
     throw runtime_error ("ForwardFFT::transform unsupport input to output conversion");
   }
 
+/*
   if (normalize)
   {
     if (verbose)
       cerr << "spip::ForwardFFT::transform normalize_output()" << endl;
     normalize_output();
   }
+*/
 }
 

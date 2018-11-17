@@ -64,6 +64,7 @@ namespace spip {
 
       bool processed_first_block;
 
+      uint64_t total_blocks;
   };
 }
 

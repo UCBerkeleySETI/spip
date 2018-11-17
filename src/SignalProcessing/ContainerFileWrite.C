@@ -120,7 +120,13 @@ void spip::ContainerFileWrite::resize_hdr_buf (unsigned required_size)
     if (spip::Container::verbose)
       cerr << "spip::ContainerFileWrite::resize_hdr_buf resizing from " << hdr_bufsz << endl;
     if (hdr_buf) 
+    {
+      if (spip::Container::verbose)
+        cerr << "spip::ContainerFileWrite::resize_hdr_buf hdr_buf=" << (void *) hdr_buf << endl;
       free (hdr_buf);
+    }
+    if (spip::Container::verbose)
+      cerr << "spip::ContainerFileWrite::resize_hdr_buf allocating " << required_size << " bytes" << endl;
     hdr_buf = (char *) malloc (required_size);
     hdr_bufsz = required_size;
   }
@@ -158,12 +164,19 @@ void spip::ContainerFileWrite::write_header ()
   // ensure the local buffer to be large enough for the header
   resize_hdr_buf (hdr_size);
   
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerFileWrite::write_header memset(hdr_buf, '\\0', " << hdr_size << ")" << endl; 
+
   // zero the header buffer
   memset (hdr_buf, '\0', hdr_size);
 
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerFileWrite::write_header header.set(ORDER=" << get_order_string(order) << ")" << endl;
   if (header.set ("ORDER", "%s", get_order_string(order).c_str()) < 0)
     throw Error (InvalidState, "spip::ContainerFileWrite::write_header", "failed to write ORDER to header");
 
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerFileWrite::write_header header.set(OBS_OFFSET=" << obs_offset << ")" << endl;
   // ensure the obs offset is updated
   if (header.set ("OBS_OFFSET", "%lu", obs_offset) < 0)
     throw Error (InvalidState, "spip::ContainerFileWrite::write_header", "failed to write OBS_OFFSET to header");

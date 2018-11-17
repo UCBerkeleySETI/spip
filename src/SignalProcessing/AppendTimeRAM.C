@@ -49,7 +49,25 @@ void spip::AppendTimeRAM::combine_SFPT_to_SFPT ()
 
 void spip::AppendTimeRAM::combine_TSPF_to_TSPF ()
 {
-  throw Error (InvalidState, "spip::AppendTimeRAM::combine_TSPF_to_TSPF", "not yet implemented");
+  if (verbose)
+    cerr << "spip::AppendTimeRAM::combine_TFPS_to_TFPS" << endl;
+  if (nbit == 8)
+  {
+    int8_t dummy;
+    combine_tspf_to_tspf (dummy);
+  }
+  else if (nbit == 16)
+  {
+    int16_t dummy;
+    combine_tspf_to_tspf (dummy);
+  }
+  else if (nbit == 32)
+  {
+    int32_t dummy;
+    combine_tspf_to_tspf (dummy);
+  }
+  else
+    throw Error (InvalidState, "spip::AppendTimeRAM::combine_TFPS_to_TFPS", "input nbit [%u] must be 8, 16 or 32", nbit);
 }
 
 void spip::AppendTimeRAM::combine_TSPFB_to_TSPFB ()

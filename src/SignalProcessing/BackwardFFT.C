@@ -154,6 +154,11 @@ void spip::BackwardFFT::configure_plan_dimensions ()
   }
   else
     throw invalid_argument ("BackwardFFT::configure_plan_dimensions unsupported input/output ordering");
+
+  if (verbose)
+    cerr << "spip::BackwardFFT::configure_plan_dimensions istride=" << istride 
+         << " idist=" << idist << " ostride=" << ostride << " odist=" << odist << endl;
+
 }
 
 //! prepare prior to each transformation call

@@ -56,9 +56,10 @@ void spip::AdaptiveFilterPipeline::set_channelisation (int freq_res)
   nfft = freq_res;
 }
 
-void spip::AdaptiveFilterPipeline::set_filtering (int ref_pol)
+void spip::AdaptiveFilterPipeline::set_filtering (int ref_pol, double _req_mon_tsamp)
 {
   reference_pol = ref_pol;
+  req_mon_tsamp = _req_mon_tsamp;
 }
 
 //! build the pipeline containers and transforms
@@ -116,7 +117,7 @@ void spip::AdaptiveFilterPipeline::configure (spip::UnpackFloat * unpacker)
   filter->set_input (channelised);
   filter->set_output (cleaned);
   filter->set_verbose (verbose);
-  filter->set_filtering (reference_pol);
+  filter->set_filtering (reference_pol, req_mon_tsamp);
 
   if (verbose)
     cerr << "spip::AdaptiveFilterPipeline::configure allocating output Ring Buffer" << endl;
@@ -217,7 +218,7 @@ void spip::AdaptiveFilterPipeline::configure_cuda (spip::UnpackFloat * unpacker)
   filter = new spip::AdaptiveFilterCUDA(stream, output_dir);
   filter->set_input (channelised);
   filter->set_output (cleaned);
-  filter->set_filtering (reference_pol);
+  filter->set_filtering (reference_pol, req_mon_tsamp);
   filter->set_verbose (verbose);
 
   // output of BWD fft
@@ -351,10 +352,9 @@ bool spip::AdaptiveFilterPipeline::process ()
 
   uint64_t input_bufsz = in_db->get_data_bufsz();
   uint64_t nbytes_input;
-  uint64_t bytes_processed = 0;
-  int64_t time_processed, stats_processed, stats_last_processed;
-  stats_processed = 0;
-  stats_last_processed = 0;
+
+  unsigned blocks_processed = 0;
+  unsigned blocks_per_mon_tsamp = filter->get_blocks_per_mon_tsamp();
 
   while (keep_processing)
   {
@@ -398,20 +398,13 @@ bool spip::AdaptiveFilterPipeline::process ()
       filter->prepare();
       filter->transformation();
 
-      // count the bytes processed
-      bytes_processed += nbytes_input;
-      time_processed = int64_t(double(bytes_processed) / input_bytes_per_second);
-
-      // stats update every 10s
-      stats_processed = time_processed / 10;
-
-      if (stats_processed > stats_last_processed)
+      blocks_processed++;
+      if (blocks_processed % blocks_per_mon_tsamp == 0)
       {
         filter->write_gains ();
         filter->write_dirty ();
         filter->write_cleaned ();
       }
-      stats_last_processed = stats_processed;
 
 #ifdef TESTING_NUER
       filter->write_gains ();

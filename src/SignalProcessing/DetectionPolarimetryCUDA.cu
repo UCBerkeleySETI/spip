@@ -111,6 +111,11 @@ __global__ void DetectionPolarimetry_TSPF_Stokes_Kernel (
 }
 
 
+void spip::DetectionPolarimetryCUDA::transform_SFPT_to_TSPF ()
+{
+  throw invalid_argument("spip::DetectionPolarimetryCUDA::transform_SFPT_to_TSP not implemented (yet)");
+}
+
 
 void spip::DetectionPolarimetryCUDA::transform_TSPF_to_TSPF ()
 {

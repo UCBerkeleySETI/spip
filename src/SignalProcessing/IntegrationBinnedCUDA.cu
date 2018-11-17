@@ -7,6 +7,8 @@
 
 #include "spip/IntegrationBinnedCUDA.h"
 
+#include <cuComplex.h>
+
 #include <iostream>
 #include <cstring>
 #include <stdexcept>
@@ -49,7 +51,6 @@ void spip::IntegrationBinnedCUDA::configure (spip::Ordering output_order)
   // ensure the buffer is zero
   buffer->zero();
 
-  // now setup the fscrunched buffer, if required
   if (chan_dec > 1)
   {
     fscrunched = new spip::ContainerCUDADevice();
@@ -280,22 +281,118 @@ __global__ void IntegrationBinned_TSPF_TSPFB_TSCR_Kernel (float * in, float * bu
   }
 }
 
-void spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB ()
+// compute a sum of a float across a warp
+__inline__ __device__
+cuFloatComplex warpReduceSumFC(cuFloatComplex val)
+{
+  for (int offset = warpSize/2; offset > 0; offset /= 2)
+  {
+    val.x += __shfl_down(val.x, offset);
+    val.y += __shfl_down(val.y, offset);
+  }
+  return val;
+}
+
+// TSPF ordered kernel: TSCR operation for LargeT scrunch
+__global__ void IntegrationBinned_TSPF_TSPFB_TSCR_LargeT_Kernel (float * in, float * buf, float * out, int * bp,
+                                                                 uint64_t ndat, unsigned nchan, unsigned nbin,
+                                                                 uint64_t buffer_idat, unsigned tdec,
+                                                                 uint64_t in_sigpol_stride, uint64_t in_dat_stride)
+{
+  extern __shared__ float shm_int_tspf_tspfb_tscr[];
+
+  // each block processes 32 channels and  time samples 
+  // each warp will read 32 channels into SHM, then we transpose and each warp sums 32 time samples
+  const unsigned warp_idx = threadIdx.x % 32; // [0..31] TODO make efficient
+  const unsigned warp_num = threadIdx.x / 32; // [0..31]
+
+  const unsigned isigpol = blockIdx.y;
+  const unsigned ichan = (blockIdx.x * 32) + warp_idx;
+  const unsigned ochan = (blockIdx.x * 32) + warp_num;  // only warp_idx == 0 will read/write
+
+  uint64_t idx = (warp_num * in_dat_stride) + (isigpol * in_sigpol_stride) + ichan;
+  uint64_t odx = ((isigpol * in_sigpol_stride) + ochan) * nbin;
+  uint64_t bdx = odx;
+
+  // use a cuFloatComplex to store the low/high bins
+  cuFloatComplex sums = make_cuFloatComplex(0, 0);
+
+  // load the previous bin values for these channels in the first warp only
+  // use first threads in warp to load 32 values from buffer
+  if (warp_idx == 0)
+  {
+    sums.x = buf[bdx+0];
+    sums.y = buf[bdx+1];
+  }
+
+  for (uint64_t idat=warp_idx; idat<ndat; idat+=32)
+  {
+    // read 32 time samples for 32 channels into SHM writing in TF order
+    // write 33 to eliminate warp lane clashing
+    shm_int_tspf_tspfb_tscr[(warp_num * 33) + warp_idx] = in[idx];
+
+    // wait for all warps to have loaded the 1024 samples
+    __syncthreads();
+
+    // determine the bin for this idat
+    const int ibin = bp[idat];
+
+    // now transpose so that each warp has 32 consecutive time samples for 1 channel
+    float val = shm_int_tspf_tspfb_tscr[warp_idx * 33 + warp_num];
+
+    // sum this time sample into the right bin
+    if (ibin == 0)
+      sums.x += val;
+    else if (ibin == 1)
+      sums.y += val;
+ 
+    // now sum across the warp (32 time samples) for 1 channel
+    sums = warpReduceSumFC(sums);
+
+    // increment the number of idats counted
+    buffer_idat += 32;
+
+    // warp_idx == 0 has the sums for each channel, reset the others
+    if (warp_idx != 0)
+      sums = make_cuFloatComplex(0, 0);
+
+    // if this the output sub-integration is complete
+    if (buffer_idat >= tdec)
+    {
+      // write the integrated value to the output:
+      if (warp_idx == 0)
+      {
+        out[odx + 0] = sums.x;
+        out[odx + 1] = sums.y;
+        odx += (in_dat_stride * nbin);
+      }
+
+      // reset the internal sum
+      sums.x = 0;
+      sums.y = 0;
+      buffer_idat = 0;
+    }
+
+    idx += in_dat_stride;
+  }
+
+  // save the sum from each channel to buffer
+  if (warp_idx == 0)
+  {
+    buf[bdx+0] = sums.x;
+    buf[bdx+1] = sums.y;
+  }
+}
+
+void spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB()
 {
   if (verbose)
-    cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB()" << endl;
+    cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPF()" << endl;
 
   float * in  = (float *) input->get_buffer();
   float * out = (float *) output->get_buffer();
   int * bp = (int *) binplan->get_buffer();
   float * buf = (float *) buffer->get_buffer();
-
-  if (verbose)
-  {
-    cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB nchan=" << nchan << " nsignal=" << nsignal << " npol=" << npol << " ndat=" << ndat << endl;
-    cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB chan_dec=" << chan_dec << " dat_dec=" << dat_dec << endl;
-    cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB buffer->get_size()=" << buffer->get_size() << endl;
-  }
 
   unsigned nchan_work = nchan;
   unsigned nsigpol = nsignal * npol;
@@ -338,22 +435,47 @@ void spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB ()
   if (dat_dec > 1)
   {
     unsigned nthread = 1024;
-    dim3 blocks (nchan_work / nthread, nsigpol, 1);
-    if (nchan_work % nthread)
-      blocks.x++;
 
-    uint64_t sigpol_stride = nchan_work;
-    uint64_t dat_stride = nsigpol * sigpol_stride;
-
-    if (verbose) 
+    if (nchan_work > ndat)
     {
-      cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB IntegrationBinned_TSPF_TSCR_Kernel blocks=" << blocks.x << "," << blocks.y << "," << blocks.z << endl;
-      cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB IntegrationBinned_TSPF_TSCR_Kernel buffer_idat=" << buffer_idat << " ndat=" << ndat << endl;
-      cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB IntegrationBinned_TSPF_TSCR_Kernel nchan_work=" << nchan_work << " dat_stride=" << dat_stride << endl;
-    }
+      dim3 blocks (nchan_work / nthread, nsigpol, 1);
+      if (nchan_work % nthread)
+        blocks.x++;
 
-    // then perform Tscrunching
-    IntegrationBinned_TSPF_TSPFB_TSCR_Kernel<<<blocks, nthread, 0, stream>>>(in, buf, out, bp, ndat, nchan_work, nbin, buffer_idat, dat_dec, sigpol_stride, dat_stride);
+      uint64_t sigpol_stride = nchan_work;
+      uint64_t dat_stride = nsigpol * sigpol_stride;
+
+      if (verbose) 
+      {
+        cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB IntegrationBinned_TSPF_TSCR_Kernel blocks=" << blocks.x << "," << blocks.y << "," << blocks.z << endl;
+        cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB IntegrationBinned_TSPF_TSCR_Kernel buffer_idat=" << buffer_idat << " ndat=" << ndat << endl;
+        cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB IntegrationBinned_TSPF_TSCR_Kernel nchan_work=" << nchan_work << " dat_stride=" << dat_stride << endl;
+      }
+
+      // then perform Tscrunching
+      IntegrationBinned_TSPF_TSPFB_TSCR_Kernel<<<blocks, nthread, 0, stream>>>(in, buf, out, bp, ndat, nchan_work, nbin, buffer_idat, dat_dec, sigpol_stride, dat_stride);
+    }
+    else
+    {
+      dim3 blocks (nchan_work / 32, nsigpol, 1);
+      if (nchan_work % 32)
+        blocks.x++;
+
+      uint64_t sigpol_stride = nchan_work;
+      uint64_t dat_stride = nsigpol * sigpol_stride;
+
+      if (verbose) 
+      {
+        cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB IntegrationBinned_TSPF_TSCR_LargeT_Kernel blocks=" << blocks.x << "," << blocks.y << "," << blocks.z << endl;
+        cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB IntegrationBinned_TSPF_TSCR_LargeT_Kernel buffer_idat=" << buffer_idat << " ndat=" << ndat << endl;
+        cerr << "spip::IntegrationBinnedCUDA::transform_TSPF_to_TSPFB IntegrationBinned_TSPF_TSCR_LargeT_Kernel nchan_work=" << nchan_work << " dat_stride=" << dat_stride << endl;
+      }
+
+      size_t sbytes = 1056 * sizeof(float);
+
+      // then perform Tscrunching
+      IntegrationBinned_TSPF_TSPFB_TSCR_LargeT_Kernel<<<blocks, nthread, sbytes, stream>>>(in, buf, out, bp, ndat, nchan_work, nbin, buffer_idat, dat_dec, sigpol_stride, dat_stride);
+    }
 
     buffer_idat += ndat;
     buffer_idat = buffer_idat % dat_dec;

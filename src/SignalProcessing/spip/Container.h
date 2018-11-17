@@ -70,7 +70,7 @@ namespace spip {
       double get_tsamp () { return tsamp; }
       double get_tsamp () const { return tsamp; }
 
-      void set_sideband (Signal::Sideband sb) { sideband = sb; }
+      void set_sideband (spip::Signal::Sideband);
       Signal::Sideband get_sideband () { return sideband; }
       Signal::Sideband get_sideband () const { return sideband; }
 

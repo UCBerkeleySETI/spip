@@ -21,6 +21,8 @@ namespace spip {
 
       ~AppendTime ();
 
+      void prepare ();
+
       void configure (Ordering output_order);
 
       void set_output_state (Signal::State _state);

@@ -14,6 +14,7 @@
 
 #include <unistd.h>
 #include <fcntl.h>
+#include <libgen.h>
 
 using namespace std;
 
@@ -203,6 +204,12 @@ void spip::FileWrite::close_file()
   cerr << "spip::FileWrite::close_file" << endl;
 #endif
   spip::File::close_file();
+
+  char * writeable = new char[filename.size() +1]; 
+  std::copy(filename.begin(), filename.end(), writeable);
+  writeable[filename.size()] = '\0';
+  cout << "Unloading " << basename(writeable) << endl;
+  delete[] writeable;
 
   // rename temporary file to actual filename
   rename (temporary_filename.c_str(), filename.c_str());

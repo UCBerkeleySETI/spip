@@ -19,7 +19,7 @@ namespace spip {
     public:
 
       //! Null constructor
-      ContainerCUDAFileWrite (std::string);
+      ContainerCUDAFileWrite (cudaStream_t, std::string);
 
       ~ContainerCUDAFileWrite();
 
@@ -41,6 +41,8 @@ namespace spip {
     protected:
 
     private:
+
+      cudaStream_t stream;
 
       void * host_buffer;
 

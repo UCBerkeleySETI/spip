@@ -30,6 +30,9 @@ void spip::ForwardFFTFFTW::configure (spip::Ordering output_order)
   if (nfft == 0)
     throw runtime_error ("ForwardFFTFFTW::configure nfft not set");
 
+  if (!conditioned)
+    conditioned = new ContainerRAM();
+
   spip::ForwardFFT::configure (output_order);
 
   // build the FFT plan, with ordering SFPT -> TFPS
@@ -72,6 +75,32 @@ void spip::ForwardFFTFFTW::prepare ()
   spip::ForwardFFT::prepare();
 }
 
+void spip::ForwardFFTFFTW::condition ()
+{
+  if (verbose)
+    cerr << "spip::ForwardFFTFFTW::confition nfft=" << nfft << endl;
+
+  if (nfft % 2 != 0)
+    throw runtime_error ("spip::ForwardFFTFFTW::condition cannot fft shift non even");
+
+  fftwf_complex * in  = (fftwf_complex *) input->get_buffer();
+  fftwf_complex * out = (fftwf_complex *) conditioned->get_buffer();
+
+  const uint64_t nval = nchan * npol * nsignal * ndat;
+  float f;
+  for (uint64_t i=0; i<nval; i++)
+  {
+    if (apply_fft_shift)
+      f = scale_fac * (int(1) - (2 * (i & 1)));
+    else
+      f = scale_fac;
+
+    out[i][0] = in[i][0] * f;
+    out[i][1] = in[i][1] * f;
+  }
+}
+
+/*
 //! fft shift the time domain signal, multiply by [1,-1,1,-1...]
 void spip::ForwardFFTFFTW::fft_shift()
 {
@@ -93,6 +122,7 @@ void spip::ForwardFFTFFTW::fft_shift()
     in[i][1] *= a;
   }
 }
+*/
 
 // convert to frequency minor order
 // convert to antenna minor order
@@ -101,8 +131,12 @@ void spip::ForwardFFTFFTW::transform_SFPT_to_TFPS ()
   if (verbose)
     cerr << "spip::ForwardFFTFFTW::transform_SFPT_to_TFPS()" << endl;
 
-  fftwf_complex * in  = (fftwf_complex *) input->get_buffer();
-  fftwf_complex * out = (fftwf_complex *) output->get_buffer();
+  fftwf_complex * in, * out;
+  if (apply_fft_shift || normalize)
+    in = (fftwf_complex *) conditioned->get_buffer();
+  else
+    in = (fftwf_complex *) input->get_buffer();
+  out = (fftwf_complex *) output->get_buffer();
   uint64_t out_offset;
 
   // iterate over input ordering of SFPT -> TFPS
@@ -129,8 +163,12 @@ void spip::ForwardFFTFFTW::transform_SFPT_to_TSPF ()
   if (verbose)
     cerr << "spip::ForwardFFTFFTW::transform_SFPT_to_TSPF()" << endl;
 
-  fftwf_complex * in  = (fftwf_complex *) input->get_buffer();
-  fftwf_complex * out = (fftwf_complex *) output->get_buffer();
+  fftwf_complex * in, * out;
+  if (apply_fft_shift || normalize)
+    in = (fftwf_complex *) conditioned->get_buffer();
+  else
+    in = (fftwf_complex *) input->get_buffer();
+  out = (fftwf_complex *) output->get_buffer();
 
   const uint64_t nchan_out = nchan * nfft;
   const uint64_t out_pol_stride = nchan_out;
@@ -163,8 +201,12 @@ void spip::ForwardFFTFFTW::transform_SFPT_to_SFPT ()
   if (verbose)
     cerr << "spip::ForwardFFTFFTW::transform_SFPT_to_SFPT()" << endl;
 
-  fftwf_complex * in  = (fftwf_complex *) input->get_buffer();
-  fftwf_complex * out = (fftwf_complex *) output->get_buffer();
+  fftwf_complex * in, * out;
+  if (apply_fft_shift || normalize)
+    in = (fftwf_complex *) conditioned->get_buffer();
+  else
+    in = (fftwf_complex *) input->get_buffer();
+  out = (fftwf_complex *) output->get_buffer();
 
   const uint64_t nchan_out = nchan * nfft;
   const uint64_t out_pol_stride = nbatch;
@@ -193,6 +235,7 @@ void spip::ForwardFFTFFTW::transform_SFPT_to_SFPT ()
   }
 }
 
+/*
 void spip::ForwardFFTFFTW::normalize_output ()
 {
   if (verbose)
@@ -210,3 +253,4 @@ void spip::ForwardFFTFFTW::normalize_output ()
     out[ival][1] = out[ival][1] * scale_fac;
   }
 }
+*/
