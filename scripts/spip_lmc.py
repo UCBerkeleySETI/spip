@@ -38,7 +38,7 @@ class lmcThread (threading.Thread):
 
     super(lmcThread, self).__init__()
 
-    self.daemon_exit_wait = 10
+    self.daemon_exit_wait = 20
     self.states = states
     self.parent = script
     self.sustain = True
@@ -109,7 +109,7 @@ class lmcThread (threading.Thread):
   def start_daemons (self, ranks):
 
     self.parent.system_lock.acquire()
-    to_sleep = 2
+    to_sleep = 5
 
     for rank in ranks:
 
@@ -320,9 +320,9 @@ class LMCReportingThread (ReportingThread):
 
       try:
         # wait for some activity on the control socket
-        self.script.log (3, "LMCReportingThread::run select len(can_read)=" + str(len(self.can_read)) + " can_read=" + str(self.can_read))
+        self.script.trace("select len(can_read)=" + str(len(self.can_read)) + " can_read=" + str(self.can_read))
         did_read, did_write, did_error = select.select(self.can_read, self.can_write, self.can_error, timeout)
-        self.script.log (3, "LMCReportingThread::run read="+str(len(did_read))+" write="+ str(len(did_write))+" error="+str(len(did_error)))
+        self.script.trace("read="+str(len(did_read))+" write="+ str(len(did_write))+" error="+str(len(did_error)))
 
       except select.error as e:
         if e[0] == errno.EINTR:
@@ -332,10 +332,10 @@ class LMCReportingThread (ReportingThread):
           raise
 
       if (len(did_read) > 0):
-        self.script.log (3, "LMCReportingThread::run len(did_read)=" + str(len(did_read)))
+        self.script.trace("len(did_read)=" + str(len(did_read)))
         for handle in did_read:
           if (handle == sock):
-            self.script.log (3, "LMCReportingThread::run accepting new connection")
+            self.script.trace("accepting new connection")
             (new_conn, addr) = sock.accept()
             self.script.log (2, "LMCReportingThread: accept connection from "+repr(addr))
 
@@ -344,42 +344,42 @@ class LMCReportingThread (ReportingThread):
 
           # an accepted connection must have generated some data
           else:
-            self.script.log (3, "LMCReportingThread::run processing data on existing connection")
+            self.script.trace("processing data on existing connection")
             try:
               self.process_message_on_handle (handle)
 
             except socket.error as e:
-              self.script.log (3, "LMCReportingThread::run socket error on existing connection")
+              self.script.trace("socket error on existing connection")
               if e.errno == errno.ECONNRESET:
                 self.script.log (2, "LMCReportingThread closing connection")
                 handle.close()
-                self.script.log (3, "LMCReportingThread::run trying to delete socket from can_read")
+                self.script.trace("trying to delete socket from can_read")
                 for i, x in enumerate(self.can_read):
                   if (x == handle):
-                    self.script.log (3, "LMCReportingThread::run deleting can_read[" + str(i) + "]")
+                    self.script.trace("deleting can_read[" + str(i) + "]")
                     del self.can_read[i]
               else:
                 raise
 
       # if we are asked to quit, close the listening socket and remove it from the list
       if self.script.quit_event.isSet():
-        self.script.log (3, "LMCReportingThread::run script.quit_event.isSet() == True")
+        self.script.trace("script.quit_event.isSet() == True")
         for i, x in enumerate(self.can_read):
           if (x == sock):
-            self.script.log (2, "LMCReportingThread::run closing listening socket at index[" + str(i) + "]")
+            self.script.debug("closing listening socket at index[" + str(i) + "]")
             sock.close()
             del self.can_read[i]
 
-        self.script.log (2, "LMCReportingThread::run concluding, len(can_read)=" + \
+        self.script.debug("concluding, len(can_read)=" + \
                          str(len(self.can_read)) + " can_read=" + str(self.can_read))
         if len(self.can_read) == 0:
           serve_requests = False
 
-    self.script.log (2, "LMCReportingThread::run exiting")
+    self.script.debug("exiting")
 
   def parse_message (self, request):
 
-    self.script.log (2, "LMCReportingThread::parse_message: " + str(request))
+    self.script.debug(str(request))
 
     command = request["lmc_cmd"]["command"]
 
@@ -513,25 +513,25 @@ class LMCDaemon (Daemon, HostBased):
 
   def gather_stats (self):
 
-    self.log(3, "LMCDaemon::gather_stats getDiskCapacity ()")
+    self.trace("getDiskCapacity ()")
     rval, self.disks = lmc_mon.getDiskCapacity (self.disks_to_monitor, DL)
-    self.log(3, "LMCDaemon::gather_stats " + str(self.disks))
+    self.trace("" + str(self.disks))
 
-    self.log(3, "LMCDaemon::gather_stats getLoads()")
+    self.trace("getLoads()")
     rval, self.loads = lmc_mon.getLoads (DL)
-    self.log(3, "LMCDaemon::gather_stats " + str(self.loads))
+    self.trace("" + str(self.loads))
 
-    self.log(3, "LMCDaemon::gather_stats getNTPSynced()")
+    self.trace("getNTPSynced()")
     rval, self.ntp_sync = lmc_mon.getNTPSynced(DL)
-    self.log(3, "LMCDaemon::gather_stats " + str(self.ntp_sync))
+    self.trace("" + str(self.ntp_sync))
 
-    self.log(3, "LMCDaemon::gather_stats getSMRBCapacity(" + str(self.host_streams)+ ")")
+    self.trace("getSMRBCapacity(" + str(self.host_streams)+ ")")
     rval, self.smrbs = lmc_mon.getSMRBCapacity (self.host_streams, self.quit_event, DL)
-    self.log(3, "LMCDaemon::gather_stats " + str(self.smrbs))
+    self.trace("" + str(self.smrbs))
 
-    self.log(3, "LMCDaemon::gather_stats getIPMISensors()")
+    self.trace("getIPMISensors()")
     rval, self.sensors = lmc_mon.getIPMISensors (DL)
-    self.log(3, "LMCDaemon::gather_stats " + str(self.sensors))
+    self.trace("" + str(self.sensors))
 
   def main (self):
 
@@ -581,12 +581,12 @@ class LMCDaemon (Daemon, HostBased):
 
     # start server thread
     for stream in self.host_servers:
-      self.log(2, "main: server_thread["+str(stream)+"] = streamThread(-1)")
+      self.debug("server_thread["+str(stream)+"] = streamThread(-1)")
       self.server_daemon_states[stream] = {}
       self.server_thread = serverThread(stream, self, self.server_daemon_states[stream])
-      self.log(2, "main: server_thread["+str(stream)+"].start()")
+      self.debug("server_thread["+str(stream)+"].start()")
       self.server_thread.start()
-      self.log(2, "main: server_thread["+str(stream)+"] started")
+      self.debug("server_thread["+str(stream)+"] started")
 
     sleep(5)
     self.log(1, "Server threads started: " + str(len(self.host_servers)))
@@ -594,24 +594,24 @@ class LMCDaemon (Daemon, HostBased):
     # start a thread for each stream
     for stream in self.host_streams:
       self.stream_daemon_states[stream] = {}
-      self.log(2, "main: stream_threads["+str(stream)+"] = streamThread ("+str(stream)+")")
+      self.debug("stream_threads["+str(stream)+"] = streamThread ("+str(stream)+")")
       self.reload_streams[stream] = False
       self.stream_threads[stream] = streamThread (stream, self, self.stream_daemon_states[stream])
-      self.log(2, "main: stream_threads["+str(stream)+"].start()")
+      self.debug("stream_threads["+str(stream)+"].start()")
       self.stream_threads[stream].start()
-      self.log(2, "main: stream_thread["+str(stream)+"] started!")
+      self.debug("stream_thread["+str(stream)+"] started!")
 
     self.log(1, "Stream threads started: " + str(len(self.host_streams)))
 
     # start a thread for each beam
     for beam in self.host_beams:
       self.beam_daemon_states[beam] = {}
-      self.log(2, "main: beam_threads["+str(beam)+"] = beamThread ("+str(beam)+")")
+      self.debug("beam_threads["+str(beam)+"] = beamThread ("+str(beam)+")")
       self.reload_beams[beam] = False
       self.beam_threads[beam] = beamThread (beam, self, self.beam_daemon_states[beam])
-      self.log(2, "main: beam_threads["+str(beam)+"].start()")
+      self.debug("beam_threads["+str(beam)+"].start()")
       self.beam_threads[beam].start()
-      self.log(2, "main: beam_thread["+str(beam)+"] started!")
+      self.debug("beam_thread["+str(beam)+"] started!")
 
     self.log(1, "Beam threads started: " + str(len(self.host_beams)))
 
@@ -622,7 +622,7 @@ class LMCDaemon (Daemon, HostBased):
 
     first_time = True
 
-    self.log(2, "main: starting main loop quit_event=" + str(self.quit_event.isSet()))
+    self.debug("starting main loop quit_event=" + str(self.quit_event.isSet()))
 
     # control loop
     while not self.quit_event.isSet():
@@ -630,17 +630,17 @@ class LMCDaemon (Daemon, HostBased):
       # update the monitoring points
       if counter == 0:
 
-        self.log(2, "main: refreshing monitoring points")
+        self.debug("refreshing monitoring points")
         if not first_time:
           self.resource_lock.acquire ()
 
-        self.log(3, "main: self.gather_stats()")
+        self.trace("self.gather_stats()")
         self.gather_stats()
 
         first_time = False
         self.resource_lock.release ()
 
-        self.log(3, "main: monitoring points refreshed")
+        self.trace("monitoring points refreshed")
 
         counter = hw_poll
 
@@ -649,10 +649,10 @@ class LMCDaemon (Daemon, HostBased):
 
       counter -= 1
 
-    self.log(2, "main: quit_event set, asking lmcThreads to terminate")
+    self.debug("quit_event set, asking lmcThreads to terminate")
     self.concludeThreads()
 
-    self.log(2, "main: done")
+    self.debug("done")
 
 
   ########################################################################## 
