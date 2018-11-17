@@ -41,6 +41,7 @@ spip::UDPFormatVDIF::UDPFormatVDIF(int pps)
 
   nsamp_per_packet = 0;
   bytes_per_second = 0;
+  prev_frame_number = 0;
 
   // we will "extract" the UTC_START from the data stream
   self_start = true;
@@ -303,6 +304,12 @@ inline int64_t spip::UDPFormatVDIF::decode_packet (char * buf, unsigned * pkt_si
   // extract key parameters from the header
   const int offset_second = getVDIFFrameEpochSecOffset (header_ptr) - start_second;
   const int frame_number  = getVDIFFrameNumber (header_ptr);
+
+#ifdef _DEBUG
+  if (frame_number != 0 && frame_number != prev_frame_number + 1)
+    cerr << thread_id << " offset_second=" << offset_second << " frame_number=" << frame_number << " prev_frame_number=" << prev_frame_number << " dropped=" << frame_number - (prev_frame_number + 1) << endl;
+  prev_frame_number = frame_number;
+#endif
 
   // calculate the byte offset for this frame within the data stream
   int64_t byte_offset = (bytes_per_second * offset_second) + (frame_number * frame_size);

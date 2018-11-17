@@ -17,7 +17,7 @@ namespace spip {
 
     public:
 
-      BlockFormatUWB ();
+      BlockFormatUWB (unsigned);
 
       ~BlockFormatUWB ();
 

@@ -8,7 +8,7 @@
 #include "spip/AsciiHeader.h"
 #include "spip/HardwareAffinity.h"
 #include "spip/SimReceiveDB.h"
-#include "spip/UDPFormatVDIF.h"
+#include "spip/UDPFormatDualVDIF.h"
 
 #include <pthread.h>
 #include <unistd.h>
@@ -96,14 +96,20 @@ int main(int argc, char *argv[])
   }
 
   simdb = new spip::SimReceiveDB(key.c_str());
-  simdb->set_format (new spip::UDPFormatVDIF());
+  simdb->set_format (new spip::UDPFormatDualVDIF());
   simdb->set_verbosity (verbose);
 
   signal(SIGINT, signal_handler);
 
   config.load_from_file (argv[optind]);
 
-  unsigned resolution = 16384;
+  // resolution is UDP_NSAMP * NPOL * NDIM * NBIT / 8
+  unsigned udp_nsamp, npol, ndim, nbit;
+  config.get("UDP_NSAMP", "%u", &udp_nsamp);
+  config.get("NPOL", "%u", &npol);
+  config.get("NDIM", "%u", &ndim);
+  config.get("NBIT", "%u", &nbit);
+  unsigned resolution = (udp_nsamp * npol * ndim * nbit) / 8;
   if (config.set("RESOLUTION", "%u", resolution) < 0)
   {
     fprintf (stderr, "ERROR: could not write RESOLUTION=%u to config\n", resolution);

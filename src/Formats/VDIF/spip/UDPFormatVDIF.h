@@ -88,6 +88,8 @@ namespace spip {
 
       bool configured_stream;
 
+      int prev_frame_number;
+
     private:
 
       unsigned nsamp_per_packet;

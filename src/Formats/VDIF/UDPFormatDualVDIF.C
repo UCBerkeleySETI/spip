@@ -53,8 +53,13 @@ inline int64_t spip::UDPFormatDualVDIF::decode_packet (char * buf, unsigned * pk
   // this UDP format assumes N threads, for either pol 0, 1 or 2
   int thread_id = getVDIFThreadID (header_ptr);
 
+  // hack to account for mislabelled RFI reference stream
+  if (thread_id == 3)
+    thread_id = 2;
+
   if (thread_id != 0 && thread_id != 1 && thread_id != 2)
-    throw invalid_argument ("VDIF thread ID must be 0, 1 or 2");
+    return -1;
+    //throw invalid_argument ("VDIF thread ID must be 0, 1 or 2");
 
   // the size of a VDIF UDP packet
   *pkt_size = packet_data_size;

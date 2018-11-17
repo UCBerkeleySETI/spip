@@ -16,16 +16,14 @@
 
 using namespace std;
 
-spip::BlockFormatUWB::BlockFormatUWB()
+spip::BlockFormatUWB::BlockFormatUWB (unsigned pol)
 {
   nchan = 1;
-  npol = 2;
+  npol = pol;
   ndim = 2;
   nbit = 16;
   nbin = 65536;
 
-  // Ask AJ...
-  //scale = 0.022325;
   scale = 1;
 
 #ifdef HAVE_FFTW3
@@ -115,6 +113,15 @@ void spip::BlockFormatUWB::unpack_hgft (char * buffer, uint64_t nbytes)
 
   const uint64_t pol_stride = ndim * nsamp_per_block;
   const uint64_t block_stride = npol * pol_stride;;
+  float re_scale = scale;
+  float im_scale = scale;
+
+  // All UWB output will be positive sideband
+  if (bw < 0)
+  {
+    out_bw = fabs(bw);
+    im_scale *= -1;
+  }
 
   // data are oranise in blocks of 2048 samples from pol0, 2048 pol1, etc
   for (unsigned iblock=0; iblock<nblock; iblock++)
@@ -127,8 +134,9 @@ void spip::BlockFormatUWB::unpack_hgft (char * buffer, uint64_t nbytes)
         re = convert_offset_binary(input[idx+0]);
         im = convert_offset_binary(input[idx+1]);
 
-        ref = float(re);
-        imf = float(im);
+        ref = float(re) * re_scale;
+        imf = float(im) * im_scale;
+
         power = ((ref * ref) + (imf * imf));
 
         sums[ipol*ndim + 0] += ref;
@@ -178,8 +186,8 @@ void spip::BlockFormatUWB::unpack_hgft (char * buffer, uint64_t nbytes)
         itime = isamp / nsamp_per_time;
 
         // now parse in the min max
-        ts_min[ipol][itime]  = std::min (power, ts_min[ipol][itime]);
-        ts_max[ipol][itime]  = std::max (power, ts_max[ipol][itime]);
+        ts_min[ipol][itime]   = std::min (power, ts_min[ipol][itime]);
+        ts_max[ipol][itime]   = std::max (power, ts_max[ipol][itime]);
         ts_sum[ipol][itime]   += power;
         ts_sumsq[ipol][itime] += power * power;
 
