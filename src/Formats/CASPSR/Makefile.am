@@ -19,8 +19,7 @@ AM_CXXFLAGS = -I. \
 	-I$(top_builddir)/src/Dada
 
 LDADD = libcaspsr.la \
-  $(top_builddir)/src/libspip.la \
-  @PSRDADA_LIBS@
+  $(top_builddir)/src/libspip.la
 
 AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @CUDA_CFLAGS@
-
+LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @CUDA_LIBS@

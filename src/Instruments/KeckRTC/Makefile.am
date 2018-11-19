@@ -22,6 +22,8 @@ LDADD = libinstkeckrtc.la \
   $(top_builddir)/src/libspip.la \
   -lrt
 
+LDADD += @PSRDADA_LIBS@
+
 keckrtc_client_SOURCES = keckrtc_client.C
 keckrtc_server_SOURCES = keckrtc_server.C
 
