@@ -140,6 +140,12 @@ class TCSDaemon(Daemon):
     self.beam_states = {}
     self.host = sockets.getHostNameShort()
 
+  def load_header_param (self, b, area, param, header, key):
+    try:
+      self.beam_states[b]["config"][area][param]["#text"] = header[key]
+    except KeyError, e:
+      self.beam_states[b]["config"][area][param]["#text"] = ""
+
   def load_finished (self):
 
     # read the most recently finished observations
@@ -189,13 +195,13 @@ class TCSDaemon(Daemon):
         self.beam_states[b]["config"]["calibration_parameters"]["tsys_avg_time"]["#text"] = ""
         self.beam_states[b]["config"]["calibration_parameters"]["tsys_freq_resolution"]["#text"] = ""
 
-        self.beam_states[b]["config"]["calibration_parameters"]["signal"]["#text"] = header["CAL_SIGNAL"]
-        self.beam_states[b]["config"]["calibration_parameters"]["freq"]["#text"] = header["CAL_FREQ"]
-        self.beam_states[b]["config"]["calibration_parameters"]["phase"]["#text"] = header["CAL_PHASE"]
-        self.beam_states[b]["config"]["calibration_parameters"]["duty_cycle"]["#text"] = header["CAL_DUTY_CYCLE"]
-        self.beam_states[b]["config"]["calibration_parameters"]["epoch"]["#text"] = header["CAL_EPOCH"]
-        self.beam_states[b]["config"]["calibration_parameters"]["tsys_avg_time"]["#text"] = header["TSYS_AVG_TIME"]
-        self.beam_states[b]["config"]["calibration_parameters"]["tsys_freq_resolution"]["#text"] = header["TSYS_FREQ_RES"]
+        self.load_header_param(b, "calibration_parameters", "signal", header, "CAL_SIGNAL")
+        self.load_header_param(b, "calibration_parameters", "freq", header, "CAL_FREQ")
+        self.load_header_param(b, "calibration_parameters", "phase", header, "CAL_PHASE")
+        self.load_header_param(b, "calibration_parameters", "duty_cycle", header, "CAL_DUTY_CYCLE")
+        self.load_header_param(b, "calibration_parameters", "epoch", header, "CAL_EPOCH")
+        self.load_header_param(b, "calibration_parameters", "tsys_avg_time", header, "TSYS_AVG_TIME")
+        self.load_header_param(b, "calibration_parameters", "tsys_freq_resolution", header, "TSYS_FREQ_RES")
 
         self.beam_states[b]["config"]["stream_configuration"]["nstream"]["#text"] = "0"
 
@@ -757,6 +763,7 @@ class TCSBeamDaemon (TCSDaemon, BeamBased):
     self.beam_states[b]["config"]["observation_parameters"] = {}
     self.beam_states[b]["config"]["custom_parameters"] = {}
     self.beam_states[b]["config"]["processing_parameters"] = {}
+    self.beam_states[b]["config"]["calibration_parameters"] = {}
     self.beam_states[b]["config"]["stream_configuration"] = {}
 
     self.beam_states[b]["config"]["source_parameters"]["name"] = {"@key":"SOURCE", "@epoch":"J2000", "#text":""}
