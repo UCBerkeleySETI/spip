@@ -6,7 +6,7 @@ libspipdsp_headers = \
   spip/Append.h spip/AppendFrequency.h spip/AppendFrequnecyRAM.h spip/AppendTime.h spip/AppendTimeRAM.h\
   spip/CalibrationPipeline.h \
   spip/Combination.h \
-  spip/ContinuumPipeline.h \
+  spip/ContinuumPipeline.h spip/ContinuumPipelineFloat.h \
   spip/Container.h \
 	spip/ContainerRAM.h \
 	spip/ContainerRAMFileWrite.h \
@@ -36,7 +36,7 @@ libspipdsp_la_SOURCES = \
   Add.C AddTime.C AddTimeRAM.C \
   Append.C AppendFrequency.C AppendFrequencyRAM.C AppendTime.C AppendTimeRAM.C \
   CalibrationPipeline.C \
-  ContinuumPipeline.C \
+  ContinuumPipeline.C ContinuumPipelineFloat.C \
   Container.C \
 	ContainerRAM.C \
 	ContainerRAMFileWrite.C \
@@ -106,9 +106,13 @@ endif
 if HAVE_CUDA
 
 libspipdsp_headers += \
+  spip/CUDARingtoCUDATransfer.h \
+  spip/CUDAtoCUDATransfer.h \
   spip/CUDAtoRAMTransfer.h \
   spip/RAMtoCUDATransfer.h \
-  spip/ContainerCUDA.h spip/ContainerRingWriteCUDA.h spip/ContainerCUDAFileWrite.h \
+  spip/RINGtoCUDATransfer.h \
+  spip/ContainerCUDA.h spip/ContainerRingWriteCUDA.h spip/ContainerRingReadCUDA.h \
+	spip/ContainerCUDAFileWrite.h \
   spip/DetectionPolarimetryCUDA.h \
   spip/DetectionSquareLawCUDA.h \
   spip/IntegrationCUDA.h \
@@ -120,9 +124,13 @@ libspipdsp_headers += \
   spip/AdaptiveFilterCUDA.h
 
 libspipdsp_la_SOURCES += \
+  CUDARingtoCUDATransfer.C \
+  CUDAtoCUDATransfer.C \
   CUDAtoRAMTransfer.C \
   RAMtoCUDATransfer.C \
-  ContainerCUDA.C ContainerRingWriteCUDA.C ContainerCUDAFileWrite.C \
+  RINGtoCUDATransfer.C \
+  ContainerCUDA.C ContainerRingWriteCUDA.C ContainerRingReadCUDA.C\
+  ContainerCUDAFileWrite.C \
   DetectionPolarimetryCUDA.cu \
   DetectionSquareLawCUDA.cu \
   IntegrationCUDA.cu \

@@ -31,6 +31,9 @@ namespace spip {
 
 #ifdef HAVE_CUDA
       void register_buffers();
+
+      int get_db_device () { return db->get_device(); };
+      int get_db_device () const { return db->get_device(); };
 #endif
 
     protected:
@@ -38,8 +41,6 @@ namespace spip {
     private:
 
       DataBlockRead * db;
-
-      uint64_t nbits_per_sample;
 
       uint64_t curr_buf_bytes;
 

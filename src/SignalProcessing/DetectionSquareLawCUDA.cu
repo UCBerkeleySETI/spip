@@ -33,7 +33,7 @@ __global__ void DetectionSquareLaw_SFPT_PPQQ_Kernel (
   // sample offset
   const uint64_t idat = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-  if (idat < ndat)
+  if (idat >= ndat)
     return;
 
   //              signal offset               channel offset
@@ -58,7 +58,7 @@ __global__ void DetectionSquareLaw_SFPT_Intensity_Kernel (
   // sample offset
   const uint64_t idat = (blockIdx.x * blockDim.x) + threadIdx.x;
   
-  if (idat < ndat)
+  if (idat >= ndat)
     return;
   
   uint64_t out_block_offset = (blockIdx.y * sig_stride) + (blockIdx.z * chan_stride);
@@ -125,7 +125,7 @@ __global__ void DetectionSquareLaw_SFPT_to_TSPF_PPQQ_Kernel (
   // sample offset
   const uint64_t idat = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-  if (idat < ndat)
+  if (idat >= ndat)
     return;
 
   //              signal offset                  channel offset
@@ -155,7 +155,7 @@ __global__ void DetectionSquareLaw_SFPT_to_TSPF_Intensity_Kernel (
   // sample offset
   const uint64_t idat = (blockIdx.x * blockDim.x) + threadIdx.x;
   
-  if (idat < ndat)
+  if (idat >= ndat)
     return;
   
   //              signal offset                  channel offset
@@ -196,6 +196,10 @@ void spip::DetectionSquareLawCUDA::transform_SFPT_to_TSPF ()
   { 
     uint64_t out_sig_stride = nchan * npol;
     uint64_t out_dat_stride = nsignal * out_sig_stride;
+    if (verbose)
+    {
+      cerr << "spip::DetectionSquareLawCUDA::transform_SFPT_to_TSPF blocks=(" << blocks.x << "," << blocks.y << "," << blocks.z << ")" << endl;
+    }
   
     // npol == 2 by definition
     DetectionSquareLaw_SFPT_to_TSPF_PPQQ_Kernel<<<blocks, nthread, 0, stream>>>(in, out, ndat, in_sig_stride, in_chan_stride, out_dat_stride, out_sig_stride);
@@ -329,8 +333,6 @@ __global__ void DetectionSquareLaw_TSPFB_Intensity_Kernel (
   }
 }
 
-
-
 void spip::DetectionSquareLawCUDA::transform_TSPF_to_TSPF ()
 {
   if (verbose)
@@ -350,6 +352,12 @@ void spip::DetectionSquareLawCUDA::transform_TSPF_to_TSPF ()
   {
     uint64_t sig_stride = npol * pol_stride;
     uint64_t dat_stride = nsignal * sig_stride;
+
+    if (verbose)
+    {
+      cerr << "spip::DetectionSquareLawCUDA::transform_TSPF_to_TSPF DetectionSquareLaw_TSPF_PPQQ_Kernel" << endl;
+      cerr << "spip::DetectionSquareLawCUDA::transform_TSPF_to_TSPF pol_stride=" << pol_stride << " sig_stride=" << sig_stride << " dat_stride=" << dat_stride << endl;
+    }
     DetectionSquareLaw_TSPF_PPQQ_Kernel<<<blocks, nthread, 0, stream>>>(in, out, nchan, dat_stride, sig_stride, pol_stride);
   }
 
@@ -374,7 +382,6 @@ void spip::DetectionSquareLawCUDA::transform_TSPF_to_TSPF ()
   }
 }
 
-// TODO IMPLEMENT!
 void spip::DetectionSquareLawCUDA::transform_TSPFB_to_TSPFB ()
 {
   if (verbose)
@@ -420,14 +427,9 @@ void spip::DetectionSquareLawCUDA::transform_TSPFB_to_TSPFB ()
   }
 }
 
-
-
 void spip::DetectionSquareLawCUDA::transform_TFPS_to_TFPS ()
 {
   if (verbose)
     cerr << "spip::DetectionSquareLawCUDA::transform_TFPS_to_TFPS" << endl;
-  
-  // read complex input data from one or two polarisations and form
-  // detected products of each polarisation indepdently
-  
+  throw invalid_argument ("spip::DetectionSquareLawCUDA::transform_TFPS_to_TFPS not implemented (yet)");
 }

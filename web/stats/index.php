@@ -20,17 +20,24 @@ class stat extends spip_webpage
     $this->config = spip::get_config();
     $this->streams = array();
 
-    $this->plot_width = 160;# 240;
-    $this->plot_height = 120;#180;
 
     $this->cache_dir = $this->config["WEB_DIR"]."/spip/cache";
+    $this->npol = $this->config["NPOL"];
+
 
     for ($istream=0; $istream<$this->config["NUM_STREAM"]; $istream++)
     {
       list ($host, $ibeam, $subband) = explode (":", $this->config["STREAM_".$istream]);
       $beam_name = $this->config["BEAM_".$ibeam];
       $this->streams[$istream] = array("beam_name" => $beam_name, "host" => $host, "subband" => $subband);
+      if (array_key_exists("NPOL_".$istream, $this->config))
+        $this->npol = max($this->npol, $this->config["NPOL_".$istream]);
     }
+
+    # total width of 
+    $width = 900;
+    $this->plot_width = floor($width / ($this->npol * 3));
+    $this->plot_height = floor(($this->plot_width * 3) / 4);
   }
 
   function javaScriptCallback()
@@ -333,6 +340,17 @@ class stat extends spip_webpage
 
   function renderObsTable ($stream)
   {
+    $fields = array();
+
+    for ($ipol=0; $ipol<$this->npol; $ipol++)
+    {
+      $fields[$stream."_histogram_mean_".$ipol."_real"] = "Mean [".$ipol." Re]";
+      $fields[$stream."_histogram_mean_".$ipol."_imag"] = "Mean [".$ipol." Im]";
+      $fields[$stream."_histogram_stddev_".$ipol."_real"] = "StdDev [".$ipol." Re]";
+      $fields[$stream."_histogram_stddev_".$ipol."_real"] = "StdDev [".$ipol." Im]";
+    }
+
+    /*
     $cols = 4;
     $fields = array( $stream."_histogram_mean_0_real" => "Mean [0 Re]",
                      $stream."_histogram_mean_0_imag" => "Mean [0 Im]",
@@ -342,45 +360,32 @@ class stat extends spip_webpage
                      $stream."_histogram_stddev_1_real" => "StdDev [1 Re]",
                      $stream."_histogram_stddev_0_imag" => "StdDev [0 Im]",
                      $stream."_histogram_stddev_1_imag" => "StdDev [1 Im]" );
+     */
 
     echo "<table id='obsTable' width='100%' border=0>\n";
 
-    echo "<tr><th colspan=8 style='text-align: center;'>Stream ".$stream."</th></tr>\n";
-
-    echo "<tr><th colspan=4 style='text-align: center;'>Pol 0</th>".
-             "<th colspan=4 style='text-align: center;'>Pol 1</th></tr>\n";
+    echo "<tr><th colspan='".($this->npol*4)."' style='text-align: center;'>Stream ".$stream."</th></tr>\n";
 
     echo "<tr>\n";
-    echo "<th width='10%'>Mean</th>\n";
-    echo "<td width='15%'>(<span id='".$stream."_histogram_mean_0_real'></span>,".
-                           "<span id='".$stream."_histogram_mean_0_imag'></span>)</td>\n";
 
-    echo "<th width='10%'>Std. Dev.</th>\n";
-    echo "<td width='15%'>(<span id='".$stream."_histogram_stddev_0_real'></span>,".
-                           "<span id='".$stream."_histogram_stddev_0_imag'></span>)</td>\n";
+    for ($ipol=0; $ipol<$this->npol; $ipol++)
+    {
+      echo "<th colspan=4 style='text-align: center;'>Pol ".$ipol."</th>";
+    }
 
-    echo "<th width='10%'>Mean</th>\n";
-    echo "<td width='15%'>(<span id='".$stream."_histogram_mean_1_real'></span>,".
-                           "<span id='".$stream."_histogram_mean_1_imag'></span>)</td>\n";
+    echo "<tr>\n";
+    for ($ipol=0; $ipol<$this->npol; $ipol++)
+    {
+      echo "<th width='10%'>Mean</th>\n";
+      echo "<td width='15%'>(<span id='".$stream."_histogram_mean_".$ipol."_real'></span>,".
+                             "<span id='".$stream."_histogram_mean_".$ipol."_imag'></span>)</td>\n";
 
-    echo "<th width='10%'>Std. Dev.</th>\n";
-    echo "<td width='15%'>(<span id='".$stream."_histogram_stddev_1_real'></span>,".
-                           "<span id='".$stream."_histogram_stddev_1_imag'></span>)</td>\n";
-    
+      echo "<th width='10%'>Std. Dev.</th>\n";
+      echo "<td width='15%'>(<span id='".$stream."_histogram_stddev_".$ipol."_real'></span>,".
+        "<span id='".$stream."_histogram_stddev_".$ipol."_imag'></span>)</td>\n";
+    }
     echo "</tr>\n";
 
-    /*
-    $keys = array_keys($fields);
-    for ($i=0; $i<count($keys); $i++)
-    {
-      if ($i % $cols == 0)
-        echo "  <tr>\n";
-      echo "    <th>".$fields[$keys[$i]]."</th>\n";
-      echo "    <td width='100px'><span id='".$keys[$i]."'>--</span></td>\n";
-      if (($i+1) % $cols == 0)
-        echo "  </tr>\n";
-    }
-    */
     echo "</table>\n";
   }
 
@@ -388,10 +393,11 @@ class stat extends spip_webpage
   {
     $img_params = "src='/spip/images/blankimage.gif' width='".$this->plot_width."px' height='".$this->plot_height."px'";
 
-    echo "<input type='hidden' id='".$stream."_histogram_0_real_ts'/>\n";
-    echo "<input type='hidden' id='".$stream."_histogram_0_imag_ts'/>\n";
-    echo "<input type='hidden' id='".$stream."_histogram_1_real_ts'/>\n";
-    echo "<input type='hidden' id='".$stream."_histogram_1_imag_ts'/>\n";
+    for ($ipol=0; $ipol<$this->npol; $ipol++)
+    {
+      echo "<input type='hidden' id='".$stream."_histogram_".$ipol."_real_ts'/>\n";
+      echo "<input type='hidden' id='".$stream."_histogram_".$ipol."_imag_ts'/>\n";
+    }
 
     echo "<table  width='100%' id='plotTable'>\n";
     /*
@@ -405,48 +411,37 @@ class stat extends spip_webpage
     */
 
     echo "<tr>\n";
-    echo   "<td>";
-    echo     "<a id='".$stream."_timeseries_0_none_link'>";
-    echo       "<img id='".$stream."_timeseries_0_none' ".$img_params." width='160px'/>";
-    echo     "</a>";
-    echo     "<input type='hidden' id='".$stream."_timeseries_0_none_ts'/>";
-    echo   "</td>\n";
+    for ($ipol=0; $ipol<$this->npol; $ipol++)
+    {
+      echo   "<td>";
+      echo     "<a id='".$stream."_timeseries_".$ipol."_none_link'>";
+      echo       "<img id='".$stream."_timeseries_".$ipol."_none' ".$img_params." width='160px'/>";
+      echo     "</a>";
+      echo     "<input type='hidden' id='".$stream."_timeseries_".$ipol."_none_ts'/>";
+      echo   "</td>\n";
 
-    echo   "<td>";
-    echo     "<a id='".$stream."_histogram_0_none_link'>";
-    echo       "<img id='".$stream."_histogram_0_none' ".$img_params."/>";
-    echo     "</a>";
-    echo     "<input type='hidden' id='".$stream."_histogram_0_none_ts'/>";
-    echo   "</td>\n";
-    echo   "<td>";
-    echo     "<a id='".$stream."_bandpass_0_none_link'>";
-    echo       "<img id='".$stream."_bandpass_0_none' ".$img_params."/>";
-    echo     "</a>";
-    echo     "<input type='hidden' id='".$stream."_bandpass_0_none_ts'/>";
-    echo   "</td>\n";
-
-    echo   "<td>";
-    echo     "<a id='".$stream."_timeseries_1_none_link'>";
-    echo       "<img id='".$stream."_timeseries_1_none' ".$img_params." width='160px'/>";
-    echo     "</a>";
-    echo     "<input type='hidden' id='".$stream."_timeseries_1_none_ts'/>";
-    echo   "</td>\n";
-
-    echo   "<td>";
-    echo     "<a id='".$stream."_histogram_1_none_link'>";
-    echo       "<img id='".$stream."_histogram_1_none' ".$img_params."/>";
-    echo     "</a>";
-    echo     "<input type='hidden' id='".$stream."_histogram_1_none_ts'/>";
-    echo   "</td>\n";
-    echo   "<td>";
-    echo     "<a id='".$stream."_bandpass_1_none_link'>";
-    echo       "<img id='".$stream."_bandpass_1_none' ".$img_params."/>";
-    echo     "</a>";
-    echo     "<input type='hidden' id='".$stream."_bandpass_1_none_ts'/>";
-    echo   "</td>\n";
-
+      echo   "<td>";
+      echo     "<a id='".$stream."_histogram_".$ipol."_none_link'>";
+      echo       "<img id='".$stream."_histogram_".$ipol."_none' ".$img_params."/>";
+      echo     "</a>";
+      echo     "<input type='hidden' id='".$stream."_histogram_".$ipol."_none_ts'/>";
+      echo   "</td>\n";
+      echo   "<td>";
+      echo     "<a id='".$stream."_bandpass_".$ipol."_none_link'>";
+      echo       "<img id='".$stream."_bandpass_".$ipol."_none' ".$img_params."/>";
+      echo     "</a>";
+      echo     "<input type='hidden' id='".$stream."_bandpass_".$ipol."_none_ts'/>";
+      echo   "</td>\n";
+    }
     echo "</tr>\n";
-    echo "<tr><td>Timeseries</td><td>Histogram</td><td>Bandpass</td><td>Timeseries</td><td>Histogram</td><td>Bandpass</td></tr>\n";
+
+    echo "<tr>\n";
+    for ($ipol=0; $ipol<$this->npol; $ipol++)
+    {
+      echo "<td>Timeseries</td><td>Histogram</td><td>Bandpass</td>\n";
+    }
+    echo "</tr>\n";
+
 
     echo "</table>\n";
   }

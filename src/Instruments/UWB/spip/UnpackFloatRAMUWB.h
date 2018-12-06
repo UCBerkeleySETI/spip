@@ -36,6 +36,9 @@ namespace spip {
 
       inline int16_t  convert_twos (int16_t in)  { if (in == 0) return 0; else return in ^ 0x8000; };
 
+      float re_scale;
+      float im_scale;
+
   };
 }
 

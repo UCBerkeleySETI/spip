@@ -63,7 +63,7 @@ class tests extends spip_webpage
     array_push($a, $this->unique("obs", "observer", "OBSERVER", "Observer", "text", "Andrew", "16"));
     array_push($a, $this->unique("obs", "project_id", "PID", "Project ID", "text", "P999", "8"));
     array_push($a, $this->unique("obs", "tobs", "TOBS", "Expected Length [s]", "text", "60", "8"));
-    array_push($a, $this->unique("obs", "calfreq", "CALFREQ", "Calibrator Frequency [Hz]", "text", "11.123", "8"));
+    //array_push($a, $this->unique("obs", "calfreq", "CALFREQ", "Calibrator Frequency [Hz]", "text", "11.123", "8"));
     return $a;
   }
 
@@ -91,9 +91,12 @@ class tests extends spip_webpage
   function get_custom_config()
   {
     $a = array();
+    array_push($a, $this->custom("custom", "adaptive_filter", "ADAPTIVE_FILTER", "Adaptive Filter Enabled", "bool", "false", "4"));
     array_push($a, $this->custom("custom", "adaptive_filter_epsilon", "ADAPTIVE_FILTER_EPSILON", "Adaptive Filter Epsilon", "text", "0.1", "4"));
     array_push($a, $this->custom("custom", "adaptive_filter_nchan", "ADAPTIVE_FILTER_NCHAN", "Adaptive Filter Channels", "text", "128", "5"));
     array_push($a, $this->custom("custom", "adaptive_filter_nsamp", "ADAPTIVE_FILTER_NSAMP", "Adaptive Filter Samples", "text", "1024", "5"));
+    array_push($a, $this->custom("custom", "schedule_block_id", "SCHED_BLOCK_ID", "TOS Schedule Block ID", "text", "0", "5"));
+    array_push($a, $this->custom("custom", "scan_id", "SCAN_ID", "TOS Scan ID", "text", "0", "5"));
     return $a;
   }
 
@@ -101,12 +104,12 @@ class tests extends spip_webpage
   {
     $a = array();
     array_push($a, $this->unique("calibration", "signal", "CAL_SIGNAL", "Presence", "bool", "false", "4"));
-    array_push($a, $this->unique("calibration", "freq", "CAL_FREQ", "Frequnecy", "text", "11", "5", "units='Hertz'"));
+    array_push($a, $this->unique("calibration", "freq", "CAL_FREQ", "Frequency", "text", "11", "5", "units='Hertz'"));
     array_push($a, $this->unique("calibration", "phase", "CAL_PHASE", "Starting phase for high state", "text", "0.0", "5"));
     array_push($a, $this->unique("calibration", "duty_cycle", "CAL_DUTY_CYCLE", "Duty cycle for high state", "text", "0.5", "3"));
     array_push($a, $this->unique("calibration", "epoch", "CAL_EPOCH", "Epoch for alignment of CAL", "text", "None", "20", "units='YYYY-DD-MM-HH:MM:SS+0'"));
     array_push($a, $this->unique("calibration", "tsys_avg_time", "TSYS_AVG_TIME", "Averaging time for TSYS estimates", "text", "5", "3", "units='seconds'"));
-    array_push($a, $this->unique("calibration", "tsys_freq_resolution", "TSYS_FREQ_RES", "Frequneyc resolution for TSYS estimates [MHz]", "text", "1", "3", "units='MHz'"));
+    array_push($a, $this->unique("calibration", "tsys_freq_resolution", "TSYS_FREQ_RES", "Frequency resolution for TSYS estimates [MHz]", "text", "1", "3", "units='MHz'"));
     return $a;
   }
 
@@ -145,7 +148,7 @@ class tests extends spip_webpage
     array_push($a, $this->custom("search", "custom_dm", "SEARCH_DM", "Custom DM", "text", "-1", "6"));
     array_push($a, $this->custom("search", "output_nbit", "SEARCH_OUTNBIT", "Output bits per sample", "text", "8", "2"));
     array_push($a, $this->custom("search", "output_tsamp", "SEARCH_OUTTSAMP", "Output sampling time [us]", "text", "64", "6"));
-    array_push($a, $this->custom("search", "output_tsubint", "SEARCH_OUTTSUBINT", "Output subint length [s]", "text", "10", "6"));
+    array_push($a, $this->custom("search", "output_tsubint", "SEARCH_OUTTSUBINT", "Output subint length [s]", "text", "30", "6"));
     array_push($a, $this->custom("search", "output_npol", "SEARCH_OUTNPOL", "Number of output polarisations", "text", "1", "1"));
     array_push($a, $this->custom("search", "coherent_dedispersion", "SEARCH_COHERENT_DEDISPERSION", "Perform coherent dedispersion", "bool", "false", "6"));
     return $a;

@@ -41,6 +41,8 @@ int main(int argc, char *argv[]) try
 
   spip::AsciiHeader config;
 
+  unsigned npol = 2;
+
   // tcp control port to receive configuration
   int control_port = -1;
 
@@ -51,7 +53,7 @@ int main(int argc, char *argv[]) try
 
   int core = -1;
 
-  while ((c = getopt(argc, argv, "b:c:D:f:hk:s:v")) != EOF) 
+  while ((c = getopt(argc, argv, "b:c:D:f:hk:p:s:v")) != EOF) 
   {
     switch(c) 
     {
@@ -79,6 +81,10 @@ int main(int argc, char *argv[]) try
         cerr << "Usage: " << endl;
         usage();
         exit(EXIT_SUCCESS);
+        break;
+
+      case 'p':
+        npol = atoi(optarg);
         break;
 
       case 's':
@@ -130,7 +136,7 @@ int main(int argc, char *argv[]) try
   udpdb->set_format (format, mon_format);
   udpdb->set_verbosity (verbose);
 
-  udpdb->set_block_format (new spip::BlockFormatUWB());
+  udpdb->set_block_format (new spip::BlockFormatUWB(npol));
   udpdb->configure_stats_output (stats_dir, stream);
 
   // Check arguments

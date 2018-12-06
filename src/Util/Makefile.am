@@ -16,8 +16,12 @@ libspiputil_la_LIBADD =
 
 if HAVE_CUFFT
 
-libspiputil_headers += spip/CUFFTError.h
-libspiputil_la_SOURCES += CUFFTError.C
+libspiputil_headers += \
+	spip/CUDAError.h \
+	spip/CUFFTError.h 
+libspiputil_la_SOURCES += \
+	CUDAError.C \
+	CUFFTError.C
 libspiputil_la_LIBADD += @CUFFT_LIBS@
 
 AM_CPPFLAGS = @CUFFT_CFLAGS@

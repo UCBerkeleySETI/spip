@@ -17,13 +17,18 @@
 
 using namespace std;
 
-spip::ContainerCUDAFileWrite::ContainerCUDAFileWrite (const string& _dir) : ContainerCUDADevice(), FileWrite (_dir)
+spip::ContainerCUDAFileWrite::ContainerCUDAFileWrite (cudaStream_t _stream, const string& _dir) : ContainerCUDADevice(), FileWrite (_dir)
 {
-  // TODO add some host memory for a D2H copy
+  stream = _stream;
+  host_buffer = NULL;
+  host_buffer_size = 0;
 }
 
 spip::ContainerCUDAFileWrite::~ContainerCUDAFileWrite ()
 {
+  if (host_buffer)
+    cudaFreeHost (host_buffer);
+  host_buffer = NULL;
 }
 
 void spip::ContainerCUDAFileWrite::process_header ()
@@ -44,7 +49,7 @@ void spip::ContainerCUDAFileWrite::write (uint64_t ndat)
     {
       string utc_start_str = utc_start->get_gmtime();
       if (spip::Container::verbose)
-        cerr << "spip::FileWrite::write_ndat open_file (" << utc_start 
+        cerr << "spip::FileWrite::write open_file (" << utc_start 
              << ", " << obs_offset << ") for idat=" << idat << endl;
       spip::FileWrite::open_file (utc_start_str.c_str(), obs_offset);
 
@@ -52,12 +57,17 @@ void spip::ContainerCUDAFileWrite::write (uint64_t ndat)
       write_header ();
     }
 
+    if (spip::Container::verbose)
+      cerr << "spip::FileWrite::write write_data(" << idat << ", 1)" << endl;
+
     // write one data sample at a time to the file
     // TODO this may not be efficient! consider paramaterizing ndat_per_write
     write_data (idat, 1);
     
     if (idat_written >= ndat_per_file)
     {
+      if (spip::Container::verbose)
+        cerr << "spip::FileWrite::write close_file()" << endl;
       close_file (); 
       idat_written = 0;
     }
@@ -86,11 +96,18 @@ void spip::ContainerCUDAFileWrite::write_header ()
 
 uint64_t spip::ContainerCUDAFileWrite::write_data (uint64_t start_idat, uint64_t ndat_to_write)
 {
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerCUDAFileWrite::write_data start_idat=" 
+         << start_idat << " ndat_to_write=" << ndat_to_write << " bits_per_sample=" 
+         << bits_per_sample << endl;
   size_t bits_to_write = (ndat_to_write * bits_per_sample);
   if (bits_to_write % 8 != 0)
     throw Error (InvalidState, "spip::ContainerCUDAFileWrite::write_data", 
                  "can only write integer bytes to file");
   size_t bytes_to_write = bits_to_write / 8;
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerCUDAFileWrite::write_data bits_to_write=" 
+         << bits_to_write << " bytes_to_write=" << bytes_to_write << endl;
 
   uint64_t buffer_offset = (start_idat * bits_per_sample) / 8;
 
@@ -99,6 +116,7 @@ uint64_t spip::ContainerCUDAFileWrite::write_data (uint64_t start_idat, uint64_t
   {
     throw Error (InvalidState, "spip::ContainerCUDAFileWrite::write_data", 
                  "unsupported container order");
+
   }
 
 #ifdef _DEBUG
@@ -107,18 +125,30 @@ uint64_t spip::ContainerCUDAFileWrite::write_data (uint64_t start_idat, uint64_t
        << " bytes_to_write=" << bytes_to_write << endl;
 #endif
 
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerCUDAFileWrite::write_data resize_host_buffer(" 
+         << bytes_to_write << ")" << endl;
   // ensure host buffer is large enough
   resize_host_buffer (bytes_to_write);
 
-  cudaError_t err = cudaMemcpyAsync (host_buffer, buffer + buffer_offset, bytes_to_write, cudaMemcpyDeviceToHost, stream);
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerCUDAFileWrite::write_data cudaMemcpyAsync (" 
+         << (void *) host_buffer << ", " << (void *) (buffer + buffer_offset)
+         << ", " << bytes_to_write << ", cudaMemcpyDeviceToHost, stream);" << endl;
+
+  cudaError_t err = cudaMemcpyAsync (host_buffer, buffer + buffer_offset, 
+                                     bytes_to_write, cudaMemcpyDeviceToHost,
+                                     stream);
   if (err != cudaSuccess)
-    throw Error(InvalidState, "spip::ContainerCUDAFileWrite::write_data", "cudaMemcpyAsync failed %s", cudaGetErrorString (err));
+    throw Error(InvalidState, "spip::ContainerCUDAFileWrite::write_data",
+               "cudaMemcpyAsync failed: %s", cudaGetErrorString (err));
 
   // wait for the copy to complete
   cudaStreamSynchronize(stream);
 
   // write to disk
-  uint64_t bytes_written = write_data_bytes (fd, host_buffer, bytes_to_write, ndat_to_write);
+  uint64_t bytes_written = write_data_bytes (fd, host_buffer, bytes_to_write,
+                                             ndat_to_write);
   if (bytes_written != bytes_to_write)
   {
     throw Error (InvalidState, "spip::ContainerCUDAFileWrite::write_data", 
@@ -135,15 +165,32 @@ uint64_t spip::ContainerCUDAFileWrite::write_data (uint64_t start_idat, uint64_t
 
 void spip::ContainerCUDAFileWrite::resize_host_buffer (size_t required_size)
 {
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerCUDAFileWrite::resize_host_buffer required_size="
+         << required_size << " host_buffer_size=" << host_buffer_size << endl;
+
   if (required_size > host_buffer_size)
   {
-    cudaError_t err = cudaFreeHost (host_buffer);
-    if (err != cudaSuccess)
-      throw Error(InvalidState, "spip::ContainerCUDAFileWrite::resize_host_buffer", cudaGetErrorString (err));
+    if (host_buffer)
+    {
+      if (spip::Container::verbose)
+        cerr << "spip::ContainerCUDAFileWrite::resize_host_buffer "
+             << "cudaFreeHost" << endl;
+      cudaError_t err = cudaFreeHost (host_buffer);
+      if (err != cudaSuccess)
+        throw Error(InvalidState, 
+                    "spip::ContainerCUDAFileWrite::resize_host_buffer", 
+                    "cudaFreeHost failed: %s", cudaGetErrorString (err));
+    }
 
-    err = cudaMallocHost (&host_buffer, required_size);
+    if (spip::Container::verbose)
+      cerr << "spip::ContainerCUDAFileWrite::resize_host_buffer cudaMallocHost" << endl;
+    cudaError_t err = cudaMallocHost (&host_buffer, required_size);
     if (err != cudaSuccess)
-      throw Error(InvalidState, "spip::ContainerCUDAFileWrite::resize_host_buffer", cudaGetErrorString (err));
+      throw Error(InvalidState, 
+                  "spip::ContainerCUDAFileWrite::resize_host_buffer", 
+                  "cudaMallocHost failed: %s", cudaGetErrorString (err));
+
     host_buffer_size = required_size;
   }
 }

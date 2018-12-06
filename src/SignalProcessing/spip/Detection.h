@@ -35,8 +35,10 @@ namespace spip {
       //! Perform Detection on input block
       void transformation ();
 
-      //! Required implementstations
+      //! Required implementations
       virtual void transform_SFPT_to_SFPT () = 0;
+
+      virtual void transform_SFPT_to_TSPF () = 0;
 
       virtual void transform_TSPF_to_TSPF () = 0;
 

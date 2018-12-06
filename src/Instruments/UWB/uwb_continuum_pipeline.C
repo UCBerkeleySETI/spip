@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) try
 
   string out_dir;
 
-  spip::ContinuumPipeline * dp;
+  spip::ContinuumPipeline * cp;
 
   spip::HardwareAffinity hw_affinity;
 
@@ -151,43 +151,46 @@ int main(int argc, char *argv[]) try
   double tsamp_actual = tsamp_channelised * tdec_out;
   cout << "Requested sampling time: " << tsamp_out << "s actual: " << tsamp_actual << "s TDEC=" << tdec_out << endl;
 
-  dp = new spip::ContinuumPipeline (in_key.c_str(), out_dir.c_str());
+  cp = new spip::ContinuumPipeline (in_key.c_str(), out_dir.c_str());
 
   if (verbose)
-    dp->set_verbose();
+    cp->set_verbose();
 
   if (verbose)
     cerr << "Channelisation: " << nchan<< endl;
-  dp->set_channelisation (nchan);
-  dp->set_channel_oversampling (channel_oversampling);
-  dp->set_decimation (tdec_out);
-  dp->set_tsubint (tsubint);
+  cp->set_channelisation (nchan);
+  cp->set_channel_oversampling (channel_oversampling);
+  cp->set_decimation (tdec_out);
+  cp->set_tsubint (tsubint);
 
   if (output_npol == 1)
-    dp->set_output_state (spip::Signal::Intensity);
+    cp->set_output_state (spip::Signal::Intensity);
   else if (output_npol == 2)
-    dp->set_output_state (spip::Signal::PPQQ);
+    cp->set_output_state (spip::Signal::PPQQ);
+  else if (output_npol == 3)
+    cp->set_output_state (spip::Signal::Coherence);
   else if (output_npol == 4)
-    dp->set_output_state (spip::Signal::Coherence);
+    cp->set_output_state (spip::Signal::Stokes);
   else
     throw invalid_argument("unrecognized output polarisation state");
 
 #ifdef HAVE_CUDA
   if (device >= 0)
   {
-    dp->set_device (device);
-    dp->configure_cuda (new spip::UnpackFloatCUDAUWB());
+    cp->set_device (device);
+    cp->configure_cuda (new spip::UnpackFloatCUDAUWB());
   }
   else
 #endif
   {
-    dp->configure (new spip::UnpackFloatRAMUWB());
+    cp->configure (new spip::UnpackFloatRAMUWB());
   }
-  dp->open ();
-  dp->process ();
-  dp->close ();
 
-  delete dp;
+  cp->open ();
+  cp->process ();
+  cp->close ();
+
+  delete cp;
 }
 catch (Error& error)
 {
@@ -213,7 +216,7 @@ void usage()
   cout << " -L secs    desired file length [default 10]" << endl;
   cout << " -n nchan   number of output channels [default 1024]" << endl;
   cout << " -o factor  channel oversampling factor [default 32]" << endl;
-  cout << " -p npol    number of output polarisations, 1: Intensity, 2: PPQQ, 4: Coherence [default 1]" << endl;
+  cout << " -p npol    number of output polarisations, 1: Intensity, 2: PPQQ, 3: Coherence, 4: Stokes [default 1]" << endl;
   cout << " -t secs    desired output sampling interval [default 1]" << endl;
   cout << " -h         display usage" << endl;
   cout << " -v         verbose output" << endl;

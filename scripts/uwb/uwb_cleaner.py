@@ -170,17 +170,19 @@ class UWBCleanerStreamDaemon (UWBCleanerDaemon, StreamBased):
     self.log(1, "UWBCleanerStreamDaemon::configure()")
     UWBCleanerDaemon.configure(self, become_daemon, dl, source, dest)
 
-    self.proc_types = ["fold", "search", "continuum"]
+    self.proc_types = ["fold", "search", "continuum", "preproc"]
     self.finished_dirs    = {}
     self.sent_dirs = {}
 
     self.finished_dirs["fold"]      = self.cfg["CLIENT_FOLD_DIR"] + "/finished"
     self.finished_dirs["search"]    = self.cfg["CLIENT_SEARCH_DIR"] + "/finished"
     self.finished_dirs["continuum"] = self.cfg["CLIENT_CONTINUUM_DIR"] + "/finished"
+    self.finished_dirs["preproc"] = self.cfg["CLIENT_PREPROC_DIR"] + "/finished"
 
     self.sent_dirs["fold"]      = self.cfg["CLIENT_FOLD_DIR"] + "/sent"
     self.sent_dirs["search"]    = self.cfg["CLIENT_SEARCH_DIR"] + "/sent"
     self.sent_dirs["continuum"] = self.cfg["CLIENT_CONTINUUM_DIR"] + "/sent"
+    self.sent_dirs["preproc"] = self.cfg["CLIENT_PREPROC_DIR"] + "/sent"
 
     # determine the beam name
     (host, beam_id, subband_id) = self.cfg["STREAM_" + self.id].split(":")

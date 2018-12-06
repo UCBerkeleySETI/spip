@@ -29,12 +29,12 @@ namespace spip {
       //! zero the buffer
       void zero ();
 
-      cudaStream_t get_stream () { return stream; };
+      //cudaStream_t get_stream () { return stream; };
 
     protected:
 
       //! stream upon which memory access should be used 
-      cudaStream_t stream;
+      //cudaStream_t stream;
 
     private:
 

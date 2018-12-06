@@ -43,6 +43,8 @@ int main(int argc, char *argv[]) try
 
   int ref_pol = 0;
 
+  double req_mon_tsamp = 10;
+
   opterr = 0;
   int c;
 
@@ -51,9 +53,9 @@ int main(int argc, char *argv[]) try
 #ifdef HAVE_CUDA
   int device = -1;
 
-  while ((c = getopt(argc, argv, "b:d:hr:v")) != EOF)
+  while ((c = getopt(argc, argv, "b:d:hr:t:v")) != EOF)
 #else
-  while ((c = getopt(argc, argv, "b:hr:v")) != EOF)
+  while ((c = getopt(argc, argv, "b:hr:t:v")) != EOF)
 #endif
   {
     switch(c)
@@ -78,6 +80,10 @@ int main(int argc, char *argv[]) try
 
       case 'r':
         ref_pol = atoi(optarg);
+        break;
+
+      case 't':
+        req_mon_tsamp = double(atof(optarg));
         break;
 
       case 'v':
@@ -110,7 +116,7 @@ int main(int argc, char *argv[]) try
   if (verbose)
     dp->set_verbose();
 
-  dp->set_filtering(ref_pol);
+  dp->set_filtering(ref_pol, req_mon_tsamp);
 
 #ifdef HAVE_CUDA
   if (device >= 0)
@@ -149,6 +155,7 @@ void usage()
 #endif
   cout << " -h        display usage" << endl;
   cout << " -r ipol   polarisation containing RFI reference signal [default 0]" << endl;
+  cout << " -t tsamp  monitoring sampling time in seconds [default 10]" << endl;
   cout << " -v        verbose output" << endl;
 }
 

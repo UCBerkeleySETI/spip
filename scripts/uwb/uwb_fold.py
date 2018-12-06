@@ -31,7 +31,7 @@ class UWBFoldDaemon (UWBProcDaemon):
     self.wideband_predictor = False
 
   def getEnvironment (self):
-    self.log (2, "UWBFoldDaemon::getEnvironment()")
+    self.info("UWBFoldDaemon::getEnvironment()")
     env = UWBProcDaemon.getEnvironment (self)
     env["TMP_USER"] = "uwb" + str(self.id)
     return env
@@ -47,7 +47,7 @@ class UWBFoldDaemon (UWBProcDaemon):
 
     # check if FOLD mode has been requested in the header
     try:
-      fold = (self.header["PERFORM_FOLD"] == "1")
+      fold = (self.header["PERFORM_FOLD"] in ["1", "true"])
     except KeyError as e:
       fold = False
 
@@ -138,12 +138,14 @@ class UWBFoldDaemon (UWBProcDaemon):
     self.cmd = "dspsr -Q " + db_key_filename + " -minram 2048 -cuda " + self.gpu_id + " -no_dyn"
 
     # handle detection options
-    if outnstokes == 1 or outnstokes == 2 or outnstokes == 4:
+    if outnstokes >= 1 or outnstokes <= 4:
       # hack for NPOL==1
       if self.header["NPOL"] == "1":
         self.cmd = self.cmd + " -d 1"
       else:
         self.cmd = self.cmd + " -d " + str(outnstokes)
+    elif outnstokes == -1:
+      self.log(2, "using stokes IQUV default for DSPSR")
     else:
       self.log(-1, "ignoring invalid outnstokes of " + str(outnstokes))
 
@@ -170,7 +172,7 @@ class UWBFoldDaemon (UWBProcDaemon):
     if mintsub > 0:
       self.cmd = self.cmd + " -Lmin " + str(mintsub)
 
-    # if observing a puslar 
+    # if observing a puslar
     if mode == "PSR":
 
       # handle a custom DM
@@ -179,7 +181,7 @@ class UWBFoldDaemon (UWBProcDaemon):
 
       # if the SK options are active
       if sk:
-        self.cmd = self.cmd + " -overlap -skz "
+        self.cmd = self.cmd + " -skz -skz_no_fscr"
 
         if sk_threshold != -1:
           self.cmd = self.cmd + " -skzs " + str(sk_threshold)
@@ -201,9 +203,9 @@ class UWBFoldDaemon (UWBProcDaemon):
         for i in range(int(self.cfg["NUM_STREAM"])):
           (cfreq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + str(i)].split(":")
           nchan_total += int(nchan)
-          chan_bw = abs(float(bw))
-          freq_low_subband = float(cfreq) - (chan_bw / 2)
-          freq_high_subband = float(cfreq) - (chan_bw / 2)
+          half_chan_bw = abs(float(bw))
+          freq_low_subband = float(cfreq) - half_chan_bw
+          freq_high_subband = float(cfreq) + half_chan_bw
           if freq_low_subband < freq_low:
             freq_low = freq_low_subband
           if freq_high_subband > freq_high:
@@ -213,6 +215,9 @@ class UWBFoldDaemon (UWBProcDaemon):
         fullband_header["NCHAN"] = str(nchan_total)
         fullband_header["BW"] = str(bw)
         fullband_header["FREQ"] = str(freq_low + bw/2)
+        self.info("fullband predictor: NCHAN=" + fullband_header["NCHAN"] +
+                  " BW=" + fullband_header["BW"] + " FREQ=" +
+                  fullband_header["FREQ"])
 
         # create the output directory
         if not os.path.exists (self.out_dir):
@@ -229,7 +234,7 @@ class UWBFoldDaemon (UWBProcDaemon):
 
         # generate the tempo2 predictor
         cmd = "t2pred " + ephemeris_file + " " + dummy_file
-        rval, lines = self.system(cmd, 1)
+        rval, lines = self.system(cmd, 1, False, self.getEnvironment())
 
         # copy the predictor file to the out_dir
         predictor_file = self.out_dir + "/pulsar.pred"

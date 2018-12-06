@@ -31,7 +31,8 @@ void spip::ContainerCUDADevice::resize ()
   if (required_size > size)
   {
     if (spip::Container::verbose)
-      cerr << "spip::ContainerCUDADevice::resize allocating memory " << required_size << " bytes" << endl;
+      cerr << "spip::ContainerCUDADevice::resize allocating memory " 
+           << required_size << " bytes" << endl;
     if (buffer)
       cudaFree (buffer);
     cudaError_t err = cudaMalloc (&buffer, required_size);
@@ -52,10 +53,12 @@ void spip::ContainerCUDADevice::resize ()
 void spip::ContainerCUDADevice::zero()
 {
   if (spip::Container::verbose)
-    cerr << "spip::ContainerCUDADevice::zero cudaMemset(" << (void *) buffer << ", 0, " << size << ")" << endl;
+    cerr << "spip::ContainerCUDADevice::zero cudaMemset(" << (void *) buffer 
+         << ", 0, " << size << ")" << endl;
   cudaError_t err = cudaMemset (buffer, 0, size);
   if (err != cudaSuccess)
-    throw Error(InvalidState, "spip::ContainerCUDADevice::zero", cudaGetErrorString (err));
+    throw Error(InvalidState, "spip::ContainerCUDADevice::zero", 
+                "cudaMemset failed: %s", cudaGetErrorString (err));
 
 }
 
@@ -76,12 +79,14 @@ void spip::ContainerCUDAPinned::resize ()
   if (required_size > size)
   {
     if (spip::Container::verbose)
-      cerr << "spip::ContainerCUDAPinned::resize allocating memory " << required_size << " bytes" << endl;
+      cerr << "spip::ContainerCUDAPinned::resize allocating memory " 
+           << required_size << " bytes" << endl;
     if (buffer)
       cudaFreeHost(buffer);
     cudaError_t err = cudaMallocHost((void **) &buffer, required_size);
     if (err != cudaSuccess)
-      throw Error(InvalidState, "spip::ContainerCUDAPinned::resize", cudaGetErrorString (err));
+      throw Error(InvalidState, "spip::ContainerCUDAPinned::resize", 
+                  "cudaMallocHost failed: %s", cudaGetErrorString (err));
     size = required_size;
   }
 }

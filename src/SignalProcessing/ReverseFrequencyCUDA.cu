@@ -79,7 +79,7 @@ void spip::ReverseFrequencyCUDA::transform_TSPF_to_TSPF ()
   float * in  = (float *) input->get_buffer();
   float * out = (float *) output->get_buffer();
 
-  //if (verbose)
+  if (verbose)
   {
     cerr << "spip::ReverseFrequencyCUDA::transform_TSPF_to_TSPF nchan=" << nchan 
          << " nsignal=" << nsignal << " npol=" << npol << " ndat=" << ndat << endl;

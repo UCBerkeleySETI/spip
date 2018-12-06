@@ -74,6 +74,7 @@ AC_CONFIG_FILES([Makefile
   web/js/Makefile
   web/results/Makefile
   web/logs/Makefile
+  web/preproc/Makefile
   web/status/Makefile
   web/search/Makefile
   web/stats/Makefile

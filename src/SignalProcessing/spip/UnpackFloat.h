@@ -47,6 +47,8 @@ namespace spip {
 
       Encoding encoding;
 
+      Signal::Sideband sideband;
+
       unsigned nchan;
 
       unsigned npol;
@@ -62,6 +64,8 @@ namespace spip {
       float offset;
 
       float scale;
+
+      Signal::Sideband output_sideband;
 
     private:
 

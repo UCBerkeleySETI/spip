@@ -50,12 +50,14 @@ int main(int argc, char *argv[]) try
 
   int nfft = 128;
 
+  double req_mon_tsamp = 10;
+
 #ifdef HAVE_CUDA
   int device = -1;
 
-  while ((c = getopt(argc, argv, "b:d:hn:r:v")) != EOF)
+  while ((c = getopt(argc, argv, "b:d:hn:r:t:v")) != EOF)
 #else
-  while ((c = getopt(argc, argv, "b:hn:r:v")) != EOF)
+  while ((c = getopt(argc, argv, "b:hn:r:t:v")) != EOF)
 #endif
   {
     switch(c)
@@ -80,6 +82,10 @@ int main(int argc, char *argv[]) try
 
       case 'n':
         nfft = atoi (optarg);
+        break;
+
+      case 't':
+        req_mon_tsamp = double(atof(optarg));
         break;
 
       case 'r':
@@ -117,7 +123,7 @@ int main(int argc, char *argv[]) try
     dp->set_verbose();
 
   dp->set_channelisation (nfft);
-  dp->set_filtering (ref_pol);
+  dp->set_filtering (ref_pol, req_mon_tsamp);
 #ifdef HAVE_CUDA
   if (device >= 0)
   {
@@ -155,6 +161,7 @@ void usage()
 #endif
   cout << " -n nfft   FFT length for filtering [default 128]" << endl;
   cout << " -r ipol   polarisation containing RFI reference [default 0]" << endl;
+  cout << " -t tsamp  monitoring tsamp in seconds [default 10]" << endl;
   cout << " -h        display usage" << endl;
   cout << " -v        verbose output" << endl;
 }

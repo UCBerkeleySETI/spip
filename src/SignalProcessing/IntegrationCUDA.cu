@@ -48,7 +48,11 @@ void spip::IntegrationCUDA::configure (spip::Ordering output_order)
     fscrunched = new spip::ContainerCUDADevice();
     fscrunched->clone_header(input->get_header());
     fscrunched->read_header();
+    if (verbose)
+      cerr << "spip::IntegrationCUDA::configure fscrunched->set_nchan(" << nchan / chan_dec << ")" << endl;
     fscrunched->set_nchan (nchan / chan_dec);
+    if (verbose)
+      cerr << "spip::IntegrationCUDA::configure fscrunched->set_ndat(" << input->get_ndat() << ")" << endl;
     fscrunched->set_ndat (input->get_ndat());
     fscrunched->write_header();
     fscrunched->resize();
@@ -62,15 +66,19 @@ __global__ void Integration_TSPF_FSCR_Kernel (float * in, float * out, unsigned 
 {
   extern __shared__ float shm_int_tsfp_fscr[];
 
-  unsigned group_idx = threadIdx.x % group_size;
-  unsigned group_num = threadIdx.x / group_size;   // output channel offset
+  // group size == chan dec 
+
+  const unsigned group_idx = threadIdx.x % group_size;
+  const unsigned group_num = threadIdx.x / group_size;   // output channel offset 
+  const unsigned num_groups = blockDim.x / group_size;
 
   unsigned isigpol = blockIdx.y;
   unsigned idat    = blockIdx.z;
-  unsigned ochan   = (blockIdx.x * group_size) + group_num;
+  //unsigned ochan   = (blockIdx.x * group_size) + group_num;
+  unsigned ochan   = (blockIdx.x * num_groups) + group_num;
   unsigned ichan   = ochan * fdec;
 
-  uint64_t in_block_offset  = (idat * in_dat_stride)  + (isigpol * in_sigpol_stride) + ichan;
+  uint64_t in_block_offset  = (idat * in_dat_stride) + (isigpol * in_sigpol_stride) + ichan;
 
   float sum = 0.0f;
   for (unsigned i=group_idx; i<fdec; i+=group_size)
@@ -93,11 +101,19 @@ __global__ void Integration_TSPF_FSCR_Kernel (float * in, float * out, unsigned 
 
   __syncthreads();
 
+  if (threadIdx.x < num_groups)
+  {
+    uint64_t out_block_offset = (idat * out_dat_stride) + (isigpol * out_sigpol_stride) + (blockIdx.x * num_groups) + threadIdx.x;
+    out[out_block_offset] = shm_int_tsfp_fscr[threadIdx.x];
+  }
+
+/*
   if (group_num == 0)
   {
     uint64_t out_block_offset = (idat * out_dat_stride) + (isigpol * out_sigpol_stride) + (blockIdx.x * group_size) + group_idx;
     out[out_block_offset] = shm_int_tsfp_fscr[group_idx];
   }
+*/
 }
 
 // TSPF ordered kernel: TSCR operation
@@ -165,7 +181,11 @@ void spip::IntegrationCUDA::transform_TSPF_to_TSPF ()
   // if fscrunching is required
   if (chan_dec > 1)
   {
-    float * fscr = (float *) fscrunched->get_buffer();
+    float * fscr;
+    if (dat_dec > 1)
+      fscr = (float *) fscrunched->get_buffer();
+    else
+      fscr = (float *) output->get_buffer();
 
     unsigned nchan_out = nchan / chan_dec;
     unsigned group_size = (chan_dec < 32) ? chan_dec : 32;
@@ -175,7 +195,7 @@ void spip::IntegrationCUDA::transform_TSPF_to_TSPF ()
     if (nchan_out % ngroups!= 0)
       blocks.x++;
 
-    size_t shm_bytes = group_size * sizeof(float);
+    size_t shm_bytes = ngroups * sizeof(float);
 
     uint64_t in_sigpol_stride = nchan;
     uint64_t in_dat_stride = in_sigpol_stride * nsigpol;
@@ -185,8 +205,8 @@ void spip::IntegrationCUDA::transform_TSPF_to_TSPF ()
     if (verbose) 
     {
       cerr << "spip::IntegrationCUDA::transform_TSPF_to_TSPF Integration_TSPF_FSCR_Kernel" << endl;
-      cerr << "group_size=" << group_size << " ngroups=" << ngroups << " shm_bytes=" << shm_bytes << endl;
-      cerr << "blocks=" << blocks.x << "," << blocks.y << "," << blocks.z << " nchan=" << nchan << " nthread=" << nthread << " npol=" << npol << endl;
+      cerr << "  group_size=" << group_size << " ngroups=" << ngroups << " shm_bytes=" << shm_bytes << endl;
+      cerr << "  blocks=" << blocks.x << "," << blocks.y << "," << blocks.z << " nchan=" << nchan << " nthread=" << nthread << " npol=" << npol << endl;
     }
 
     // first perform Fscrunching

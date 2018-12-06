@@ -40,7 +40,7 @@ class UWBContinuumDaemon (UWBProcDaemon):
 
     # check if CONTINUUM mode has been requested in the header
     try:
-      continuum = (self.header["PERFORM_CONTINUUM"] == "1")
+      continuum = (self.header["PERFORM_CONTINUUM"] in ["1", "true"])
     except KeyError as e:
       continuum = False
 
@@ -51,6 +51,8 @@ class UWBContinuumDaemon (UWBProcDaemon):
     # output directory for CONTINUUM mode
     self.out_dir = self.cfg["CLIENT_CONTINUUM_DIR"] + "/processing/" + self.beam + "/" \
                    + self.utc_start + "/" + self.source + "/" + self.cfreq
+
+    in_tsamp = float(self.header["TSAMP"]) / 1e6
 
     out_tsamp = -1
     out_tsubint = -1
@@ -79,10 +81,10 @@ class UWBContinuumDaemon (UWBProcDaemon):
       out_nchan = 1024
 
     # configure the command to be run
-    self.cmd = "uwb_continuum_pipeline " + self.db_key + " " + self.out_dir + " -d " + self.gpu_id
+    self.cmd = "uwb_continuum_pipeline_float " + self.db_key + " " + self.out_dir + " -d " + self.gpu_id
 
     # handle detection options
-    if out_npol == 1 or out_npol == 2 or out_npol == 4:
+    if out_npol == 1 or out_npol == 2 or out_npol == 3 or out_npol == 4:
       self.cmd = self.cmd + " -p " + str(out_npol)
     else:
       self.log(-1, "ignoring invalid outnstokes of " + str(outnstokes))
@@ -94,8 +96,25 @@ class UWBContinuumDaemon (UWBProcDaemon):
       else:
         self.log(-1, "Invalid output channelisation")
 
-    # handle temporal integration and sub-integration length
+    # ensure the oversampling/output time resolution meets nyquist criteria
+    oversampling = 32
+    effective_tsamp = in_tsamp * out_nchan * oversampling
+    while effective_tsamp > out_tsamp:
+      # sacrifice oversampling before time resolution
+      if oversampling >= 2:
+        oversampling = oversampling / 2
+        effective_tsamp = in_tsamp * out_nchan * oversampling
+      else:
+        out_tsamp = out_tsamp * 2
+
+    if oversampling < 1:
+      self.error("requested nchan and tsamp not compatible with reality")
+      
+    # temporal integration and sub-integration length
     self.cmd = self.cmd + " -t " + str(out_tsamp) + " -L " + str(out_tsubint)
+
+    # spectral oversampling to reduce leakage
+    self.cmd = self.cmd + " -o " + str(oversampling)
 
     self.log(1, self.cmd)
     self.log_prefix = "continuum_src"

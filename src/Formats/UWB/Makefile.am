@@ -28,5 +28,16 @@ LDADD = libuwb.la \
 	$(top_builddir)/src/libspip.la -lpthread 
 
 AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @VDIFIO_CFLAGS@ @CUDA_CFLAGS@ @FFTW_CFLAGS@
-LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @VDIFIO_LIBS@ @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@ @FFTW_LIBS@
+LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@ @VDIFIO_LIBS@ @BOOST_SYSTEM_LDFLAGS@ @FFTW_LIBS@
+
+if HAVE_SPEAD2
+
+bin_PROGRAMS += uwb_ibvrecv
+uwb_ibvrecv_SOURCES = uwb_ibvrecv.C
+
+AM_CXXFLAGS += @SPEAD2_CFLAGS@
+LDADD += @SPEAD2_LIBS@
+uwb_ibvrecv_LDADD = $(LDADD) -lrdmacm -libverbs
+
+endif
 

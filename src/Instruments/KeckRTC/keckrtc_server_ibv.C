@@ -349,15 +349,26 @@ int main(int argc, char *argv[]) try
       }
 
       // perform some sort of operation 
-      // keckrtc_dummy (dev_buf, packet_size, stream);
-
-      rval = cudaMemcpyAsync (send_buf_ptr, dev_buf, packet_size, cudaMemcpyDeviceToHost, stream);
-      if (rval != cudaSuccess)
-        cerr << "cudaMemcpyAsync failed on sock_recv" << endl;
-
-      rval = cudaStreamSynchronize (stream);
+      //keckrtc_dummy (dev_buf, packet_size, stream);
+#ifdef HAVE_GDR
+      if (use_gdr)
+      {
+        //rval = cudaStreamSynchronize (stream);
+        //  if (rval != cudaSuccess)
+        //  cerr << "cudaStreamSynchronize failed" << endl;
+        gdr_copy_from_bar (send_buf_ptr, buf_ptr, packet_size);
+      }
+      else
+#endif
+      {
+        rval = cudaMemcpyAsync (send_buf_ptr, dev_buf, packet_size, cudaMemcpyDeviceToHost, stream);
         if (rval != cudaSuccess)
-        cerr << "cudaStreamSynchronize failed" << endl;
+          cerr << "cudaMemcpyAsync failed on sock_recv" << endl;
+
+        rval = cudaStreamSynchronize (stream);
+          if (rval != cudaSuccess)
+          cerr << "cudaStreamSynchronize failed" << endl;
+      }
     }
 #endif
 
@@ -382,7 +393,10 @@ int main(int argc, char *argv[]) try
   uint64_t frames_offset = 10;
   if (iframe > frames_offset)
   { 
+    char filename[1024]; 
+    sprintf (filename, "keckrtc_server_ibv_timing_%u_%u.dat", frame_size, packet_size);
     uint64_t frames_sent = iframe - 1;
+    cerr << "writing to " << filename << endl;
     write_timing_data ("recv_timing.dat", times, frames_offset, frames_sent);
     print_timing_data (times, frames_offset, frames_sent, frame_size);
   }

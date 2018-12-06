@@ -19,12 +19,15 @@ spip::AdaptiveFilter::AdaptiveFilter (const string& dir) :
   // default, should be configured [TODO]
   perform_filtering = false;
   filter_update_time = 1024;
-  epsilon = 0.1;
+  epsilon = 0.01;
   gains = NULL;
   dirty = NULL;
   cleaned = NULL;
   norms = NULL;
   ref_pol = 0;
+  req_mon_tsamp = 0;
+  mon_tsamp = 0;
+  blocks_per_mon_tsamp = 0;
 }
 
 spip::AdaptiveFilter::~AdaptiveFilter ()
@@ -32,9 +35,10 @@ spip::AdaptiveFilter::~AdaptiveFilter ()
 }
 
 //! set filtering parameters, and indicate if a reference polarisation is present
-void spip::AdaptiveFilter::set_filtering (int pol)
+void spip::AdaptiveFilter::set_filtering (int pol, double _req_mon_tsamp)
 {
   ref_pol = pol;
+  req_mon_tsamp = _req_mon_tsamp;
   if (ref_pol < 0)
     throw invalid_argument ("AdaptiveFilter::set_filtering invalid reference pol");
   perform_filtering = true;
@@ -99,6 +103,13 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   // ensure the output is appropriately sized
   prepare_output();
 
+  // tsamp of the filter for a input block
+  double block_tsamp = tsamp * ndat;
+  // number of blocks to get close to the req_mon_tsamp
+  blocks_per_mon_tsamp = unsigned(floor((req_mon_tsamp *1e6)/ block_tsamp));
+  // actual monitoring tsamp
+  mon_tsamp = block_tsamp * blocks_per_mon_tsamp;
+
   // also prepare the gains
   if (verbose)
     cerr << "spip::AdaptiveFilter::configure gains->clone_header()" << endl;
@@ -108,7 +119,7 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   // update the parameters that this transformation will affect
   gains->set_nbit (32);
   gains->set_ndim (2);
-  gains->set_tsamp (tsamp * ndat);
+  gains->set_tsamp (mon_tsamp);
   gains->set_npol (out_npol);
   gains->set_order (spip::Ordering::TSPF);
 
@@ -143,8 +154,8 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   // update the parameters that this transformation will affect
   dirty->set_nbit (32);
   dirty->set_ndim (1);
-  dirty->set_tsamp (tsamp * ndat);
-  dirty->set_npol (out_npol);
+  dirty->set_tsamp (mon_tsamp);
+  dirty->set_npol (npol);
   dirty->set_order (spip::Ordering::TSPF);
 
   dirty->write_header();
@@ -163,7 +174,7 @@ void spip::AdaptiveFilter::configure (spip::Ordering output_order)
   cleaned->set_ndim (1);
   cleaned->set_tsamp (tsamp * ndat);
   cleaned->set_npol (out_npol);
-  cleaned->set_tsamp (tsamp * ndat);
+  cleaned->set_tsamp (mon_tsamp);
   cleaned->set_order (spip::Ordering::TSPF);
 
   cleaned->write_header();

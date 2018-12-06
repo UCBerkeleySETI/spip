@@ -34,6 +34,9 @@ namespace spip {
     
     private:
 
+      float re_scale;
+      float im_scale;
+
   };
 }
 

@@ -21,6 +21,7 @@ spip::AdaptiveFilterRAM::AdaptiveFilterRAM (string dir) : AdaptiveFilter (dir)
   gains_file_write = NULL;
   dirty_file_write = NULL;
   cleaned_file_write = NULL;
+  total_blocks = 0;
 }
 
 spip::AdaptiveFilterRAM::~AdaptiveFilterRAM ()
@@ -70,7 +71,7 @@ void spip::AdaptiveFilterRAM::configure (spip::Ordering output_order)
   spip::AdaptiveFilter::configure (output_order);
 
   int64_t gains_size = nchan * out_npol * ndim * sizeof(float);
-  int64_t dirty_size = nchan * out_npol * sizeof(float);
+  int64_t dirty_size = nchan * npol * sizeof(float);
   int64_t cleaned_size = nchan * out_npol * sizeof(float);
 
   gains_file_write = dynamic_cast<spip::ContainerRAMFileWrite *>(gains);
@@ -167,7 +168,7 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
         const uint64_t gain_offset = (isig * out_npol * nchan * gain_ndim) + (ipol * nchan * gain_ndim) + (ichan * gain_ndim);
         
         // dirty are stored in TSPF
-        const uint64_t dirty_offset = (isig * out_npol * nchan) + (ipol * nchan) + ichan;
+        const uint64_t dirty_offset = (isig * npol * nchan) + (ipol * nchan) + ichan;
 
         // cleaned are stored in TSPF
         const uint64_t cleaned_offset = (isig * out_npol * nchan) + (ipol * nchan) + ichan;
@@ -237,9 +238,6 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
             ast_real = in_ptr[re_idat];
             ast_imag = in_ptr[im_idat];
 
-	    if (iblock == 0 && ichan == 0 && ival < 10)
-	     cerr << ival << " " << ast_real << " " << ast_imag << endl;
-
             ref_real = ref_ptr[re_idat];
             ref_imag = ref_ptr[im_idat];
 
@@ -304,25 +302,35 @@ void spip::AdaptiveFilterRAM::transform_SFPT()
           }
 
           // average power
-          dirty_power = ast_sum / nval;
-          cleaned_power = cleaned_sum / nval;
+          if (iblock == 0)
+          {
+            dirty_power = ast_sum / nval;
+            cleaned_power = cleaned_sum / nval;
+
+            // save the dirty for this pol/chan
+            dirty_buf[dirty_offset] = dirty_power;
+
+            // save the cleaned for this pol/chan
+            cleaned_buf[cleaned_offset] = cleaned_power;
+
+            if (ipol == 0)
+            {
+              const uint64_t dirty_ref_offset = (isig * npol * nchan) + (ref_pol * nchan) + ichan;
+              dirty_buf[dirty_ref_offset] = ref_sum / nval;
+            }
+          }
         }
 
         // save the gain for this pol/chan
         gains_buf[gain_offset + 0] = g_real;
         gains_buf[gain_offset + 1] = g_imag;
 
-        // save the dirty for this pol/chan
-        dirty_buf[dirty_offset] = dirty_power;
-
-        // save the cleaned for this pol/chan
-        cleaned_buf[cleaned_offset] = cleaned_power;
-
         // save the normalization for this sig/pol/chan
         norms_buf[norms_offset] = current_factor;
       }
     }
   }
+  total_blocks += nblocks;
 }
 
 // write gains

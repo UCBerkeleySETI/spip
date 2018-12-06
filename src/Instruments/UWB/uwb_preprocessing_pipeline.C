@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) try
 {
   string in_key;
 
-  string cal_key;
+  string cal_path = ".";
 
   string trans_key;
 
@@ -55,6 +55,8 @@ int main(int argc, char *argv[]) try
 
   float cal_tsamp_out = 10; // in seconds
 
+  float cal_freq_res = 1;   // in MHz
+
   float trans_tsamp_out = 64; // in microseconds
 
   bool filter = false;
@@ -65,12 +67,14 @@ int main(int argc, char *argv[]) try
 
   int ref_pol = -1;
 
+  double req_mon_tsamp = 10;
+
 #ifdef HAVE_CUDA
   int device = -1;
 
-  while ((c = getopt(argc, argv, "abc:d:f:hn:r:v")) != EOF)
+  while ((c = getopt(argc, argv, "abc:d:e:f:hn:r:t:v")) != EOF)
 #else
-  while ((c = getopt(argc, argv, "abc:f:hn:r:v")) != EOF)
+  while ((c = getopt(argc, argv, "abc:e:f:hn:r:t:v")) != EOF)
 #endif
   {
     switch(c)
@@ -96,6 +100,11 @@ int main(int argc, char *argv[]) try
         break;
 #endif
 
+      case 'e':
+        calibrate = true;
+        cal_freq_res = atof (optarg);
+        break;
+
       case 'f':
         transients = true;
         trans_tsamp_out = atof (optarg);
@@ -115,6 +124,10 @@ int main(int argc, char *argv[]) try
         ref_pol = atoi(optarg);
         break;
 
+      case 't':
+        req_mon_tsamp = double(atof(optarg));
+        break;
+
       case 'v':
         verbose++;
         spip::Container::verbose = true;
@@ -129,9 +142,9 @@ int main(int argc, char *argv[]) try
   }
 
   // Check arguments
-  if ((argc - optind) != 4)
+  if ((argc - optind) != 3)
   {
-    fprintf(stderr,"ERROR: 4 command line arguments expected\n");
+    fprintf(stderr,"ERROR: 3 command line arguments expected\n");
     usage();
     return EXIT_FAILURE;
   }
@@ -139,11 +152,10 @@ int main(int argc, char *argv[]) try
   signal(SIGINT, signal_handler);
 
   in_key = argv[optind];
-  cal_key = argv[optind+1];
-  trans_key = argv[optind+2];
-  out_key = argv[optind+3];
+  trans_key = argv[optind+1];
+  out_key = argv[optind+2];
 
-  pp = new spip::PreprocessingPipeline (in_key.c_str(), cal_key.c_str(), trans_key.c_str(), out_key.c_str());
+  pp = new spip::PreprocessingPipeline (in_key.c_str(), cal_path.c_str(), trans_key.c_str(), out_key.c_str());
 
   if (verbose)
     pp->set_verbose();
@@ -151,27 +163,29 @@ int main(int argc, char *argv[]) try
   cerr << "main: calibrate=" << calibrate << " filter=" << filter << " transients=" << transients << endl;
   pp->set_function (calibrate, filter, transients);
 
-  cerr << "main: ref_pol=" << ref_pol << endl;
-  pp->set_filtering (ref_pol);
+  cerr << "main: ref_pol=" << ref_pol << " mon_tsamp=" << req_mon_tsamp << endl;
+  pp->set_filtering (ref_pol, req_mon_tsamp);
 
   cerr << "main: channelisation=" << nfft << endl;
   pp->set_channelisation (nfft);
 
-  double tsamp, tsamp_channelised, bw, cal_bw;
-  int tdec_out;
+  double tsamp = 1.0f / (128.0f);
 
+  double tsamp_channelised, bw, cal_bw;
+  int tdec_out;
   tsamp = 1.0f / (128.0f);
+
   tsamp_channelised = tsamp * nfft;
   tdec_out = int(floor(trans_tsamp_out/tsamp_channelised));
-  cerr << "main: Trans tdec=" << tdec_out << " pdec=1" << endl;
-  pp->set_trans_decimation (tdec_out, 1);
+  cerr << "main: Trans tdec=" << tdec_out << " pdec=2" << endl;
+  pp->set_trans_decimation (tdec_out, 2);
 
   tsamp = 1.0f / (128.0f * 1e6);
   tsamp_channelised = tsamp * nfft;
   tdec_out = int(floor(cal_tsamp_out/tsamp_channelised));
 
   bw = 128.0;   // MHz
-  cal_bw = 1.0; // MHz
+  cal_bw = cal_freq_res; // MHz
   int fdec_out = int(floor(cal_bw / (bw/nfft)));
   cerr << "main: Cal tdec=" << tdec_out << " pdec=1" << endl;
   pp->set_cal_decimation (fdec_out, tdec_out, 1);
@@ -206,16 +220,18 @@ catch (std::exception& exc)
 
 void usage()
 {
-  cout << "uwb_preprocessing_pipeline [options] inkey calkey transkey outkey" << endl;
+  cout << "uwb_preprocessing_pipeline [options] inkey transkey outkey" << endl;
   cout << " -a        apply adaptive filtering" << endl;
-  cout << " -c tsamp  write binned calibration spectra to calkey with specified sampling interval in seconds [default 10]" << endl;
+  cout << " -c tsamp  write binned calibration spectra with tsamp in seconds [default 10]" << endl;
 #ifdef HAVE_CUDA
   cout << " -d gpu    use GPU [default: use CPU]" << endl;
 #endif
+  cout << " -e fres   write binned calibration spectra to calkey with frequnecy resolution in MHz [default 1]" << endl;
   cout << " -f tsamp  write transient search mode filterbanks to transkey with specificed sampling interface in microseconds [default 64]" << endl;
-  cout << " -n nfft   FFT length for filtering [default: 128]" << endl;
-  cout << " -r ipol   polarisatsion ipol contains an RFI reference signal" << endl;
   cout << " -h        display usage" << endl;
+  cout << " -n nfft   FFT length for filtering [default: 1024]" << endl;
+  cout << " -r ipol   polarisatsion ipol contains an RFI reference signal" << endl;
+  cout << " -t tsamp  Adaptive filter monitoring tsamp in seconds [default 10]" << endl;
   cout << " -v        verbose output" << endl;
 }
 

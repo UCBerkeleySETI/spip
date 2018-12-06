@@ -31,6 +31,7 @@ spip::ContinuumPipeline::ContinuumPipeline (const char * in_key_string, const ch
 
 #ifdef HAVE_CUDA
   device = -1;
+  input_ring_ram = true;
 #endif
 
   in_db  = new DataBlockRead (in_key_string);
@@ -40,6 +41,7 @@ spip::ContinuumPipeline::ContinuumPipeline (const char * in_key_string, const ch
   in_db->lock();
 
   verbose = false;
+  unpack = true;
 }
 
 spip::ContinuumPipeline::~ContinuumPipeline()
@@ -137,6 +139,8 @@ void spip::ContinuumPipeline::configure (spip::UnpackFloat * unpacker)
   // detected data
   detected = new spip::ContainerRAM ();
 
+  if (verbose)
+    cerr << "spip::ContinuumPipeline::configure allocating Detection" << endl;
   // Detector
   if (output_state == spip::Signal::Intensity)
   {
@@ -175,17 +179,6 @@ void spip::ContinuumPipeline::configure (spip::UnpackFloat * unpacker)
   integrator->set_input (detected);
   integrator->set_output (output);
   integrator->set_verbose (verbose);
-
-/*
-  // Frequency Reverser
-  if (verbose)
-    cerr << "spip::ContinuumPipeline::configure reverser->set_sideband (Lower)" << endl;
-  reverser = new spip::ReverseFrequencyRAM();
-  reverser->set_sideband (Signal::Sideband::Lower);
-  reverser->set_input (integrated);
-  reverser->set_output (output);
-  reverser->set_verbose (verbose);
-*/
 }
 
 #ifdef HAVE_CUDA
@@ -214,38 +207,63 @@ void spip::ContinuumPipeline::set_device (int _device)
 //! build the pipeline containers and transforms
 void spip::ContinuumPipeline::configure_cuda (spip::UnpackFloat * unpacker)
 {
+  // input container, reads header 
   if (verbose)
     cerr << "spip::ContinuumPipeline::configure_cuda creating input" << endl;
-  // input container, reads header 
-  input = new spip::ContainerRingRead (in_db);
-  input->register_buffers();
+  // if input data block resides on the host
+  if (in_db->get_device() == -1)
+  {
+    input = new spip::ContainerRingRead (in_db);
+    input->register_buffers();
+  }
+  else
+  {
+    d_input = new spip::ContainerRingReadCUDA (in_db);
+    unpack = false;
+    input_ring_ram = false;
+  }
 
   // transfer host to device
   reblocked = new spip::ContainerCUDADevice ();
 
-  if (verbose)
-    cerr << "spip::ContinuumPipeline::configure_cuda allocating RAM to CUDA Transfer" << endl;
-  ram_to_cuda = new spip::RAMtoCUDATransfer (stream);
-  ram_to_cuda->set_input (input);
-  ram_to_cuda->set_output (dynamic_cast<spip::ContainerCUDADevice*>(reblocked)); 
-  ram_to_cuda->set_verbose (verbose);
+  if (input_ring_ram)
+  {
+    if (verbose)
+      cerr << "spip::ContinuumPipeline::configure_cuda allocating ram_to_cuda" << endl;
+    ram_to_cuda = new spip::RAMtoCUDATransfer (stream);
+    ram_to_cuda->set_input (input);
+    ram_to_cuda->set_output (dynamic_cast<spip::ContainerCUDADevice*>(reblocked));
+    ram_to_cuda->set_verbose (verbose);
+  }
+  else
+  {
+    if (verbose)
+      cerr << "spip::ContinuumPipeline::configure_cuda allocating cuda_to_cuda" << endl;
+    cuda_to_cuda = new spip::CUDARingtoCUDATransfer (stream);
+    cuda_to_cuda->set_input (d_input);
+    cuda_to_cuda->set_output (dynamic_cast<spip::ContainerCUDADevice*>(reblocked));
+    cuda_to_cuda->set_verbose (verbose);
+  }
 
-  if (verbose)
-    cerr << "spip::ContinuumPipeline::configure_cuda unpacked container" << endl;
-  // unpacked container
-  unpacked = new spip::ContainerCUDADevice ();
-  if (verbose)
-    cerr << "spip::ContinuumPipeline::configure_cuda allocating UnpackFloat" << endl;
+  if (unpack)
+  {
+    if (verbose)
+      cerr << "spip::ContinuumPipeline::configure_cuda unpacked container" << endl;
+    // unpacked container
+    unpacked = new spip::ContainerCUDADevice ();
+    if (verbose)
+      cerr << "spip::ContinuumPipeline::configure_cuda allocating UnpackFloat" << endl;
 
-  // unpack to float operation
-  unpack_float = unpacker;
-  unpack_float->set_input (reblocked);
-  unpack_float->set_output (unpacked);
-  unpack_float->set_verbose (verbose);
+    // unpack to float operation
+    unpack_float = unpacker;
+    unpack_float->set_input (reblocked);
+    unpack_float->set_output (unpacked);
+    unpack_float->set_verbose (verbose);
 
-  // ensure the cuda Stream is set
-  spip::UnpackFloatCUDA * tmp = dynamic_cast<spip::UnpackFloatCUDA *>(unpacker);
-  tmp->set_stream (stream);
+    // ensure the cuda Stream is set
+    spip::UnpackFloatCUDA * tmp = dynamic_cast<spip::UnpackFloatCUDA *>(unpacker);
+    tmp->set_stream (stream);
+  }
   
   // fine channels
   if (verbose)
@@ -256,7 +274,10 @@ void spip::ContinuumPipeline::configure_cuda (spip::UnpackFloat * unpacker)
     cerr << "spip::ContinuumPipeline::configure_cuda allocating Forward FFT" << endl;
   // forward FFT operation
   fwd_fft = new spip::ForwardFFTCUDA(stream);
-  fwd_fft->set_input (unpacked);
+  if (unpack)
+    fwd_fft->set_input (unpacked);
+  else
+    fwd_fft->set_input (reblocked);
   fwd_fft->set_output (channelised);
   fwd_fft->set_nfft (nfft);
   fwd_fft->set_verbose (verbose);
@@ -264,7 +285,7 @@ void spip::ContinuumPipeline::configure_cuda (spip::UnpackFloat * unpacker)
   // detected data
   detected = new spip::ContainerCUDADevice();
 
-  // coherennce detector
+  // coherence detector
   if ((output_state == spip::Signal::Intensity) || (output_state == spip::Signal::PPQQ))
     detector = new spip::DetectionSquareLawCUDA(stream);
   else
@@ -280,24 +301,15 @@ void spip::ContinuumPipeline::configure_cuda (spip::UnpackFloat * unpacker)
   // lower sideband data
   d_output = new spip::ContainerCUDADevice();
 
-  // time and frequnecy integrator
+  // time and frequency integrator
   integrator = new spip::IntegrationCUDA(stream);
   integrator->set_decimation (tdec, 1, fdec, 1);
   integrator->set_input (detected);
   integrator->set_output (d_output);
   integrator->set_verbose (verbose);
 
-  // lower sideband converter
-/*
-  reverser = new spip::ReverseFrequencyCUDA (stream);
-  reverser->set_sideband (Signal::Sideband::Lower);
-  reverser->set_input (integrated);
-  reverser->set_output (d_output);
-  reverser->set_verbose (verbose);
-*/
-
   if (verbose)
-    cerr << "spip::ContinuumPipeline::configure_cuda allocating output File Writer" << endl;
+    cerr << "spip::ContinuumPipeline::configure_cuda allocating output File Writer tsubint=" << tsubint << endl;
   // coarse output channels
   output = new spip::ContainerFileWrite(out_dir);
   output->register_buffer();
@@ -322,15 +334,27 @@ void spip::ContinuumPipeline::open ()
 
   if (verbose)
     cerr << "spip::ContinuumPipeline::open input->read_header()" << endl;
+
   // read from the input
-  input->process_header();
+#ifdef HAVE_CUDA
+  if (in_db->get_device() != -1)
+  {
+    input_ring = dynamic_cast<spip::ContainerRing*>(d_input);
+  }
+  else
+#endif
+  {
+    input_ring = dynamic_cast<spip::ContainerRing*>(input);
+  }
+
+  input_ring->process_header();
 
   // now determine the required reblocking
-  uint64_t input_block_size = input->get_size();
-  uint64_t bytes_required = uint64_t(input->calculate_nbits_per_sample()) * nfft / 8;
+  uint64_t input_block_size = input_ring->get_size();
+  uint64_t bytes_required = uint64_t(input_ring->calculate_nbits_per_sample()) * nfft / 8;
   if (verbose)
-    cerr << "spip::ContinuumPipeline::open input->calculate_nbits_per_sample()=" 
-         << input->calculate_nbits_per_sample() << " nfft=" << nfft << endl;
+    cerr << "spip::ContinuumPipeline::open input_ring->calculate_nbits_per_sample()=" 
+         << input_ring->calculate_nbits_per_sample() << " nfft=" << nfft << endl;
   if (bytes_required > input_block_size)
   {
     reblock_factor = bytes_required / input_block_size;
@@ -351,10 +375,22 @@ void spip::ContinuumPipeline::open ()
 #ifdef HAVE_CUDA
   if (device >= 0)
   {
-    if (verbose)
-      cerr << "spip::ContinuumPipeline::open ram_to_cuda->configure(SFPT)" << endl;
-    ram_to_cuda->set_output_reblock (reblock_factor);
-    ram_to_cuda->configure(spip::Ordering::SFPT);
+    if (input_ring_ram)
+    {
+      if (verbose)
+        cerr << "spip::ContinuumPipeline::open ram_to_cuda->configure(SFPT)" << endl;
+      ram_to_cuda->set_output_reblock (reblock_factor);
+      ram_to_cuda->configure(spip::Ordering::SFPT);
+    }
+    else
+    {
+      if (verbose)
+        cerr << "spip::ContinuumPipeline::open cuda_to_cuda->set_output_reblock(" << reblock_factor << ")" << endl;
+      cuda_to_cuda->set_output_reblock (reblock_factor);
+      if (verbose)
+        cerr << "spip::ContinuumPipeline::open cuda_to_cuda->configure(SFPT)" << endl;
+      cuda_to_cuda->configure(spip::Ordering::SFPT);
+    }
   }
   else
 #endif
@@ -363,10 +399,13 @@ void spip::ContinuumPipeline::open ()
     ram_to_ram->configure (spip::Ordering::SFPT);
   }
   
-  // configure the unpacker
-  if (verbose)
-    cerr << "spip::ContinuumPipeline::open unpack_float->configure(SFPT)" << endl;
-  unpack_float->configure(spip::Ordering::SFPT);
+  if (unpack)
+  {
+    // configure the unpacker
+    if (verbose)
+      cerr << "spip::ContinuumPipeline::open unpack_float->configure(SFPT)" << endl;
+    unpack_float->configure(spip::Ordering::SFPT);
+  }
 
   // configure the forward FFT
   if (verbose)
@@ -380,10 +419,6 @@ void spip::ContinuumPipeline::open ()
   if (verbose)
     cerr << "spip::ContinuumPipeline::open integrator->configure(TSPF)" << endl;
   integrator->configure(spip::Ordering::TSPF);
-
-  if (verbose)
-    cerr << "spip::ContinuumPipeline::open reverser->configure(TSPF)" << endl;
-  //reverser->configure(spip::Ordering::TSPF);
 
 #ifdef HAVE_CUDA
   if (device >= 0)
@@ -399,6 +434,8 @@ void spip::ContinuumPipeline::open ()
     cerr << "spip::ContinuumPipeline::open output->process_header()" << endl;
   output->process_header();
 }
+
+
 
 //! close the input and output data blocks
 void spip::ContinuumPipeline::close ()
@@ -437,11 +474,15 @@ bool spip::ContinuumPipeline::process ()
     {
       // read a block of input data
       if (verbose)
-        cerr << "spip::ContinuumPipeline::process input->open_block()" << endl;
-      nbytes_input = input->open_block();
+        cerr << "spip::ContinuumPipeline::process input_ring->open_block()" << endl;
+      nbytes_input = input_ring->open_block();
+      if (verbose)
+        cerr << "spip::ContinuumPipeline::process input block contains " << nbytes_input << " bytes" << endl;
 
       if (nbytes_input < input_bufsz)
+      {
         keep_processing = false;
+      }
 
       // only process full blocks of data
       if (keep_processing)
@@ -449,8 +490,16 @@ bool spip::ContinuumPipeline::process ()
 #ifdef HAVE_CUDA
         if (device >= 0)
         {
-          ram_to_cuda->prepare();
-          ram_to_cuda->transformation();
+          if (input_ring_ram)
+          {
+            ram_to_cuda->prepare();
+            ram_to_cuda->transformation();
+          }
+          else
+          {
+            cuda_to_cuda->prepare();
+            cuda_to_cuda->transformation();
+          }
         }
         else
 #endif
@@ -464,14 +513,17 @@ bool spip::ContinuumPipeline::process ()
       blocks_read++;
 
       if (verbose)
-        cerr << "spip::ContinuumPipeline::process input->close_block()" << endl;
-      input->close_block();
+        cerr << "spip::ContinuumPipeline::process input_ring->close_block()" << endl;
+      input_ring->close_block();
     }
 
-    if (verbose)
-      cerr << "spip::ContinuumPipeline::process unpack_float->transformation()" << endl;
-    unpack_float->prepare();
-    unpack_float->transformation();
+    if (unpack)
+    {
+      if (verbose)
+        cerr << "spip::ContinuumPipeline::process unpack_float->transformation()" << endl;
+      unpack_float->prepare();
+      unpack_float->transformation();
+    }
   
     if (keep_processing)
     {
@@ -491,10 +543,6 @@ bool spip::ContinuumPipeline::process ()
       integrator->prepare();
       integrator->transformation();
 
-      if (verbose)
-        cerr << "spip::ContinuumPipeline::process reverser->transformation()" << endl;
-      //reverser->prepare();
-      //reverser->transformation();
 
 #ifdef HAVE_CUDA
       if (device >= 0)

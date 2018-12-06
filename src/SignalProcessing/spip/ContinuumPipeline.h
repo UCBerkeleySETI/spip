@@ -18,10 +18,10 @@
 #include "spip/DetectionSquareLawRAM.h"
 #include "spip/IntegrationRAM.h"
 #include "spip/RAMtoRAMTransfer.h"
-#include "spip/ReverseFrequencyRAM.h"
 #include "spip/ContainerRingRead.h"
 #include "spip/ContainerFileWrite.h"
 #include "spip/ContainerRAM.h"
+#include "spip/ContainerTransfer.h"
 
 #include "config.h"
 
@@ -32,9 +32,10 @@
 #include "spip/DetectionPolarimetryCUDA.h"
 #include "spip/DetectionSquareLawCUDA.h"
 #include "spip/IntegrationCUDA.h"
-#include "spip/ReverseFrequencyCUDA.h"
 #include "spip/RAMtoCUDATransfer.h"
+#include "spip/ContainerRingReadCUDA.h"
 #include "spip/CUDAtoRAMTransfer.h"
+#include "spip/CUDARingtoCUDATransfer.h"
 #endif
 
 #include <vector>
@@ -83,6 +84,8 @@ namespace spip {
 
       DataBlockRead * in_db;
 
+      RAMtoRAMTransfer * ram_to_ram; 
+
       UnpackFloat * unpack_float;
 
       ForwardFFT * fwd_fft;
@@ -91,7 +94,7 @@ namespace spip {
 
       Integration * integrator;
 
-      ReverseFrequency * reverser;
+      ContainerRing * input_ring;
 
       ContainerRingRead * input;
 
@@ -128,18 +131,24 @@ namespace spip {
 #ifdef HAVE_CUDA
       int device;
 
+      bool input_ring_ram;
+
       cudaStream_t stream;
 
-      RAMtoCUDATransfer * ram_to_cuda; 
+      ContainerRingReadCUDA * d_input;
 
       ContainerCUDADevice * d_output; 
 
+      RAMtoCUDATransfer * ram_to_cuda; 
+
       CUDAtoRAMTransfer * cuda_to_ram; 
+
+      CUDARingtoCUDATransfer * cuda_to_cuda; 
 #endif
 
-      RAMtoRAMTransfer * ram_to_ram; 
-
       unsigned reblock_factor;
+
+      bool unpack;
   };
 
 }

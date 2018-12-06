@@ -39,7 +39,8 @@ namespace spip {
       void transformation ();
 
       //! Required operation
-      virtual void fft_shift () = 0;
+      virtual void condition () = 0;
+      //virtual void fft_shift () = 0;
 
       //! Required data transformation
       virtual void transform_SFPT_to_TFPS () = 0 ;
@@ -51,7 +52,7 @@ namespace spip {
       virtual void transform_SFPT_to_SFPT () = 0 ;
 
       //! Require data renormalization
-      virtual void normalize_output () = 0;
+     // virtual void normalize_output () = 0;
 
       void set_nfft (int);
 
@@ -59,6 +60,9 @@ namespace spip {
       void set_normalization (bool _normalize);
 
     protected:
+
+      // generic container to store normalized or conditioned data
+      Container * conditioned;
 
       unsigned nchan;
 

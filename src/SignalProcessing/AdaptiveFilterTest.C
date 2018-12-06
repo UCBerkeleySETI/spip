@@ -35,6 +35,7 @@ spip::AdaptiveFilterTest::AdaptiveFilterTest (const char * in_key_string, const 
 
   reference_pol = -1;
   verbose = false;
+  req_mon_tsamp = 0;
 }
 
 spip::AdaptiveFilterTest::~AdaptiveFilterTest()
@@ -48,9 +49,10 @@ spip::AdaptiveFilterTest::~AdaptiveFilterTest()
   delete out_db;
 }
 
-void spip::AdaptiveFilterTest::set_filtering (int ref_pol)
+void spip::AdaptiveFilterTest::set_filtering (int ref_pol, double _req_mon_tsamp)
 {
   reference_pol = ref_pol;
+  req_mon_tsamp = _req_mon_tsamp;
 }
 
 //! build the pipeline containers and transforms
@@ -93,7 +95,7 @@ void spip::AdaptiveFilterTest::configure (spip::UnpackFloat * unpacker)
   filter = new spip::AdaptiveFilterRAM(output_dir);
   filter->set_input (unpacked);
   filter->set_output (output);
-  filter->set_filtering (reference_pol);
+  filter->set_filtering (reference_pol, req_mon_tsamp);
   filter->set_verbose (verbose);
 }
 
@@ -167,7 +169,7 @@ void spip::AdaptiveFilterTest::configure_cuda (spip::UnpackFloat * unpacker)
   filter = new spip::AdaptiveFilterCUDA(stream, output_dir);
   filter->set_input (unpacked);
   filter->set_output (d_output);
-  filter->set_filtering (reference_pol);
+  filter->set_filtering (reference_pol, req_mon_tsamp);
   filter->set_verbose (verbose);
 
   if (verbose)
@@ -277,6 +279,9 @@ bool spip::AdaptiveFilterTest::process ()
   uint64_t input_bufsz = in_db->get_data_bufsz();
   uint64_t nbytes;
 
+  unsigned blocks_processed = 0;
+  unsigned blocks_per_mon_tsamp = filter->get_blocks_per_mon_tsamp();
+
   while (keep_processing)
   {
     // read a block of input data
@@ -309,9 +314,15 @@ bool spip::AdaptiveFilterTest::process ()
       cerr << "spip::AdaptiveFilterTest::process filter->transformation()" << endl;
     filter->prepare();
     filter->transformation();
-    filter->write_gains();
-    filter->write_dirty();
-    filter->write_cleaned();
+
+    // count the bytes processed
+    blocks_processed++;
+    if (blocks_processed % blocks_per_mon_tsamp == 0)
+    {
+      filter->write_gains();
+      filter->write_dirty();
+      filter->write_cleaned();
+    }
 
 #ifdef HAVE_CUDA
     if (device >= 0)

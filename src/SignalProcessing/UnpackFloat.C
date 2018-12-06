@@ -18,6 +18,7 @@ spip::UnpackFloat::UnpackFloat () : Transformation<Container,Container>("UnpackF
   scale = 1;
   endianness = spip::Little;
   encoding  = spip::TwosComplement;
+  output_sideband = Signal::Sideband::None;
 }
 
 spip::UnpackFloat::~UnpackFloat ()
@@ -35,6 +36,7 @@ void spip::UnpackFloat::configure (spip::Ordering output_order)
   nsignal = input->get_nsignal ();
   endianness = input->get_endianness();
   encoding = input->get_encoding ();
+  sideband = input->get_sideband();
 
   if (verbose)
   {
@@ -75,6 +77,12 @@ void spip::UnpackFloat::configure (spip::Ordering output_order)
   output->set_endianness (spip::Little);
   output->set_encoding (spip::TwosComplement);
   output->set_order (spip::Ordering::SFPT);
+
+  // unpackers may change this in their consuctors
+  if (output_sideband != Signal::Sideband::None)
+  {
+    output->set_sideband (output_sideband);
+  }
 
   // update the output header parameters with the new details
   output->write_header ();

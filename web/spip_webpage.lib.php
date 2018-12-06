@@ -80,7 +80,6 @@ class spip_webpage
     echo "       <span id='".$id."_progress_bar'>[ ... ]</span>\n";
   }
 
-
 } // END CLASS DEFINITION
 
 
@@ -149,12 +148,14 @@ function handleDirect($child_class)
     {
       $nav_items = array ();
       
-      if ($this->config["TIMING_MODE"] == "true")
+      if ($obj->config["TIMING_MODE"] == "true")
         $nav_items["/spip/timing/"] = "Timing";
-      if ($this->config["SEARCH_MODE"] == "true")
+      if ($obj->config["SEARCH_MODE"] == "true")
         $nav_items["/spip/search/"] = "Search";
-      if ($this->config["CONTINUUM_MODE"] == "true")
+      if ($obj->config["CONTINUUM_MODE"] == "true")
         $nav_items["/spip/continuum/"] = "Continuum";
+      else
+        $nav_items["/spip/"] = "";
       $nav_items["/spip/stats/"] = "Stats";
       $nav_items["/spip/status/"] = "Status";
       $nav_items["/spip/results/"] = "Results";

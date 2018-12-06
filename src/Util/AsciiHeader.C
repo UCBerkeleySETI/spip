@@ -213,8 +213,11 @@ int spip::AsciiHeader::set (const char* keyword, const char* format, ...)
   }
 
   if (eol)
+  {
     /* make a copy */
     dup = strdup (eol);
+
+  }
 
   /* %Xs dictates only a minumum string length */
   if (sprintf (key, "%-19s %-20s   ", keyword, value) < 0) {

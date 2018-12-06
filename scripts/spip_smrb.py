@@ -12,6 +12,7 @@
 #   SMRBs destroyed upon exit
 #
 
+import errno
 import threading, sys, traceback, socket, select
 from time import sleep
 
@@ -21,6 +22,8 @@ from spip.daemons.bases import StreamBased
 from spip.daemons.daemon import Daemon
 from spip.log_socket import LogSocket
 from spip.utils.core import system
+from spip.utils import sockets
+
 
 DAEMONIZE = True
 DL        = 1
@@ -120,7 +123,7 @@ class monThread (threading.Thread):
       script.log(2, "monThread::run binding to localhost:" + str(port))
       sock.bind(("localhost", port))
 
-      sock.listen(2)
+      sock.listen(10)
 
       can_read.append(sock)
       timeout = 1
@@ -155,20 +158,30 @@ class monThread (threading.Thread):
               can_read.append(new_conn)
 
             else:
-              message = handle.recv(4096)
-              message = message.strip()
-              script.log(3, "monThread::run message='" + message+"'")
-              if (len(message) == 0):
-                script.log(3, "monThread::run closing connection")
-                handle.close()
-                for i, x in enumerate(can_read):
-                  if (x == handle):
-                    del can_read[i]
+
+              try:  
+                message = handle.recv(4096)
+              except socket.error as e:
+                if e.errno == errno.ECONNRESET:
+                  script.log (1, "Connection reset")
+                  handle.close()
+                  for i, x in enumerate(can_read):
+                    if (x == handle):
+                      del can_read[i]
               else:
-                if message == "smrb_status":
-                  script.log (3, "monThread::run " + str(smrb))
-                  handle.send(serialized)
-          
+                message = message.strip()
+                script.log(3, "monThread::run message='" + message+"'")
+                if (len(message) == 0):
+                  script.log(3, "monThread::run closing connection")
+                  handle.close()
+                  for i, x in enumerate(can_read):
+                    if (x == handle):
+                      del can_read[i]
+                else:
+                  if message == "smrb_status":
+                    script.log (3, "monThread::run " + str(smrb))
+                    handle.send(serialized)
+              
       for i, x in enumerate(can_read):
         x.close()
         del can_read[i]
@@ -254,8 +267,8 @@ class SMRBDaemon(Daemon,StreamBased):
       self.binary_list.append ("dada_db -k " + db_key)
       db_keys.append(db_key)
 
-    # wait 1 second for threads to initialize
-    sleep(1)
+    # wait 5 seconds for threads to initialize
+    sleep(5)
 
     self.log (2, "SMRBDaemon::main starting monThread")
     # after creation, launch thread to monitor smrb, maintaining state
@@ -289,6 +302,32 @@ class SMRBDaemon(Daemon,StreamBased):
   def getDBMonPort (self, stream_id):
     start_port = 20000
     return start_port + int(stream_id)
+
+  @classmethod
+  def waitForSMRB (self, db_key, script):
+
+    # port of the SMRB daemon for this stream
+    smrb_port = SMRBDaemon.getDBMonPort(script.id)
+
+    # wait up to 30s for the SMRB to be created
+    smrb_wait = 60
+
+    smrb_exists = False
+    while not smrb_exists and smrb_wait > 0 and not script.quit_event.isSet():
+
+      script.debug("trying to open connection to SMRB")
+      smrb_sock = sockets.openSocket (DL, "localhost", smrb_port, 1)
+      if smrb_sock:
+        smrb_sock.send ("smrb_status\r\n")
+        junk = smrb_sock.recv (65536)
+        smrb_sock.close()
+        smrb_exists = True
+      else:
+        sleep (1)
+        smrb_wait -= 1
+
+    return smrb_exists
+
 
 if __name__ == "__main__":
 

@@ -41,11 +41,17 @@ int main(int argc, char *argv[]) try
   // tcp control port to receive configuration
   int control_port = -1;
 
+  // number of polarisations present
+  unsigned npol = 2;
+
   // control socket for the control port
   spip::TCPSocketServer * ctrl_sock = 0;
 
   // core on which to bind thread operations
   int core = -1;
+
+  // number of input channels
+  int nchan = 1;
 
   string stats_dir = "";
 
@@ -56,7 +62,7 @@ int main(int argc, char *argv[]) try
   opterr = 0;
   int c;
 
-  while ((c = getopt(argc, argv, "b:c:D:hk:n:s:v")) != EOF) 
+  while ((c = getopt(argc, argv, "b:c:D:hk:n:p:s:v")) != EOF) 
   {
     switch(c) 
     {
@@ -80,6 +86,14 @@ int main(int argc, char *argv[]) try
         cerr << "Usage: " << endl;
         usage();
         exit(EXIT_SUCCESS);
+        break;
+
+      case 'n':
+        nchan = atoi(optarg);
+        break;
+
+      case 'p':
+        npol = atoi(optarg);
         break;
 
       case 's':
@@ -108,7 +122,7 @@ int main(int argc, char *argv[]) try
   dbstats = new spip::DataBlockStats (key.c_str());
 
   dbstats->set_verbosity(verbose > 0);
-  dbstats->set_block_format (new spip::BlockFormatUWB());
+  dbstats->set_block_format (new spip::BlockFormatUWB(npol));
 
   // Check arguments
   if ((argc - optind) != 1) 

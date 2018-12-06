@@ -22,7 +22,7 @@ namespace spip {
 
       ~AdaptiveFilter ();
 
-      void set_filtering (int);
+      void set_filtering (int, double);
 
       void configure (Ordering output_order);
         
@@ -31,6 +31,8 @@ namespace spip {
       void prepare_output ();
 
       void reserve ();
+
+      unsigned get_blocks_per_mon_tsamp() { return blocks_per_mon_tsamp; };
 
       //! Perform 
       void transformation ();
@@ -88,6 +90,14 @@ namespace spip {
 
       // polarisation containing the RFI reference signal (<=0 means none)
       int ref_pol;
+
+      // sampling time of monitoring output
+      double req_mon_tsamp;
+
+      double mon_tsamp;
+
+      // number of input blocks per monitoring tsamp
+      unsigned blocks_per_mon_tsamp;
 
       bool perform_filtering;
 

@@ -87,7 +87,7 @@ void spip::AddTime::configure (spip::Ordering output_order)
   if (verbose)
     cerr << "spip::AddTime::configure ndat=" << ndat 
          << " ndim=" << ndim << " nbit=" << nbit << " npol=" << npol 
-         << " nsignal=" << nsignal << endl;
+         << " nsignal=" << nsignal << " nbin=" << nbin << endl;
   
   // determine the changed parameters
 

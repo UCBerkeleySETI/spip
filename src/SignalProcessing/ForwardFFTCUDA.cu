@@ -6,10 +6,12 @@
  ***************************************************************************/
 
 #include "spip/ForwardFFTCUDA.h"
+#include "spip/ContainerCUDA.h"
 #include "spip/CUFFTError.h"
 
 #include <stdexcept>
 #include <cmath>
+#include <cstdio>
 
 using namespace std;
 
@@ -31,6 +33,9 @@ void spip::ForwardFFTCUDA::configure (spip::Ordering output_order)
 {
   if (nfft == 0)
     throw runtime_error ("ForwardFFTCUDA::configure nfft not set");
+
+  if (!conditioned)
+    conditioned = new spip::ContainerCUDADevice ();
 
   spip::ForwardFFT::configure (output_order);
 
@@ -102,21 +107,51 @@ void spip::ForwardFFTCUDA::configure_plan ()
     work_area = 0;
 }
 
-__global__ void fftshift_even (float2 *data, int N)
+// only words for event NFFT
+__global__ void forwardfftcuda_shift_kernel (float2 * in, float2 * out, uint64_t nval)
 {
-  int i = blockDim.x * blockIdx.x + threadIdx.x;
-  if (i < N)
+  uint64_t i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i < nval)
   {
+    float2 val = in[i];
     const int a = int(1) - (2 * (i & 1));
-    data[i].x *= a;
-    data[i].y *= a;
+    val.x *= a;
+    val.y *= a;
+    out[i] = val;
   }
 }
 
-void spip::ForwardFFTCUDA::fft_shift ()
+__global__ void forwardfftcuda_shift_normalize_kernel(float2 * in, float2 * out, uint64_t nval, float scale_fac)
+{
+  uint64_t i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i < nval)
+  { 
+    float2 val = in[i];
+    const int a = int(1) - (2 * (i & 1));
+    const float f = scale_fac * float(a);
+    val.x *= f;
+    val.y *= f;
+    out[i] = val;
+  }
+}
+
+//! normalize the array by the scale factor
+__global__ void forwardfftcuda_normalize_kernel (float2 * in, float2 * out, uint64_t nval, float scale)
+{
+  uint64_t i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < nval)
+  {
+    float2 val = in[i];
+    val.x *= scale;
+    val.y *= scale;
+    out[i] = val;
+  }
+}
+
+void spip::ForwardFFTCUDA::condition()
 {
   cufftComplex * in  = (cufftComplex *) input->get_buffer();
-  cufftComplex * out = (cufftComplex *) output->get_buffer();
+  cufftComplex * out = (cufftComplex *) conditioned->get_buffer();
 
   uint64_t nval = ndat * nsignal * npol * nchan;
   unsigned nthreads = 1024;
@@ -124,20 +159,43 @@ void spip::ForwardFFTCUDA::fft_shift ()
   if (nval % nthreads)
     nblocks++;
 
-  if (nfft % 2 == 0)
-    fftshift_even<<<nblocks, nthreads, 0, stream>>>(in, nval);
+  if ((apply_fft_shift) && (nfft % 2 != 0))
+    throw runtime_error ("ForwardFFTCUDA::condition odd fft shift not implemented (yet)");
+  if (apply_fft_shift && normalize)
+  {
+    if (verbose)
+      cerr << "spip::ForwardFFTCUDA::condition forwardfftcuda_shift_normalize_kernel" << endl;
+    forwardfftcuda_shift_normalize_kernel<<<nblocks, nthreads, 0, stream>>>(in, out, nval, scale_fac);
+  }
+  else if (apply_fft_shift && !normalize)
+  {
+    if (verbose)
+      cerr << "spip::ForwardFFTCUDA::condition forwardfftcuda_shift_kernel" << endl;
+    forwardfftcuda_shift_kernel<<<nblocks, nthreads, 0, stream>>>(in, out, nval);
+  }
+  else if (!apply_fft_shift && normalize)
+  {
+    if (verbose)
+      cerr << "spip::ForwardFFTCUDA::condition forwardfftcuda_normalize_kernel" << endl;
+    forwardfftcuda_normalize_kernel<<<nblocks, nthreads, 0, stream>>>(in, out, nval, scale_fac);
+  }
   else
   {
-    throw runtime_error ("ForwardFFTCUDA::transform odd fft shift not implemented yet");
+    throw runtime_error ("ForwardFFTCUDA::transform unexpected call to condition");
   }
 }
-
 
 //! perform Forward FFT using CUFFT
 void spip::ForwardFFTCUDA::transform_SFPT_to_TFPS ()
 {
-  cufftComplex * in  = (cufftComplex *) input->get_buffer();
-  cufftComplex * out = (cufftComplex *) output->get_buffer();
+  if (verbose)
+    cerr << "spip::ForwardFFTCUDA::transform_SFPT_to_TFPS()" << endl;
+  cufftComplex * in, * out;
+  if (apply_fft_shift || normalize)
+    in = (cufftComplex *) conditioned->get_buffer();
+  else
+    in = (cufftComplex *) input->get_buffer();
+  out = (cufftComplex *) output->get_buffer();
   cufftResult result; 
 
   uint64_t out_offset;
@@ -162,31 +220,17 @@ void spip::ForwardFFTCUDA::transform_SFPT_to_TFPS ()
   }
 }
 
-/*
-// kernel to perform fft shift of each FFT block of data
-__global__ void forwardfftcuda_fft_shift_tspf_kernel (float2 * output, uint64_t nfft)
-{
-  // each block of data handles 1 NFFT of data and flips that 
-  float2 * data = output + (blockIdx.x * nfft);
-  const uint64_t half_nfft = nfft / 2;
-
-  // each thread switches a value with is fft_shifted one
-  for (uint64_t i=threadIdx.x; i<half_nfft; i+=blockDim.x)
-  {
-    float2 upper = data[i + half_nfft];
-    data[i + half_nfft] = data[i];
-    data[i] = upper;
-  }
-}
-*/
-
 // convert to frequency minor order
 void spip::ForwardFFTCUDA::transform_SFPT_to_TSPF ()
 {
   if (verbose)
     cerr << "spip::ForwardFFTCUDA::transform_SFPT_to_TSPF()" << endl;
-  cufftComplex * in  = (cufftComplex *) input->get_buffer();
-  cufftComplex * out = (cufftComplex *) output->get_buffer();
+  cufftComplex * in, * out;
+  if (apply_fft_shift || normalize)
+    in = (cufftComplex *) conditioned->get_buffer();
+  else
+    in = (cufftComplex *) input->get_buffer();
+  out = (cufftComplex *) output->get_buffer();
   cufftResult result;
 
   const uint64_t nchan_out = nchan * nfft;
@@ -215,51 +259,20 @@ void spip::ForwardFFTCUDA::transform_SFPT_to_TSPF ()
       }
     }
   }
-
-/*
-  if (apply_fft_shift)
-  {
-    // assume that the number of channels dominates
-    unsigned nthreads = 1024;
-    unsigned half_nfft = nfft / 2;
-    if (half_nfft < nthreads)
-      nthreads = half_nfft;
-
-    uint64_t ndat_out = ndat / nfft;
-    uint64_t nblocks = ndat_out * nsignal * npol * nchan; // nchan is nchan_in
-
-    //cerr << "spip::ForwardFFTCUDA::transform_SFPT_to_TSPF ndat=" << ndat << " ndat_out=" << ndat_out << " nchan=" << nchan << " nfft=" << nfft << endl;
-    //cerr << "spip::ForwardFFTCUDA::transform_SFPT_to_TSPF nblocks=" << nblocks << " nthreads=" << nthreads << endl;
-    if (verbose)
-      cerr << "spip::ForwardFFTCUDA::transform_SFPT_to_TSPF fft_shift nfft=" << nfft << endl;
-    forwardfftcuda_fft_shift_tspf_kernel<<<nblocks, nthreads, 0, stream>>> (out, nfft);
-  }
-*/
 }
-
-/*
-// kernel to perform fft shift of each FFT block of data
-__global__ void forwardfftcuda_fft_shift_sfpt_kernel (float2 * output, uint64_t nfft)
-{
-  // each block of data handles 1 NFFT of data and flips that 
-  float2 * data = output + (blockIdx.x * nfft);
-  const uint64_t half_nfft = nfft / 2;
-  
-  // each thread switches a value with is fft_shifted one
-  for (uint64_t i=threadIdx.x; i<half_nfft; i+=blockDim.x)
-  { 
-    float2 upper = data[i + half_nfft];
-    data[i + half_nfft] = data[i];
-    data[i] = upper;
-  } 
-}
-*/
 
 void spip::ForwardFFTCUDA::transform_SFPT_to_SFPT ()
 {
-  cufftComplex * in  = (cufftComplex *) input->get_buffer();
-  cufftComplex * out = (cufftComplex *) output->get_buffer();
+  cufftComplex * in, * out;
+  if (apply_fft_shift || normalize)
+    in = (cufftComplex *) conditioned->get_buffer();
+  else
+    in = (cufftComplex *) input->get_buffer();
+  out = (cufftComplex *) output->get_buffer();
   cufftResult result;
+
+  if (verbose)
+    cerr << "spip::ForwardFFTCUDA::transform_SFPT_to_SFPT in=" << (void *) in << " out=" << (void *) out << endl;
 
   const uint64_t nchan_out = nchan * nfft;
   const uint64_t out_pol_stride = nbatch;
@@ -289,57 +302,4 @@ void spip::ForwardFFTCUDA::transform_SFPT_to_SFPT ()
       }
     }
   }
-
-/*
-  if (apply_fft_shift)
-  {
-    // assume that the number of channels dominates
-    unsigned nthreads = 1024;
-    unsigned half_nfft = nfft / 2;
-
-    dim3 blocks = dim3(ndat/nthreads, )
-
-    if (half_nfft < nthreads)
-      nthreads = half_nfft;
-
-    uint64_t ndat_out = ndat / nfft;
-    uint64_t nblocks = ndat_out * nsignal * npol * nchan; // nchan is nchan_in
-
-    //cerr << "spip::ForwardFFTCUDA::transform_SFPT_to_TSPF ndat=" << ndat << " ndat_out=" << ndat_out << " nchan=" << nchan << " nfft=" << nfft <<
-    //endl;
-    //cerr << "spip::ForwardFFTCUDA::transform_SFPT_to_TSPF nblocks=" << nblocks << " nthreads=" << nthreads << endl;
-    if (verbose)
-      cerr << "spip::ForwardFFTCUDA::transform_SFPT_to_SFPT fft_shift nfft=" << nfft << endl;
-    forwardfftcuda_fft_shift_sfpt_kernel<<<nblocks, nthreads, 0, stream>>> (out, nfft);
-  }
-*/
-}
-
-//! normalize the array by the scale factor
-__global__ void forwardfftcuda_normalize_kernel (float * data, uint64_t nval, float scale)
-{
-  unsigned idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx < nval)
-    data[idx] = data[idx] * scale;
-}
-
-void spip::ForwardFFTCUDA::normalize_output ()
-{
-  if (verbose)
-    cerr << "spip::ForwardFFTCUDA::normalize_output()" << endl;
-  float * out = (float *) output->get_buffer();
-
-  int nthread = 1024;
-  uint64_t nval = ndat * nsignal * nchan * npol * ndim;
-  int nblock = nval / nthread;
-  if (nval % nthread != 0)
-    nblock++;
-
-  if (verbose)
-    cerr << "spip::ForwardFFTCUDA::normalize_output nval="
-         << nval << " scale_fac=" << scale_fac << endl;
-
-  forwardfftcuda_normalize_kernel<<<nblock, nthread, 0, stream>>> (out, nval, scale_fac);
-
-  // TODO add check on running of kernel 
 }

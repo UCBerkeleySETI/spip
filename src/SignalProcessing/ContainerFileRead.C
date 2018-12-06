@@ -44,12 +44,23 @@ uint64_t spip::ContainerFileRead::read_data()
   if (spip::Container::verbose)
     cerr << "spip::ContainerFileRead::read_data reading " << file_size 
          << " bytes into " << (void *) buffer << endl;
-  // read from the FD into the containers buffer the file size listed in the header
-  size_t bytes_read = ::read (fd, buffer, file_size);
-  if (bytes_read < size_t(file_size))
-    throw Error (InvalidState, "spip::ContainerFileRead::read_data", "advertised data size was %ld, but only %ld bytes were read",
-file_size, bytes_read);
-  return uint64_t(bytes_read);
+
+  size_t total_bytes_read = 0;
+  while (total_bytes_read < file_size)
+  {
+    size_t bytes_to_read = file_size - total_bytes_read;
+
+    // read from the FD into the containers buffer the file size listed in the header
+    size_t bytes_read = ::read (fd, buffer, file_size);
+    if (bytes_read < 0)
+      throw Error (InvalidState, "spip::ContainerFileRead::read_data", "read failed to read data from file");
+    total_bytes_read += bytes_read;
+
+  }
+  if (total_bytes_read != file_size)
+    throw Error (InvalidState, "spip::ContainerFileRead::read_data", "advertised data size was %ld, but only %ld bytes were read", file_size, total_bytes_read);
+
+  return uint64_t(total_bytes_read);
 }
 
 void spip::ContainerFileRead::open_file()

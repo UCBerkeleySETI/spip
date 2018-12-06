@@ -11,6 +11,7 @@ import sys, traceback
 from time import sleep
 
 from spip_recv import RecvDaemon,ConfiguringThread
+from spip.config import Config
 from uwb_config import UWBConfig
 
 DAEMONIZE = True
@@ -46,10 +47,13 @@ class UWBRecvDaemon(RecvDaemon):
     (host, self.beam_id, self.subband_id) = self.cfg["STREAM_" + self.id].split(":")
     beam = self.cfg["BEAM_" + str(self.beam_id)]
 
+    npol = Config.getStreamParam (self.cfg, "NPOL", self.id)
+
     cmd = self.cfg["STREAM_BINARY"] + " -k " + self.db_key \
             + " -b " + self.cpu_core \
             + " -c " + self.ctrl_port \
             + " -D " + self.cfg["CLIENT_STATS_DIR"] + "/" + beam \
+            + " -p " + npol \
             + " -s " + str(self.id) \
             + " -f dualvdif" \
             + " " + config_file

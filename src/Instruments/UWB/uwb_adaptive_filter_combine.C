@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) try
   filter->set_input (combined);
   filter->set_output (output);
   filter->set_verbose (verbose);
-  filter->set_filtering (1);
+  filter->set_filtering (1, 10);
 
   // open the input file, reading the header
   if (verbose)

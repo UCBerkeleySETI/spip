@@ -28,23 +28,95 @@ class TCSInterfaceDaemon(Daemon):
     self.beam_cfg = {}
     self.host = sockets.getHostNameShort()
 
-  def configure_beam_state (self):
+  def configure_beam_state(self):
 
-    beam_xml = "<beam_configuration><nbeam key='NBEAM'>1</nbeam><beam_state_0 key='BEAM_STATE_0' name='1'>1</beam_state_0></beam_configuration>"
+    beam_xml = \
+        "<beam_configuration>" + \
+        "<nbeam key='NBEAM'>1</nbeam>" + \
+        "<beam_state_0 key='BEAM_STATE_0' name='1'>1</beam_state_0>" + \
+        "</beam_configuration>"
 
-    source_xml = "<source_parameters><name key='SOURCE' epoch='J2000'>None</name><ra key='RA' units='hh:mm:ss'>None</ra><dec key='DEC' units='dd:mm:ss'>None</dec></source_parameters>"
+    source_xml = \
+        "<source_parameters>" + \
+        "<name key='SOURCE' epoch='J2000'>None</name>" + \
+        "<ra key='RA' units='hh:mm:ss'>None</ra>" + \
+        "<dec key='DEC' units='dd:mm:ss'>None</dec>" + \
+        "</source_parameters>"
 
-    observation_xml = "<observation_parameters><observer key='OBSERVER'>None</observer><project_id key='PID'>None</project_id><tobs key='TOBS'>None</tobs><calfreq key='CALFREQ'>None</calfreq><utc_start key='UTC_START'>None</utc_start><utc_stop key='UTC_STOP'>None</utc_stop></observation_parameters>"
+    observation_xml = \
+        "<observation_parameters>" + \
+        "<observer key='OBSERVER'>None</observer>" + \
+        "<project_id key='PID'>None</project_id>" + \
+        "<tobs key='TOBS'>None</tobs>" + \
+        "<calfreq key='CALFREQ'>None</calfreq>" + \
+        "<utc_start key='UTC_START'>None</utc_start>" + \
+        "<utc_stop key='UTC_STOP'>None</utc_stop>" + \
+        "</observation_parameters>"
 
-    custom_xml = "<custom_parameters><adaptive_filter_epsilon key='ADAPTIVE_FILTER_EPSILON'>0.1</adaptive_filter_epsilon><adaptive_filter_nchan key='ADAPTIVE_FILTER_NCHAN'>128</adaptive_filter_nchan><adaptive_filter_nsamp key='ADAPTIVE_FILTER_NSAMP'>1024</adaptive_filter_nsamp></custom_parameters>"
+    custom_xml = \
+        "<custom_parameters>" + \
+        "<adaptive_filter key='ADAPTIVE_FILTER'>0</adaptive_filter>" + \
+        "<adaptive_filter_epsilon key='ADAPTIVE_FILTER_EPSILON'>0.1</adaptive_filter_epsilon>" + \
+        "<adaptive_filter_nchan key='ADAPTIVE_FILTER_NCHAN'>128</adaptive_filter_nchan>" + \
+        "<adaptive_filter_nsamp key='ADAPTIVE_FILTER_NSAMP'>1024</adaptive_filter_nsamp>" + \
+        "<schedule_block_id key='SCHED_BLOCK_ID'>0</schedule_block_id>" + \
+        "<scan_id key='SCAN_ID'>0</scan_id>" + \
+        "</custom_parameters>"
 
-    modes_xml = "<processing_modes><fold key='PERFORM_FOLD'>1</fold><search key='PERFORM_SEARCH'>0</search><continuum key='PERFORM_CONTINUUM'>0</continuum><spectral_line key='PERFORM_SPECTRAL_LINE'>0</spectral_line><vlbi key='PERFORM_VLBI'>0</vlbi><baseband key='PERFORM_BASEBAND'>0</baseband></processing_modes>"
+    calibration_xml = \
+        "<calibration_parameters>" + \
+        "<signal key='CAL_SIGNAL'>0</signal>" + \
+        "<freq key='CAL_FREQ'>1</freq>" + \
+        "<phase key='CAL_PHASE'>0.0</phase>" + \
+        "<duty_cycle key='CAL_DUTY_CYCLE'>0.5</duty_cycle>" + \
+        "<epoch key='CAL_EPOCH'>Unknown</epoch>" + \
+        "<tsys_avg_time key='TSYS_AVG_TIME' units='seconds'>10</tsys_avg_time>" + \
+        "<tsys_freq_resolution key='TSYS_FREQ_RES' units='MHz'>1</tsys_freq_resolution>" + \
+        "</calibration_parameters>"
 
-    fold_xml = "<fold_processing_parameters><output_nchan key='FOLD_OUTNCHAN'>128</output_nchan><custom_dm key='FOLD_DM'>-1</custom_dm><output_nbin key='FOLD_OUTNBIN'>1024</output_nbin><output_tsubint key='FOLD_OUTTSUBINT'>10</output_tsubint><output_npol key='FOLD_OUTNPOL'>4</output_npol><mode key='MODE'>PSR</mode><sk key='FOLD_SK'>0</sk><sk_threshold key='FOLD_SK_THRESHOLD'>3</sk_threshold><sk_nsamps key='FOLD_SK_NSAMPS'>1024</sk_nsamps><append_output key='FOLD_APPEND_OUTPUT'>1</append_output><custom_period key='FOLD_CUSTOM_PERIOD'>-1</custom_period></fold_processing_parameters>"
+    modes_xml = \
+        "<processing_modes>" + \
+        "<fold key='PERFORM_FOLD'>1</fold>" + \
+        "<search key='PERFORM_SEARCH'>0</search>" + \
+        "<continuum key='PERFORM_CONTINUUM'>0</continuum>" + \
+        "<spectral_line key='PERFORM_SPECTRAL_LINE'>0</spectral_line>" + \
+        "<vlbi key='PERFORM_VLBI'>0</vlbi>" + \
+        "<baseband key='PERFORM_BASEBAND'>0</baseband>" + \
+        "</processing_modes>"
 
-    search_xml = "<search_processing_parameters><output_nchan key='SEARCH_OUTNCHAN'>128</output_nchan><custom_dm key='SEARCH_DM'>-1</custom_dm><output_nbit key='SEARCH_OUTNBIT'>8</output_nbit><output_tsubint key='SEARCH_OUTTSUBINT'>10</output_tsubint><output_npol key='SEARCH_OUTNPOL'>4</output_npol><output_tsamp key='SEARCH_OUTTSAMP'>64</output_tsamp><coherent_dedispersion key='SEARCH_COHERENT_DEDISPERSION'>0</coherent_dedispersion></search_processing_parameters>"
+    fold_xml = \
+        "<fold_processing_parameters>" + \
+        "<output_nchan key='FOLD_OUTNCHAN'>128</output_nchan>" + \
+        "<custom_dm key='FOLD_DM'>-1</custom_dm>" + \
+        "<output_nbin key='FOLD_OUTNBIN'>1024</output_nbin>" + \
+        "<output_tsubint key='FOLD_OUTTSUBINT'>10</output_tsubint>" + \
+        "<output_npol key='FOLD_OUTNPOL'>4</output_npol>" + \
+        "<mode key='MODE'>PSR</mode>" + \
+        "<sk key='FOLD_SK'>0</sk>" + \
+        "<sk_threshold key='FOLD_SK_THRESHOLD'>3</sk_threshold>" + \
+        "<sk_nsamps key='FOLD_SK_NSAMPS'>1024</sk_nsamps>" + \
+        "<append_output key='FOLD_APPEND_OUTPUT'>1</append_output>" + \
+        "<custom_period key='FOLD_CUSTOM_PERIOD'>-1</custom_period>" + \
+        "</fold_processing_parameters>"
 
-    continuum_xml = "<continuum_processing_parameters><output_nchan key='CONTINUUM_OUTNCHAN'>1024</output_nchan><output_tsubint key='CONTINUUM_OUTTSUBINT'>10</output_tsubint><output_npol key='CONTINUUM_OUTNPOL'>4</output_npol><output_tsamp key='CONTINUUM_OUTTSAMP'>1</output_tsamp></continuum_processing_parameters>"
+    search_xml = \
+        "<search_processing_parameters>" + \
+        "<output_nchan key='SEARCH_OUTNCHAN'>128</output_nchan>" + \
+        "<custom_dm key='SEARCH_DM'>-1</custom_dm>" + \
+        "<output_nbit key='SEARCH_OUTNBIT'>8</output_nbit>" + \
+        "<output_tsubint key='SEARCH_OUTTSUBINT'>10</output_tsubint>" + \
+        "<output_npol key='SEARCH_OUTNPOL'>4</output_npol>" + \
+        "<output_tsamp key='SEARCH_OUTTSAMP'>64</output_tsamp>" + \
+        "<coherent_dedispersion key='SEARCH_COHERENT_DEDISPERSION'>0</coherent_dedispersion>" + \
+        "</search_processing_parameters>"
+
+    continuum_xml = \
+        "<continuum_processing_parameters>" + \
+        "<output_nchan key='CONTINUUM_OUTNCHAN'>1024</output_nchan>" + \
+        "<output_tsubint key='CONTINUUM_OUTTSUBINT'>10</output_tsubint>" + \
+        "<output_npol key='CONTINUUM_OUTNPOL'>4</output_npol>" + \
+        "<output_tsamp key='CONTINUUM_OUTTSAMP'>1</output_tsamp>" + \
+        "</continuum_processing_parameters>"
 
     stream_xml = "<stream_configuration><nstream key='NSTREAM'>" + str(self.cfg["NUM_STREAM"]) + "</nstream>"
     for i in range(int(self.cfg["NUM_STREAM"])):
@@ -56,6 +128,7 @@ class TCSInterfaceDaemon(Daemon):
     xml += stream_xml
     xml += source_xml
     xml += observation_xml
+    xml += calibration_xml
 
     for i in range(int(self.cfg["NUM_STREAM"])):
       xml += "<stream" + str(i) + ">" + \
@@ -131,24 +204,27 @@ class TCSInterfaceDaemon(Daemon):
                   # Parse XML for correctness
                   (valid, command, reply) = self.parse_obs_cmd (line, id)
 
-                  self.log(1, "TCSInterfaceDaemon::commandThread valid=" + str(valid) \
+                  self.log(2, "TCSInterfaceDaemon::commandThread valid=" + str(valid) \
                            + " command=" + command + " reply=" + str(reply))
 
                   if valid :
                     if command == "start":
-                      self.log(1, "TCSInterfaceDaemon::commandThread issue_start_cmd line="+line)
+                      self.log(1, "-> ok")
+                      handle.send ("ok\r\n")
+                      self.log(2, "TCSInterfaceDaemon::commandThread issue_start_cmd line="+line)
                       reply = self.issue_start_cmd (line)
                     elif command == "stop":
-                      self.log(1, "TCSInterfaceDaemon::commandThread issue_stop_cmd line="+line)
+                      self.log(2, "TCSInterfaceDaemon::commandThread issue_stop_cmd line="+line)
                       reply = self.issue_stop_cmd (line)
                     elif command == "configure":
-                      self.log(1, "TCSInterfaceDaemon::commandThread no action for configure command")
+                      self.log(2, "TCSInterfaceDaemon::commandThread no action for configure command")
                     else:
                       self.log(-1, "Unrecognized command [" + command + "]")
 
                   else:
                     self.log(-1, "failed to parse line: " + reply)
 
+                  self.log(1, "-> " + str(reply))
                   handle.send (reply + "\r\n")
 
                 else:
@@ -167,18 +243,22 @@ class TCSInterfaceDaemon(Daemon):
                     del can_read[i]
               else:
                 raise
-  
+
   ###############################################################################
   # set singular parameter
   def set_param (self, mode, param, value):
-    self.beam_cfg["obs_cmd"][mode][param]["#text"] = value
+    self.beam_cfg["obs_cmd"][mode][param]["#text"] = str(value)
+
+  ###############################################################################
+  # set singular parameter
+  def get_param (self, mode, param):
+    return str(self.beam_cfg["obs_cmd"][mode][param]["#text"])
 
   ###############################################################################
   # set mode parameters for all streams
   def set_stream_params (self, nstream, mode, param, value):
     for istream in range(nstream):
-      self.beam_cfg["obs_cmd"]["stream" + str(istream)][mode][param]["#text"] = value
-
+      self.beam_cfg["obs_cmd"]["stream" + str(istream)][mode][param]["#text"] = str(value)
 
   ###############################################################################
   # parse an XML command for correctness
@@ -218,6 +298,7 @@ class TCSInterfaceDaemon(Daemon):
           self.set_param ("observation_parameters", "project_id", value)
         if key == "CALFREQ":
           self.set_param ("observation_parameters", "calfreq", value)
+          self.set_param ("calibration_parameters", "freq", value)
         if key == "OBSVAL":
           self.set_param ("observation_parameters", "tobs", value)
         if key == "OBSUNIT":
@@ -229,6 +310,11 @@ class TCSInterfaceDaemon(Daemon):
         if key == "DEC":
           self.set_param ("source_parameters", "dec", value)
         if key == "MODE":
+          self.set_stream_params (nstream, "fold_processing_parameters", "mode", value)
+          if value == "CAL":
+            self.set_param ("calibration_parameters", "signal", 1)
+          else:
+            self.set_param ("calibration_parameters", "signal", 0)
           self.set_stream_params (nstream, "fold_processing_parameters", "mode", value)
         if key == "PERFORM_FOLD":
           self.set_stream_params (nstream, "processing_modes", "fold", value)
@@ -316,147 +402,40 @@ class TCSInterfaceDaemon(Daemon):
       return (False, str(value) + " was not in the allowed list " + str(valid_values))
 
 
-  def validate_configuration ():
-
-    (ok, message) = self.validate_fold_configuration()
-    if not ok:
-      return (ok, message)
-
-    (ok, message) = self.validate_search_configuration()
-    if not ok:
-      return (ok, message)
-
-    (ok, message) = self.validate_continuum_configuration()
-    if not ok:
-      return (ok, message)
-
-    return (True, "")
-
-  def validate_continuum_configuration ():
-
-    c = script.beam_cfg["obs_cmd"]["stream0"]["continuum_processing_parameters"]
-
-    prefix = "stream0, continuum, "
-
-    (ok, message) = self.power_of_two_range_inclusive (4096, 262144, int(c["output_nchan"]["#text"]))
-    if not ok:
-      return (False, prefix + "output_nchan: " + message)
-
-    (ok, message) = self.range_inclusive (0.25, 60, int(c["output_tsamp"]["#text"]))
-    if not ok:
-      return (False, prefix + "output_tsamp: " + message)
-
-    (ok, message) = self.range_inclusive (10, 3600, int(c["output_tsubint"]["#text"]))
-    if not ok:
-      return (False, prefix + "output_tsubint: " + message)
-
-    (ok, message) = self.in_list([1,2,3,4], int(c["output_npol"]["#text"]))
-    if not ok:
-      return (False, prefix + "output_npol: " + message)
-
-    return (True, "")
-
-  def validate_search_configuration ():
-
-    c = script.beam_cfg["obs_cmd"]["stream0"]["search_processing_parameters"]
-
-    prefix = "stream0, search, "
-
-    (ok, message) = self.power_of_two_range_inclusive (64, 4096, int(c["output_nchan"]["#text"]))
-    if not ok:
-      return (False, prefix + "output_nchan: " + message)
-
-    (ok, message) = self.range_inclusive (-1, 3000, int(c["custom_dm"]["#text"]))
-    if not ok:
-      return (False, prefix + "custom_dm: " + message)
-
-    (ok, message) = self.in_list([1,2,4, 8, 16], int(c["output_nbit"]["#text"]))
-    if not ok:
-      return (False, prefix + "output_nbit: " + message)
-
-    (ok, message) = self.power_of_two_range_inclusive (1, 1048576, int(c["output_tsamp"]["#text"]))
-    if not ok:
-      return (False, prefix + "output_tsamp: " + message)
-
-    (ok, message) = self.range_inclusive (10, 3600, int(c["output_tsubint"]["#text"]))
-    if not ok:
-      return (False, prefix + "output_tsubint: " + message)
-
-    (ok, message) = self.in_list([1,2,3,4], int(c["output_npol"]["#text"]))
-    if not ok:
-      return (False, prefix + "output_npol: " + message)
-
-    (ok, message) = self.in_list([0, 1, "false", "true"], int(c["co_dedisp"]["#text"]))
-    if not ok:
-      return (False, prefix + "co_dedisp: " + message)
-
-    # validate the maximum data rate
-    nchan = int(c["output_nchan"]["#text"])
-    nbit = int(c["output_nbit"]["#text"])
-    tsamp_us = int(c["output_tsamp"]["#text"])
-    npol = int(c["output_npol"]["#text"])
-    if npol == 3:
-      npol = 4
-
-    data_rate_bits_per_second = (nchan * nbit * npol * 1000000) / tsamp_us
-    data_rate_limit = 1073741824
-    if data_rate_bits_per_second > data_rate_limit:
-      return (False, prefix + " data rate [" + str(data_rate_bits_per_second/1e9) + "] exceeds limit [" + str(data_rate_limit/1e9) + "]") 
-
-    return (True, "")
-
-  def validate_fold_configuration ():
- 
-    c = script.beam_cfg["obs_cmd"]["stream0"]["fold_processing_parameters"]
-
-    (ok, message) = self.power_of_two_range_inclusive (64, 4096, int(c["output_nchan"]["#text"]))
-    if not ok:
-      return (False, "stream0, fold, output_nchan: " + message)
-
-    (ok, message) = self.range_inclusive (-1, 3000, int(c["custom_dm"]["#text"]))
-    if not ok:
-      return (False, "stream0, fold, custom_dm: " + message)
-
-    (ok, message) = self.power_of_two_range_inclusive (8, 4096, int(c["output_nbin"]["#text"]))
-    if not ok:
-      return (False, "stream0, fold, output_nbin: " + message)
-
-    (ok, message) = self.in_list([1,2,4], int(c["output_nstokes"]["#text"]))
-    if not ok:
-      return (False, "stream0, fold, output_nstokes: " + message)
-
-    (ok, message) = self.in_list(["PSR", "CAL"], int(c["mode"]["#text"]))
-    if not ok:
-      return (False, "stream0, fold, mode: " + message)
-
-    # (ok, message) = self.range_inclusive(0.0005, int(c["output_tsubint"]["#text"])/2, int(c["custom_period"]["#text"]))
-    #  if not ok:
-    #    return (False, "stream0, fold, custom_period: " + message)
-
-    (ok, message) = self.in_list (["0", "1", "true", "false"], c["sk"]["#text"])
-    if not ok:
-      return (False, "stream0, fold, sk: " + message)
-
-    (ok, message) = self.range_inclusive(3, 6, c["sk_threshold"]["#text"])
-    if not ok:
-      return (False, "stream0, fold, sk_threshold: " + message)
-
-    (ok, message) = self.power_of_two_range_inclusive(128, 4096, c["sk_nsamps"]["#text"])
-    if not ok:
-      return (False, "stream0, fold, sk_nsamps: " + message)
-
-    #(ok, message) = self.in_list (["0", "1", "true", "false"], c["append_output"]["#text"])
-    #if not ok:
-    #   return (False, "stream0, fold, append_output: " + message)
-
-    return (True, "")
-      
-
   ###############################################################################
   # issue_start_cmd
   def issue_start_cmd (self, line):
 
     self.log(2, "issue_start_cmd()")
+
+    # check calibration parameters to see if we can enable the CAL processing
+    if self.get_param("calibration_parameters","signal") == "1":
+      # read the cal freq
+      calfreq_str = float(self.get_param("calibration_parameters","freq"))
+      self.info("calibration_parmaeters::freq=" + str(calfreq_str))
+      valid_cal = False
+      try:
+        calfreq_int = int(calfreq_str)
+        if calfreq_int > 0 and calfreq_str == float(calfreq_int):
+          valid_cal = True
+          self.info("calibration_parmaeters::freq [" + str(calfreq_str) + "] was an integer as [" + str(calfreq_int) + "]")
+        else:
+          self.info("calibration_parmaeters::freq [" + str(calfreq_str) + "] was not > 0")
+      except:
+        self.info("calibration_parmaeters::freq [" + str(calfreq_str) + "] was not an integer")
+
+      # if the calfreq is a positive integer, assume 0.5 duty cycle and 0.0 phase
+      if valid_cal:
+        self.set_param("calibration_parameters","duty_cycle", "0.5")
+        self.set_param("calibration_parameters","phase", "0.5")
+        self.set_param("calibration_parameters","tsys_avg_time", "10")
+        self.set_param("calibration_parameters","tsys_freq_resolution", "1")
+        # generate a fake epoch for the CAL
+        fake_cal_epoch = times.getUTCTime()
+        self.set_param ("calibration_parameters", "epoch", fake_cal_epoch)
+      else:
+        self.set_param("calibration_parameters","signal", "0")
+        self.set_param("calibration_parameters","epoch", "Unknown")
 
     script.beam_cfg["obs_cmd"]["command"] = "configure"
     xml = xmltodict.unparse (script.beam_cfg)
@@ -464,7 +443,7 @@ class TCSInterfaceDaemon(Daemon):
     sock = sockets.openSocket (DL, self.host, self.spip_tcs_port, 1)
     if sock:
       self.log(1, "UWB_TCS <- configure")
-      sock.send (xml)
+      sock.send (xml + "\r\n")
       xml_reply = sock.recv(131072)
       sock.close ()
       reply = xmltodict.parse (xml_reply)
@@ -473,7 +452,7 @@ class TCSInterfaceDaemon(Daemon):
         self.log(-1, "TCSInterfaceDaemon::issue_start_cmd: bad configuration: " + reply["tcs_response"])
         return reply["tcs_response"]
     else:
-      self.log(-1, "TCSInterfaceDaemon::issue_start_cmd could not conenct to uwb_tcs")
+      self.log(-1, "TCSInterfaceDaemon::issue_start_cmd could not connect to uwb_tcs")
       return "FAIL: could not connect to Medusa's TCS service"
     
     # the configure command did work, start!
@@ -487,12 +466,21 @@ class TCSInterfaceDaemon(Daemon):
 
     sock = sockets.openSocket (DL, self.host, self.spip_tcs_port, 1)
     if sock:
-      sock.send (xml)
+      self.log(1, "UWB_TCS <- start")
+      sock.send (xml + "\r\n")
+      xml_reply = sock.recv(131072)
       sock.close ()
+      reply = xmltodict.parse (xml_reply)
+      self.log(1, "UWB_TCS -> " + reply["tcs_response"])
+      if reply["tcs_response"] != "OK":
+        self.log(-1, "TCSInterfaceDaemon::issue_start_cmd: bad configuration: " + reply["tcs_response"])
+        return reply["tcs_response"]
+      else:
+        return "start_utc " + utc_start
     else:
-      self.log(1, "TCSInterfaceDaemon::issue_start_cmd could not conenct to spip_tcs")
+      self.log(1, "TCSInterfaceDaemon::issue_start_cmd could not connect to spip_tcs")
+      return "internal medusa error"
 
-    return "start_utc " + utc_start
 
   ###############################################################################
   # issue_stop_cmd
@@ -505,14 +493,17 @@ class TCSInterfaceDaemon(Daemon):
 
     sock = sockets.openSocket (DL, self.host, self.spip_tcs_port, 1)
     if sock:
-      sock.send (xml)
+      sock.send (xml + "\r\n")
       sock.close ()
     else:
       self.log(1, "TCSInterfaceDaemon::issue_stop_cmd could not conenct to spip_tcs")
 
+    # reset the XML configuration to a default value
+    self.configure_beam_state()
+
     time.sleep(1)
 
-    return "none"
+    return "ok"
 
 class TCSServerDaemon (TCSInterfaceDaemon, ServerBased):
 

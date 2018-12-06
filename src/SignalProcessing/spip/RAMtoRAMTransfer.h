@@ -14,7 +14,7 @@
 
 namespace spip {
 
-  class RAMtoRAMTransfer: public Transformation <Container, Container>
+  class RAMtoRAMTransfer: public Transformation<Container, Container>
   {
     public:
      
@@ -38,11 +38,11 @@ namespace spip {
 
     private:
 
+      uint64_t ndat;
+
       unsigned iblock_out;
 
       unsigned nblock_out;
-
-      uint64_t ndat;
 
   };
 

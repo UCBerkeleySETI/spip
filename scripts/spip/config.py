@@ -212,3 +212,13 @@ class Config(object):
         header[parts[0]] = parts[1]
     return header
 
+  @staticmethod
+  def getStreamParam(cfg, key, stream_id):
+    val = ""
+    if key in cfg.keys():
+      val = cfg[key]
+    stream_key = key + "_" + stream_id
+    if stream_key in cfg.keys():
+      val = cfg[stream_key]
+    return val
+

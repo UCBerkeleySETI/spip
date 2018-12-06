@@ -27,6 +27,8 @@ namespace spip {
    
       void transform_SFPT_to_SFPT ();
 
+      void transform_SFPT_to_TSPF ();
+
       void transform_TSPF_to_TSPF ();
 
       void transform_TFPS_to_TFPS ();

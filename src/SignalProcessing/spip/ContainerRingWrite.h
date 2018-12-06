@@ -25,7 +25,7 @@ namespace spip {
 
       void process_header ();
 
-      void open_block ();
+      uint64_t open_block ();
 
       void close_block ();
 

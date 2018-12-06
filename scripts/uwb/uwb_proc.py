@@ -110,7 +110,7 @@ class UWBProcDaemon (Daemon, StreamBased):
     self.configure_child()
 
     self.log (2, "UWBProcDaemon::main wait_for_smrb()")
-    self.wait_for_smrb()
+    SMRBDaemon.waitForSMRB(self.db_key, self)
 
     if self.quit_event.isSet():
       self.log (-1, "UWBProcDaemon::main quit event was set after waiting for SMRB creation")
@@ -145,12 +145,13 @@ class UWBProcDaemon (Daemon, StreamBased):
         self.log (2, "UWBProcDaemon::main parsing header")
         self.header = Config.parseHeader (lines)
 
-        if not float(self.bw) == float(self.header["BW"]):
-          self.log (-1, "configured bandwidth ["+bw+"] != self.header["+self.header["BW"]+"]")
+        # account for lower to upper sideband conversion
+        if not abs(float(self.bw)) == float(self.header["BW"]):
+          self.log (-1, "configured bandwidth ["+self.bw+"] != self.header["+self.header["BW"]+"]")
         if not float(self.cfreq) == float(self.header["FREQ"]):
-          self.log (-1, "configured cfreq ["+cfreq+"] != self.header["+self.header["FREQ"]+"]")
+          self.log (-1, "configured cfreq ["+self.cfreq+"] != self.header["+self.header["FREQ"]+"]")
         if not int(self.nchan) == int(self.header["NCHAN"]):
-          self.log (-2, "configured nchan ["+nchan+"] != self.header["+self.header["NCHAN"]+"]")
+          self.log (-2, "configured nchan ["+self.nchan+"] != self.header["+self.header["NCHAN"]+"]")
 
         self.source = self.header["SOURCE"]
         self.utc_start = self.header["UTC_START"]

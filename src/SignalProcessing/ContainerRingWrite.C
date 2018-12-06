@@ -5,6 +5,7 @@
  *
  ***************************************************************************/
 
+#include "spip/Error.h"
 #include "spip/ContainerRingWrite.h"
 
 #include <iostream>
@@ -17,6 +18,11 @@ spip::ContainerRingWrite::ContainerRingWrite (spip::DataBlockWrite * _db)
 {
   db = _db;
   size = db->get_data_bufsz();
+#ifdef HAVE_CUDA
+  if (db->get_device() != -1)
+    throw Error (InvalidState, "spip::ContainerRingWrite::ContainerRingWrite",
+                 "Cannot operate on GPU ring buffer");
+#endif
 }
 
 spip::ContainerRingWrite::~ContainerRingWrite ()
@@ -33,11 +39,14 @@ void spip::ContainerRingWrite::process_header ()
   db->write_header (header.raw());
 }
 
-void spip::ContainerRingWrite::open_block()
+uint64_t spip::ContainerRingWrite::open_block()
 {
   unsigned char * tmp = (unsigned char *) db->open_block();
+  if (spip::Container::verbose)
+    cerr << "spip::ContainerRingWrite::open_block buffer_ptr=" << (void *) tmp << endl;
   set_buffer (tmp);
-} 
+  return size;
+}
 
 void spip::ContainerRingWrite::close_block()
 {

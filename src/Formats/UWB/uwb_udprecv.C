@@ -12,6 +12,7 @@
 #include "spip/UDPFormatVDIF.h"
 #include "spip/UDPFormatDualVDIF.h"
 #include "spip/UDPFormatUWB.h"
+#include "spip/Error.h"
 
 #ifdef HAVE_HWLOC
 #include "spip/HardwareAffinity.h"
@@ -154,6 +155,11 @@ int main(int argc, char *argv[])
     pthread_join (stats_thread_id, &result);
   
     delete udprecv;
+  }
+  catch (Error& error)
+  {
+    cerr << error << endl;
+    exit (-1);
   }
   catch (std::exception& exc)
   {

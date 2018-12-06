@@ -33,6 +33,7 @@ spip::BlockFormat::BlockFormat()
   nbit = 8;
   freq = 0;
   bw = 0;
+  out_bw = 0;
 
   temp_file = (char *) malloc(FILENAME_MAX);
 }
@@ -54,11 +55,14 @@ void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime,
   nbin = _nbin;
   ntime = _ntime;
   bw = _bw;
+  out_bw = bw;
   freq = _freq;
   tsamp = _tsamp;
 
 #ifdef _DEBUG
-  cerr << "spip::BlockFormat::prepare nbin=" << nbin << " ntime=" << ntime << " nfreq=" << _nfreq << " bw=" << bw << " freq=" << freq << " tsamp=" << tsamp << " nchan=" << nchan << endl;
+  cerr << "spip::BlockFormat::prepare nbin=" << nbin << " ntime=" << ntime 
+       << " nfreq=" << _nfreq << " bw=" << bw << " out_bw=" << out_bw 
+       << " freq=" << freq << " tsamp=" << tsamp << " nchan=" << nchan << endl;
 #endif
 
   // configure the number of channels in the FT
@@ -103,7 +107,8 @@ void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime,
   hist.resize(npol);
 
 #ifdef _DEBUG
-  cerr << "spip::BlockFormat::prepare hist [" << npol << "][" << ndim << "][" << nfreq_hg << "][" << nbin << "]" << endl;
+  cerr << "spip::BlockFormat::prepare hist [" << npol << "][" << ndim 
+       << "][" << nfreq_hg << "][" << nbin << "]" << endl;
 #endif
 
   for (unsigned ipol=0; ipol<npol; ipol++)
@@ -133,7 +138,6 @@ void spip::BlockFormat::prepare (unsigned _nbin, unsigned _ntime,
       }
     }
   }
-
 }
 
 void spip::BlockFormat::reset()
@@ -209,7 +213,7 @@ void spip::BlockFormat::write_freq_times(string ft_filename)
   ft_file.write (reinterpret_cast<const char *>(&nfreq_ft), sizeof(nfreq_ft));
   ft_file.write (reinterpret_cast<const char *>(&ntime), sizeof(ntime));
   ft_file.write (reinterpret_cast<const char *>(&freq), sizeof(freq));
-  ft_file.write (reinterpret_cast<const char *>(&bw), sizeof(bw));
+  ft_file.write (reinterpret_cast<const char *>(&out_bw), sizeof(out_bw));
   ft_file.write (reinterpret_cast<const char *>(&tsamp), sizeof(tsamp));
   for (unsigned ipol=0; ipol<npol; ipol++)
   {
@@ -239,7 +243,7 @@ void spip::BlockFormat::write_bandpasses (string bp_filename)
   bp_file.write (reinterpret_cast<const char *>(&npol), sizeof(npol));
   bp_file.write (reinterpret_cast<const char *>(&nfreq_ft), sizeof(nfreq_ft));
   bp_file.write (reinterpret_cast<const char *>(&freq), sizeof(freq));
-  bp_file.write (reinterpret_cast<const char *>(&bw), sizeof(bw));
+  bp_file.write (reinterpret_cast<const char *>(&out_bw), sizeof(out_bw));
   for (unsigned ipol=0; ipol<npol; ipol++)
   {
     const char * buffer = reinterpret_cast<const char*>(&bandpass[ipol][0]);

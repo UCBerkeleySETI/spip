@@ -26,7 +26,7 @@ __global__ void PolSelectKernel_SFPT (float * in, float* out,
   const unsigned ichan = blockIdx.y;
   const unsigned isig = blockIdx.z;
 
-  if (ival < nval) 
+  if (ival >= nval) 
     return;
 
   // offsets for input and output
@@ -84,6 +84,8 @@ void spip::PolSelectCUDA::transform_SFPT()
   // pointers to the buffers for in out
   float * in = (float *) input->get_buffer();
   float * out = (float *) output->get_buffer();
+  if (verbose)
+    cerr << "spip::PolSelectCUDA::transform_SFPT in=" << in << " out=" << out << endl;
 
   uint64_t pol_stride = ndat * ndim;
   uint64_t in_chan_stride  = npol * pol_stride;
@@ -91,10 +93,21 @@ void spip::PolSelectCUDA::transform_SFPT()
   uint64_t in_sig_stride  = nchan * in_chan_stride;
   uint64_t out_sig_stride = nchan * out_chan_stride;
 
+  if (verbose)
+  {
+    cerr << "spip::PolSelectCUDA::transform_SFPT pol_stride=" << pol_stride << endl;
+    cerr << "spip::PolSelectCUDA::transform_SFPT chan_stride in=" << in_chan_stride << " out=" << out_chan_stride << endl;
+    cerr << "spip::PolSelectCUDA::transform_SFPT sig_stride in=" << in_sig_stride << " out=" << out_sig_stride << endl;
+  }
+
   unsigned nthread = 1024;
-  dim3 blocks (pol_stride/nthread, nchan, npol);
+  dim3 blocks (pol_stride/nthread, nchan, nsignal);
   if (pol_stride % nthread != 0)
     blocks.x++;
+
+  if (verbose)
+    cerr << "spip::PolSelectCUDA::transform_SFPT blocks=(" << blocks.x << "," << blocks.y <<
+"," << blocks.z << ") nthread=" << nthread << endl;
 
   PolSelectKernel_SFPT<<<blocks, nthread, 0, stream>>>(in, out, in_sig_stride, out_sig_stride, in_chan_stride, out_chan_stride, pol_stride, out_npol);
 

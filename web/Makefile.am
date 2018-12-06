@@ -7,6 +7,7 @@ nobase_dist_web_SCRIPTS = index.php \
                           colors.less \
                           spip.lib.php \
 													spip_socket.lib.php \
-													spip_webpage.lib.php
+													spip_webpage.lib.php \
+													tcs.lib.php
 
-SUBDIRS = continuum controls images js logs search status timing test stats results
+SUBDIRS = continuum controls images js logs search status timing test stats results preproc
