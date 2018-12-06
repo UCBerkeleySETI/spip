@@ -147,12 +147,18 @@ function handleDirect($child_class)
     // print the main navigation panel
     if ($obj->nav_item != "")
     {
-      $nav_items = array ("/spip/timing/" => "Timing", 
-                          "/spip/continuum/" => "Continuum",
-                          "/spip/stats/" => "Stats",
-                          "/spip/status/" => "Status",
-                          "/spip/results/" => "Results",
-                          "/spip/controls/" => "Controls");
+      $nav_items = array ();
+      
+      if ($this->config["TIMING_MODE"] == "true")
+        $nav_items["/spip/timing/"] = "Timing";
+      if ($this->config["SEARCH_MODE"] == "true")
+        $nav_items["/spip/search/"] = "Search";
+      if ($this->config["CONTINUUM_MODE"] == "true")
+        $nav_items["/spip/continuum/"] = "Continuum";
+      $nav_items["/spip/stats/"] = "Stats";
+      $nav_items["/spip/status/"] = "Status";
+      $nav_items["/spip/results/"] = "Results";
+      $nav_items["/spip/controls/"] = "Controls";
 
       #echo "<table height='60px' width='100%' id='nav'>\n";
       #echo "<tr>\n";

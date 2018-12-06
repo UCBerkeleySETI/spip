@@ -174,27 +174,21 @@ void spip::IBVReceiver::receive ()
   while (data_bufsz < 128*1024*1024)
     data_bufsz *= 2;
 
-  block = (char *) malloc (data_bufsz);
+  curr_block = (char *) malloc (data_bufsz);
+  next_block = (char *) malloc (data_bufsz);
+
+  bytes_curr_buf = 0;
+  bytes_next_buf = 0;
 
   // block accounting 
   curr_byte_offset = 0;
   next_byte_offset = 0;
-  overflow_maxbyte = 0;
+  last_byte_offset = 0;
 
 #ifdef _DEBUG
   cerr << "spip::IBVReceiver::receive [" << curr_byte_offset << " - "
-       << next_byte_offset << "] (" << 0 << ")" << endl;
+       << next_byte_offset << " - " << last_byte_offset << "]" << endl;
 #endif
-
-  // configure the overflow buffer
-  overflow = new UDPOverflow();
-  overflow_bufsz = format->get_resolution() * 4 * 4;
-  while (overflow_bufsz <= 1024 * 1024)
-    overflow_bufsz *= 2;
-
-  cerr << "spip::IBVReceiver::receive overflow_bufsz=" << overflow_bufsz << endl;
-  overflow->resize (overflow_bufsz);
-  overflow_block = (char *) overflow->get_buffer();
 
   int64_t byte_offset;
   unsigned bytes_received;
@@ -245,16 +239,17 @@ void spip::IBVReceiver::receive ()
         // packet belongs in current buffer
         if ((byte_offset >= curr_byte_offset) && (byte_offset < next_byte_offset))
         { 
-          bytes_this_buf += bytes_received;
+          bytes_curr_buf += bytes_received;
           stats->increment_bytes (bytes_received);
-          format->insert_last_packet (block + (byte_offset - curr_byte_offset));
+          format->insert_last_packet (curr_block + (byte_offset - curr_byte_offset));
           queue->close_packet();
         }
         // packet belongs in overflow buffer
-        else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
+        else if ((byte_offset >= next_byte_offset) && (byte_offset < last_byte_offset))
         {
-          format->insert_last_packet (overflow_block + (byte_offset - next_byte_offset));
-          overflow->copied_from (byte_offset - next_byte_offset, bytes_received);
+          bytes_next_buf += bytes_received;
+          format->insert_last_packet (next_block + (byte_offset - next_byte_offset));
+          stats->increment_bytes (bytes_received);
           queue->close_packet();
         } 
         // ignore packets that preceed this buffer
@@ -269,13 +264,13 @@ void spip::IBVReceiver::receive ()
       }
   
       // close open data block buffer if is is now full
-      if (bytes_this_buf >= data_bufsz || filled_this_block)
+      if (bytes_curr_buf >= data_bufsz || filled_this_block)
       {
 #ifdef _DEBUG
-        cerr << "spip::IBVReceiver::process_packet close_block() " << data_bufsz - bytes_this_buf << endl;
+        cerr << "spip::IBVReceiver::process_packet close_block() " << data_bufsz - bytes_curr_buf << endl;
 #endif
         close_block();
-        stats->dropped_bytes (data_bufsz - bytes_this_buf);
+        stats->dropped_bytes (data_bufsz - bytes_curr_buf);
 
         // update stats for any sleeps
         uint64_t nsleeps = queue->process_sleeps();
@@ -301,21 +296,23 @@ void spip::IBVReceiver::open_block ()
   need_next_block = false;
 
   // here we would open a ring buffer
+  char * tmp = curr_block;
+  curr_block = next_block;
+  next_block = tmp;
 
   // update absolute limits
   curr_byte_offset = next_byte_offset;
   next_byte_offset = curr_byte_offset + data_bufsz;
-  overflow_maxbyte = next_byte_offset + overflow_bufsz;
+  last_byte_offset = next_byte_offset + data_bufsz;
 
   // copy any data from the overflow into the new block
-  bytes_this_buf = overflow->copy_to (block);
-  stats->increment_bytes (bytes_this_buf);
+  bytes_curr_buf = bytes_next_buf;
+  bytes_next_buf = 0;
 
 #ifdef _DEBUG
   cerr << "spip::UDPReceiveDB::open_block filling buffer ["
        << curr_byte_offset << " - " << next_byte_offset
-       << " - " << overflow_maxbyte << "] "
-       << " overflow_bufsz=" << overflow->get_bufsz() << endl;
+       << " - " << last_byte_offset << "] " << endl;
 #endif
 
   filled_this_block = false;

@@ -9,6 +9,8 @@
 #include <cuda_runtime.h>
 #endif
 
+#include <queue>
+
 namespace spip {
 
   class DataBlockWrite : public DataBlock
@@ -48,6 +50,8 @@ namespace spip {
     protected:
 
     private:
+
+      std::queue<void *> opened_blocks;
 
 #ifdef HAVE_CUDA
       int dev_id;

@@ -172,34 +172,22 @@ void spip::UDPReceiver::receive ()
   while (data_bufsz < 128*1024*1024)
     data_bufsz *= 2;
 
-  char * block = (char *) malloc (data_bufsz);
+  char * curr_block = (char *) malloc (data_bufsz);
+  char * next_block = (char *) malloc (data_bufsz);
   bool need_next_block = false;
 
   // block accounting 
   int64_t curr_byte_offset = 0;
-  int64_t next_byte_offset = data_bufsz;
+  int64_t next_byte_offset = curr_byte_offset + data_bufsz;
+  int64_t last_byte_offset = curr_byte_offset + data_bufsz;
 
 #ifdef _DEBUG
   cerr << "spip::UDPReceiver::receive [" << curr_byte_offset << " - "
        << next_byte_offset << "] (" << 0 << ")" << endl;
 #endif
 
-  // overflow buffer
-  int64_t overflow_bufsz = nchan * ndim * npol;
-  overflow_bufsz = format->get_resolution() * 4;
-  while (overflow_bufsz < 4*1024*1024)
-    overflow_bufsz *= 2;
-#ifdef _DEBUG
-  cerr << "overflow_bufsz=" << overflow_bufsz << endl;
-#endif
-
-  int64_t overflow_lastbyte = 0;
-  int64_t overflow_maxbyte = next_byte_offset + overflow_bufsz;
-  int64_t overflowed_bytes = 0;
-  char * overflow = (char *) malloc(overflow_bufsz);
-  memset (overflow, 0, overflow_bufsz);
-
-  int64_t bytes_this_buf = 0;
+  int64_t bytes_curr_buf = 0;
+  int64_t bytes_next_buf = 0;
   int64_t byte_offset;
   unsigned bytes_received;
 
@@ -229,25 +217,16 @@ void spip::UDPReceiver::receive ()
         // update absolute limits
         curr_byte_offset = next_byte_offset;
         next_byte_offset = curr_byte_offset + data_bufsz;
-        overflow_maxbyte = next_byte_offset + overflow_bufsz;
+        last_byte_offset = next_byte_offset + data_bufsz;
+
+        bytes_curr_buf = bytes_next_buf;
+        bytes_next_buf = 0;
 
 #ifdef _DEBUG
         cerr << "spip::UDPReceiver::receive [" << curr_byte_offset << " - "
-             << next_byte_offset << " - " << overflow_maxbyte
-             << "] (" << bytes_this_buf << ")" << endl;
+             << next_byte_offset << " - " << last_byte_offset 
+             << "] (" << bytes_curr_buf << ")" << endl;
 #endif
-
-        if (overflow_lastbyte > 0)
-        {
-          memcpy (block, overflow, overflow_lastbyte);
-          overflow_lastbyte = 0;
-          bytes_this_buf = overflowed_bytes;
-          stats->increment_bytes (overflowed_bytes);
-          overflowed_bytes = 0;
-        }
-        else
-          bytes_this_buf = 0;
-
         // update stats for any sleeps
         nsleeps = sock->process_sleeps();
         stats->sleeps(nsleeps);
@@ -268,15 +247,15 @@ void spip::UDPReceiver::receive ()
       if ((byte_offset >= curr_byte_offset) && (byte_offset < next_byte_offset))
       {
         stats->increment_bytes (bytes_received);
-        format->insert_last_packet (block + (byte_offset - curr_byte_offset));
-        bytes_this_buf += bytes_received;
+        format->insert_last_packet (curr_block + (byte_offset - curr_byte_offset));
+        bytes_curr_buf += bytes_received;
         sock->consume_packet();
       }
-      else if ((byte_offset >= next_byte_offset) && (byte_offset < overflow_maxbyte))
+      else if ((byte_offset >= next_byte_offset) && (byte_offset < last_byte_offset))
       {
-        format->insert_last_packet (overflow + (byte_offset - next_byte_offset));
-        overflow_lastbyte = std::max((byte_offset - next_byte_offset) + bytes_received, overflow_lastbyte);
-        overflowed_bytes += bytes_received;
+        stats->increment_bytes (bytes_received);
+        format->insert_last_packet (next_block + (byte_offset - next_byte_offset));
+        bytes_next_buf += bytes_received;
         sock->consume_packet();
       }
       // ignore
@@ -287,21 +266,19 @@ void spip::UDPReceiver::receive ()
       else
       {
 #ifdef _DEBUG
-        cerr << "ELSE byte_offset=" << byte_offset << " [" << curr_byte_offset <<" - " << next_byte_offset << " - " << overflow_maxbyte << "] bytes_received=" << bytes_received << " bytes_this_buf=" << bytes_this_buf
-  << "overflowed_bytes=" << overflowed_bytes << endl;
+        cerr << "ELSE byte_offset=" << byte_offset << " [" << curr_byte_offset <<" - " << next_byte_offset << " - " << last_byte_offset << "] bytes_received=" << bytes_received << " bytes_curr_buf=" << bytes_curr_buf << endl; 
 #endif
         need_next_block = true;
       }
 
-      if (bytes_this_buf >= data_bufsz || need_next_block)
+      if (bytes_curr_buf >= data_bufsz || bytes_next_buf >= data_bufsz/2 || need_next_block)
       {
-        stats->dropped_bytes (data_bufsz - bytes_this_buf);
+        stats->dropped_bytes (data_bufsz - bytes_curr_buf);
         need_next_block = true;
       }
     }
   }
   sock->close_me();
-
 }
 
 void spip::UDPReceiver::stop_receiving ()

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/local/kat/bin/python
 
 ###############################################################################
 #  
@@ -95,6 +95,7 @@ class KATCPDaemon(Daemon):
                       "</repack_request>"
 
   def reset_cam_config (self):
+    self.cam_config["ITRF"] = "None"
     self.cam_config["ADC_SYNC_TIME"] = "0"
     self.cam_config["PRECISETIME_FRACTION_POLV"] = "0.0"
     self.cam_config["PRECISETIME_FRACTION_POLH"] = "0.0"
@@ -120,6 +121,7 @@ class KATCPDaemon(Daemon):
   # reset the sepcified beam configuration
   def reset_beam_config (self):
     self.beam_config["lock"].acquire()
+    self.beam_config["ITRF"] = "None"
     self.beam_config["SOURCE"] = "None"
     self.beam_config["RA"] = "None"
     self.beam_config["DEC"] = "None"
@@ -277,6 +279,11 @@ class KATCPDaemon(Daemon):
     xml +=     "<beam_state_0 key='BEAM_STATE_0' name='" + self.beam_name + "'>on</beam_state_0>"
     xml +=   "</beam_configuration>"
 
+    xml +=   "<stream_configuration>"
+    xml +=     "<nstream key='NSTREAM'>" + self.cfg["NUM_STREAM"] + "</nstream>"
+    xml +=     "<active key='STREAM_ACTIVE'>true</active>"
+    xml +=   "</stream_configuration>"
+
     xml +=   "<source_parameters>"
     xml +=     "<name key='SOURCE' epoch='J2000'>" + self.beam_config["SOURCE"] + "</name>"
 
@@ -305,45 +312,60 @@ class KATCPDaemon(Daemon):
     xml +=     "<utc_stop key='UTC_STOP'>None</utc_stop>"
     xml +=   "</observation_parameters>"
 
-    xml +=   "<custom_parameters>"
-    xml +=     "<adc_sync_time key='ADC_SYNC_TIME'>" + self.beam_config["ADC_SYNC_TIME"] + "</adc_sync_time>"
-    xml +=     "<antennae key='ANTENNAE'>" + self.beam_config["ANTENNAE"] + "</antennae>"
-    xml +=     "<schedule_block_id key='SCHEDULE_BLOCK_ID'>" + self.beam_config["SCHEDULE_BLOCK_ID"] + "</schedule_block_id>"
-    xml +=     "<experiment_id key='EXPERIMENT_ID'>" + self.beam_config["EXPERIMENT_ID"] + "</experiment_id>"
-    xml +=     "<proposal_id key='PROPOSAL_ID'>" + self.beam_config["PROPOSAL_ID"] + "</proposal_id>"
-    xml +=     "<program_block_id key='PROGRAM_BLOCK_ID'>" + "TBD" + "</program_block_id>"
-    xml +=     "<description key='DESCRIPTION'>" + self.beam_config["DESCRIPTION"] + "</description>"
-    xml +=     "<itrf key='ITRF'>" + self.beam_config["ITRF"] + "</itrf>"
-    xml +=     "<precisetime_fraction_polv key='PRECISETIME_FRACTION_POLV'>" + self.beam_config["PRECISETIME_FRACTION_POLV"] + "</precisetime_fraction_polv>"
-    xml +=     "<precisetime_fraction_polh key='PRECISETIME_FRACTION_POLH'>" + self.beam_config["PRECISETIME_FRACTION_POLH"] + "</precisetime_fraction_polh>"
-    xml +=     "<precisetime_uncertainty_polv key='PRECISETIME_UNCERTAINTY_POLV'>" + self.beam_config["PRECISETIME_UNCERTAINTY_POLV"] + "</precisetime_uncertainty_polv>"
-    xml +=     "<precisetime_uncertainty_polh key='PRECISETIME_UNCERTAINTY_POLH'>" + self.beam_config["PRECISETIME_UNCERTAINTY_POLH"] + "</precisetime_uncertainty_polh>"
-    xml +=     "<ktt_gnss_delta key='TFR_KTT_GNSS'>" + self.beam_config["TFR_KTT_GNSS"] + "</ktt_gnss_delta>"
-    xml +=     "<nchan_per_stream key='NCHAN_PER_STREAM'>" + self.beam_config["NCHAN_PER_STREAM"] + "</nchan_per_stream>"
-    xml +=   "</custom_parameters>"
+    xml +=   "<calibration_parameters>"
+    xml +=     "<signal key='CAL_SIGNAL'>0</signal>"
+    xml +=     "<freq key='CAL_FREQ'>11.123</freq>"
+    xml +=     "<phase key='CAL_PHASE'>0.0</phase>"
+    xml +=     "<duty_cycle key='CAL_DUTY_CYCLE'>0.5</duty_cycle>"
+    xml +=     "<epoch key='CAL_EPOCH'>Unknown</epoch>"
+    xml +=   "</calibration_parameters>"
 
-    xml +=   "<processing_modes>"
-    xml +=     "<fold key='PERFORM_FOLD'>" + self.beam_config["PERFORM_FOLD"] + "</fold>"
-    xml +=     "<search key='PERFORM_SEARCH'>" + self.beam_config["PERFORM_SEARCH"] + "</search>"
-    xml +=   "</processing_modes>"
-    
-    # processing parameters control the behaviour of PTUSE
-    xml +=   "<fold_processing_parameters>"
-    xml +=     "<output_nchannels key='FOLD_OUTNCHAN'>" + self.beam_config["OUTNCHAN"] + "</output_nchannels>"
-    xml +=     "<dm key='FOLD_DM'>" + self.beam_config["DM"] + "</dm>"
-    xml +=     "<output_nbins key='FOLD_OUTNBIN'>" + self.beam_config["OUTNBIN"] + "</output_nbins>"
-    xml +=     "<output_tsubint key='FOLD_OUTTSUBINT'>" + self.beam_config["OUTTSUBINT"] + "</output_tsubint>"
-    xml +=     "<output_npol key='FOLD_OUTNPOL'>" + self.beam_config["OUTNPOL"] + "</output_npol>"
-    xml +=     "<mode key='MODE'>" + self.beam_config["MODE"] + "</mode>"
-    xml +=   "</fold_processing_parameters>"
+    for i in range(int(self.cfg["NUM_STREAM"])):
 
-    xml +=   "<search_processing_parameters>"
-    xml +=     "<output_nbits key='SEARCH_OUTNBIT'>" + self.beam_config["OUTNBIT"] + "</output_nbits>"
-    xml +=     "<output_nchannels key='SEARCH_OUTNCHAN'>" + self.beam_config["OUTNCHAN"] + "</output_nchannels>"
-    xml +=     "<dm key='SEARCH_DM'>" + self.beam_config["DM"] + "</dm>"
-    xml +=     "<output_tdec key='SEARCH_OUTTDEC'>" + self.beam_config["OUTTDEC"] + "</output_tdec>"
-    xml +=     "<output_npol key='SEARCH_OUTNPOL'>" + self.beam_config["OUTNPOL"] + "</output_npol>"
-    xml +=   "</search_processing_parameters>"
+      xml += "<stream" + str(i) +">"
+
+      xml +=   "<custom_parameters>"
+      xml +=     "<adc_sync_time key='ADC_SYNC_TIME'>" + self.beam_config["ADC_SYNC_TIME"] + "</adc_sync_time>"
+      xml +=     "<antennae key='ANTENNAE'>" + self.beam_config["ANTENNAE"] + "</antennae>"
+      xml +=     "<schedule_block_id key='SCHEDULE_BLOCK_ID'>" + self.beam_config["SCHEDULE_BLOCK_ID"] + "</schedule_block_id>"
+      xml +=     "<experiment_id key='EXPERIMENT_ID'>" + self.beam_config["EXPERIMENT_ID"] + "</experiment_id>"
+      xml +=     "<proposal_id key='PROPOSAL_ID'>" + self.beam_config["PROPOSAL_ID"] + "</proposal_id>"
+      xml +=     "<program_block_id key='PROGRAM_BLOCK_ID'>" + "TBD" + "</program_block_id>"
+      xml +=     "<description key='DESCRIPTION'>" + self.beam_config["DESCRIPTION"] + "</description>"
+      xml +=     "<itrf key='ITRF'>" + self.beam_config["ITRF"] + "</itrf>"
+      xml +=     "<precisetime_fraction_polv key='PRECISETIME_FRACTION_POLV'>" + self.beam_config["PRECISETIME_FRACTION_POLV"] + "</precisetime_fraction_polv>"
+      xml +=     "<precisetime_fraction_polh key='PRECISETIME_FRACTION_POLH'>" + self.beam_config["PRECISETIME_FRACTION_POLH"] + "</precisetime_fraction_polh>"
+      xml +=     "<precisetime_uncertainty_polv key='PRECISETIME_UNCERTAINTY_POLV'>" + self.beam_config["PRECISETIME_UNCERTAINTY_POLV"] + "</precisetime_uncertainty_polv>"
+      xml +=     "<precisetime_uncertainty_polh key='PRECISETIME_UNCERTAINTY_POLH'>" + self.beam_config["PRECISETIME_UNCERTAINTY_POLH"] + "</precisetime_uncertainty_polh>"
+      xml +=     "<ktt_gnss_delta key='TFR_KTT_GNSS'>" + self.beam_config["TFR_KTT_GNSS"] + "</ktt_gnss_delta>"
+      xml +=     "<nchan_per_stream key='NCHAN_PER_STREAM'>" + self.beam_config["NCHAN_PER_STREAM"] + "</nchan_per_stream>"
+      xml +=     "<zero_copy key='ZERO_COPY'>1</zero_copy>"
+      xml +=   "</custom_parameters>"
+
+      xml +=   "<processing_modes>"
+      xml +=     "<fold key='PERFORM_FOLD'>" + self.beam_config["PERFORM_FOLD"] + "</fold>"
+      xml +=     "<search key='PERFORM_SEARCH'>" + self.beam_config["PERFORM_SEARCH"] + "</search>"
+      xml +=   "</processing_modes>"
+      
+      # processing parameters control the behaviour of PTUSE
+      xml +=   "<fold_processing_parameters>"
+      xml +=     "<output_nchannels key='FOLD_OUTNCHAN'>" + self.beam_config["OUTNCHAN"] + "</output_nchannels>"
+      xml +=     "<dm key='FOLD_DM'>" + self.beam_config["DM"] + "</dm>"
+      xml +=     "<output_nbins key='FOLD_OUTNBIN'>" + self.beam_config["OUTNBIN"] + "</output_nbins>"
+      xml +=     "<output_tsubint key='FOLD_OUTTSUBINT'>" + self.beam_config["OUTTSUBINT"] + "</output_tsubint>"
+      xml +=     "<output_npol key='FOLD_OUTNPOL'>" + self.beam_config["OUTNPOL"] + "</output_npol>"
+      xml +=     "<mode key='MODE'>" + self.beam_config["MODE"] + "</mode>"
+      xml +=   "</fold_processing_parameters>"
+
+      xml +=   "<search_processing_parameters>"
+      xml +=     "<output_nbits key='SEARCH_OUTNBIT'>" + self.beam_config["OUTNBIT"] + "</output_nbits>"
+      xml +=     "<output_nchannels key='SEARCH_OUTNCHAN'>" + self.beam_config["OUTNCHAN"] + "</output_nchannels>"
+      xml +=     "<dm key='SEARCH_DM'>" + self.beam_config["DM"] + "</dm>"
+      xml +=     "<output_tdec key='SEARCH_OUTTDEC'>" + self.beam_config["OUTTDEC"] + "</output_tdec>"
+      xml +=     "<output_npol key='SEARCH_OUTNPOL'>" + self.beam_config["OUTNPOL"] + "</output_npol>"
+      xml +=   "</search_processing_parameters>"
+
+      xml += "</stream" + str(i) +">"
 
     xml += "</obs_cmd>"
 
@@ -358,6 +380,10 @@ class KATCPDaemon(Daemon):
     xml +=     "<nbeam key='NBEAM'>1</nbeam>"
     xml +=     "<beam_state_0 key='BEAM_STATE_0' name='" + self.beam_name + "'>on</beam_state_0>"
     xml +=   "</beam_configuration>"
+    xml +=   "<stream_configuration>"
+    xml +=     "<nstream key='NSTREAM'>" + self.cfg["NUM_STREAM"] + "</nstream>"
+    xml +=     "<active key='STREAM_ACTIVE'>true</active>"
+    xml +=   "</stream_configuration>"
     xml +=   "<observation_parameters>"
     xml +=     "<utc_start key='UTC_START'>None</utc_start>"
     xml +=   "</observation_parameters>"
@@ -374,6 +400,10 @@ class KATCPDaemon(Daemon):
     xml +=     "<nbeam key='NBEAM'>1</nbeam>"
     xml +=     "<beam_state_0 key='BEAM_STATE_0' name='" + self.beam_name + "'>on</beam_state_0>"
     xml +=   "</beam_configuration>"
+    xml +=   "<stream_configuration>"
+    xml +=     "<nstream key='NSTREAM'>" + self.cfg["NUM_STREAM"] + "</nstream>"
+    xml +=     "<active key='STREAM_ACTIVE'>true</active>"
+    xml +=   "</stream_configuration>"
     xml +=   "<observation_parameters>"
     xml +=     "<utc_stop key='UTC_STOP'>None</utc_stop>"
     xml +=   "</observation_parameters>"

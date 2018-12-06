@@ -136,9 +136,12 @@ class MEERKATFoldDaemon (MEERKATProcDaemon):
     if dm >= 0:
       self.cmd = self.cmd + " -D " + str(dm)
     else:
-      (rval, dm) = self.get_dm (self.header["SOURCE"])
-      if rval != 0:
-        self.log(-1, "get_dm(" + self.header["SOURCE"] + ") failed, using 0")
+      if self.header["MODE"] == "PSR":
+        (rval, dm) = self.get_dm (self.header["SOURCE"])
+        if rval != 0:
+          self.log(-1, "get_dm(" + self.header["SOURCE"] + ") failed, using 0")
+          dm = 0
+      else:
         dm = 0
 
     self.log(1, "dm=" + str(dm))

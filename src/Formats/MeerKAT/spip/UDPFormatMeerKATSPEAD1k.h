@@ -50,12 +50,7 @@ namespace spip {
 
       void decode_spead (char * buf);
 
-#ifdef OLD_DECODER
-      void set_heap_num (int64_t heap_num ) { header.heap_cnt = heap_num * 8192; };
-      void print_packet_timestamp ();
-#else
       std::size_t decode_cbf_packet (cbf_packet_header &out, const uint8_t *data, std::size_t max_size);
-#endif
       inline int64_t decode_packet (char * buf, unsigned *payload_size);
       inline int64_t get_subband (int64_t byte_offset, int nsubband);
       inline int insert_last_packet (char * buf);
@@ -73,11 +68,7 @@ namespace spip {
 
     private:
 
-#ifdef OLD_DECODER
-      spead2::recv::packet_header header;
-#else
       spip::cbf_packet_header cbf_header;
-#endif
 
       time_t adc_sync_time;
 
@@ -106,16 +97,6 @@ namespace spip {
       unsigned heap_size;
 
       unsigned pkts_per_heap;
-
-#ifdef OLD_DECORDER
-      std::vector<int64_t> timestamps;
-
-      std::vector<int64_t> channels;
-
-      std::vector<int64_t> curr_heap_cnts;
-
-      std::vector<uint64_t> curr_heap_offsets;
-#endif
 
       unsigned nbytes_per_heap;
 

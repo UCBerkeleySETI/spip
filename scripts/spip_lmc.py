@@ -84,7 +84,7 @@ class lmcThread (threading.Thread):
 
         for rank in self.ranks:
           for daemon in self.daemons[rank]:
-            cmd = "pgrep -f '^python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "' | wc -l"
+            cmd = "pgrep -f 'python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "' | wc -l"
             rval, lines = self.parent.system (cmd, 3, True)
             self.states[daemon] = (rval == 0)
         counter = 5
@@ -120,7 +120,7 @@ class lmcThread (threading.Thread):
       self.parent.log(2, self.prefix + "launching daemons of rank " + rank)
       for daemon in self.daemons[rank]:
         self.states[daemon] = False
-        cmd = "python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix
+        cmd = self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix
         self.parent.log(2, self.prefix + cmd)
         rval, lines = self.parent.system (cmd)
         if rval:
@@ -163,7 +163,7 @@ class lmcThread (threading.Thread):
         self.parent.system_lock.acquire()
 
         for daemon in self.daemons[rank]:
-          cmd = "pgrep -f '^python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "'"
+          cmd = "pgrep -f 'python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "'"
           rval, lines = self.parent.system (cmd, 3, True)
           if rval == 0 and len(lines) > 0:
             any_daemon_running = True
@@ -187,7 +187,7 @@ class lmcThread (threading.Thread):
         self.parent.system_lock.acquire()
         for daemon in self.daemons[rank]:
           if daemons_running[daemon]:
-            cmd = "pkill -f '^python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "'"
+            cmd = "pkill -f 'python " + self.parent.cfg["SCRIPTS_DIR"] + "/" + daemon + ".py" + self.process_suffix + "'"
             rval, lines = self.parent.system (cmd, 3)
         self.parent.system_lock.release()
 

@@ -676,6 +676,26 @@ class KATCPServer (DeviceServer):
             self.script.log (-1, "configure: " + response)
             return ("fail", response)
 
+        # if the backend nchan is < CAM nchan
+        self.script.log (1, "configure: n_channels=" + str(n_channels))
+        if int(n_channels) == 1024 and False:
+          nchan = 992
+          self.script.log (1, "configure: reconfiguring MCAST groups from  " + mcasts['x'] + ", " + mcasts['y'])
+          (mcast_base_x, mcast_ngroups_x) = mcasts['x'].split("+")
+          (mcast_base_y, mcast_ngroups_y) = mcasts['y'].split("+")
+          nchan_per_group = int(n_channels) / int(mcast_ngroups_x)
+          new_ngroups = nchan / nchan_per_group
+          offset = (int(mcast_ngroups_x) - new_ngroups) / 2
+          self.script.log (1, "configure: nchan_per_group=" + str(nchan_per_group) + 
+                           " new_ngroups=" + str(new_ngroups) + " offset=" + str(offset))
+          parts_x = mcast_base_x.split(".")
+          parts_y = mcast_base_y.split(".")
+          parts_x[3] = str(int(parts_x[3]) + offset)
+          parts_y[3] = str(int(parts_y[3]) + offset)
+          mcasts['x'] = ".".join(parts_x) + "+" + str(new_ngroups)
+          mcasts['y'] = ".".join(parts_y) + "+" + str(new_ngroups)
+          self.script.log (1, "configure: reconfigured MCAST groups to " + mcasts['x'] + ", " + mcasts['y'])
+
         self.script.log (1, "configure: connecting to RECV instance to update configuration")
 
         for istream in range(int(self.script.cfg["NUM_STREAM"])):

@@ -275,6 +275,9 @@ class TCSDaemon(Daemon):
               else:
                 raise
 
+  def validate_config (self, xml):
+    return (True, "")
+
 
   ###############################################################################
   # parse an XML command for correctness
@@ -531,7 +534,8 @@ class TCSDaemon(Daemon):
 
     # create the directory structure
     src_dir = processing_dir + "/" + beam + "/" + utc_start + "/" + source + "/"
-    os.makedirs (src_dir, 0755)
+    if not os.path.exists(src_dir):
+      os.makedirs (src_dir, 0755)
 
     # write stream information to file
     fptr = open (src_dir + "/obs.info", "w")
@@ -543,7 +547,8 @@ class TCSDaemon(Daemon):
       (freq, bw, nchan) = self.cfg["SUBBAND_CONFIG_" + str(streams[i])].split(":")
 
       # create the ouput sub-band dir
-      os.makedirs (src_dir + "/" + freq)
+      if not os.path.exists(src_dir + "/" + freq):
+        os.makedirs (src_dir + "/" + freq, 0755)
 
       # write the configuration to the file
       fptr.write(Config.writePaddedString("SUBBAND_" + str(i), \

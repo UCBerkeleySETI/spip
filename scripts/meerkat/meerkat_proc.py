@@ -66,7 +66,7 @@ class MEERKATProcDaemon (Daemon, StreamBased):
 
     self.db_key = SMRBDaemon.getDBKey (self.db_prefix, self.stream_id, self.num_stream, self.db_id)
 
-    self.log (0, "MEERKATProcDaemon::configure db_key=" + self.db_key)
+    self.log (2, "MEERKATProcDaemon::configure db_key=" + self.db_key)
 
     # GPU to use for signal processing
     self.gpu_id = self.cfg["GPU_ID_" + str(self.id)]
@@ -75,7 +75,7 @@ class MEERKATProcDaemon (Daemon, StreamBased):
     (self.cfreq, self.bw, self.nchan) = self.cfg["SUBBAND_CONFIG_" + self.subband_id].split(":")
     self.beam = self.cfg["BEAM_" + str(self.beam_id)]
 
-    self.log (0, "MEERKATProcDaemon::configure done")
+    self.log (2, "MEERKATProcDaemon::configure done")
 
   def wait_for_smrb (self):
 

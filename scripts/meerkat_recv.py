@@ -24,6 +24,7 @@ class MeerKATRecvDaemon(RecvDaemon):
 
   def __init__ (self, name, id):
     RecvDaemon.__init__(self, name, id)
+    self._use_vma = True
 
   def getConfiguration (self):
     self.log (2, "MeerKATRecvDaemon::getConfiguration()")
@@ -34,11 +35,14 @@ class MeerKATRecvDaemon(RecvDaemon):
   def getEnvironment (self):
     self.log (2, "MeerKATRecvDaemon::getEnvironment()")
     env = RecvDaemon.getEnvironment (self)
-    env["LD_PRELOAD"] = "libvma.so"
-    env["VMA_MTU"] = "4200"
-    #env["VMA_RING_ALLOCATION_LOGIC_RX"] = "10"
-    env["VMA_INTERNAL_THREAD_AFFINITY"] = self.cpu_core
-    env["VMA_TRACELEVEL"] = "WARNING"
+    if int(self.local_config["NCHAN"]) <= 1024:
+      self._use_vma = False
+    if self._use_vma:
+      env["LD_PRELOAD"] = "libvma.so"
+      env["VMA_MTU"] = "4200"
+      #env["VMA_RING_ALLOCATION_LOGIC_RX"] = "10"
+      env["VMA_INTERNAL_THREAD_AFFINITY"] = self.cpu_core
+      env["VMA_TRACELEVEL"] = "WARNING"
     return env
 
   def getCommand (self, config_file):
@@ -54,7 +58,7 @@ class MeerKATRecvDaemon(RecvDaemon):
             + " -b " + self.cpu_core \
             + " -c " + self.ctrl_port
 
-    if self.local_config["NCHAN"] == "1024":
+    if int(self.local_config["NCHAN"]) <= 1024:
       cmd = cmd + " -f spead1k"
     else:
       cmd = cmd + " -f spead"

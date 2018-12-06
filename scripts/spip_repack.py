@@ -138,6 +138,7 @@ class RepackDaemon(Daemon):
 
     self.zap_psh_script = "zap.psh"
     self.convert_psrfits = True
+    self.psrfits_rf_filename = False
     self.nchan_plot = 1024
     self.beams = []
     self.subbands = []
@@ -495,7 +496,6 @@ class RepackDaemon(Daemon):
     new["obs:observer"] = header["OBSERVER"] 
     new["obs:projid"]   = header["PID"]
 
-
     new["be:nrcvr"]     = header["NPOL"]
     
     try:
@@ -580,9 +580,17 @@ class RepackDaemon(Daemon):
       if rval:
         return (rval, "failed to copy processed file to archived dir")
       psrfits_file = out_dir + "/" + os.path.basename (input_file)
-      psrfits_file = string.replace(psrfits_file, ".ar", ".rf")
 
-      self.log (2, "process_archive() psrfits_file=" + psrfits_file)
+      if self.psrfits_rf_filename:
+        psrfits_file = string.replace(psrfits_file, ".ar", ".rf")
+
+        self.log (2, "process_archive() psrfits_file=" + psrfits_file)
+
+        # rename the output file
+        try:
+          shutil.move (input_file, psrfits_file)
+        except OSError, e:
+          return (-1, "failed to rename input_file to psrfits_file: " + str(e))
 
       # update the header parameters in the psrfits file
       (rval, message) = self.patch_psrfits_header (in_dir, psrfits_file)

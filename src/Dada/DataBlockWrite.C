@@ -174,6 +174,7 @@ void * spip::DataBlockWrite::open_block ()
     throw runtime_error ("not locked as writer");
 
   curr_buf = (void *) ipcio_open_block_write (data_block, &curr_buf_id);
+  opened_blocks.push (curr_buf);
   block_open = true;
   return curr_buf;
 }
@@ -187,7 +188,11 @@ ssize_t spip::DataBlockWrite::close_block (uint64_t bytes)
   if (!locked)
     throw runtime_error ("not locked as writer");
 
-  block_open = false;
+  opened_blocks.pop ();
+  block_open = (opened_blocks.size() > 0);
+  if (block_open)
+    curr_buf = opened_blocks.front();
+
   return ipcio_close_block_write (data_block, bytes);
 }
 

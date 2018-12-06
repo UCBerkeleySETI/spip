@@ -91,15 +91,13 @@ namespace spip {
 
       int64_t next_byte_offset;
 
-      int64_t overflow_maxbyte;
+      int64_t last_byte_offset;
 
-      char * block;
+      char * curr_block;
+
+      char * next_block;
 
       uint64_t data_bufsz;
-
-      char * overflow_block;
-
-      uint64_t overflow_bufsz;
 
       size_t packet_size;
 
@@ -107,7 +105,9 @@ namespace spip {
 
       size_t buffer_size;
 
-      uint64_t bytes_this_buf;
+      uint64_t bytes_curr_buf;
+
+      uint64_t bytes_next_buf;
 
   };
 
