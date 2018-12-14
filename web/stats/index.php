@@ -20,7 +20,6 @@ class stat extends spip_webpage
     $this->config = spip::get_config();
     $this->streams = array();
 
-
     $this->cache_dir = $this->config["WEB_DIR"]."/spip/cache";
     $this->npol = $this->config["NPOL"];
 
@@ -316,7 +315,7 @@ class stat extends spip_webpage
       header("Content-type: image/png");
       header('Content-Disposition: inline; filename="image.png"');
       header("Content-length: ".filesize($file));
-      header("Last-Modified: ".date(DATE_RFC2822, $curr));
+      header("Last-Modified: ".@date(DATE_RFC2822, $curr));
       readfile($file);
     }
 
