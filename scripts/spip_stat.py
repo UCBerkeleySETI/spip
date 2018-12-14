@@ -274,9 +274,11 @@ class StatDaemon(Daemon,StreamBased):
 
     while (not self.quit_event.isSet()):
 
+      process_stats = True
+
       # wait for the header to determine when dbstats should run
       cmd = "dada_header -k " + self.db_key
-      self.log(0, cmd)
+      self.info(cmd)
       self.binary_list.append (cmd)
       rval, lines = self.system (cmd)
       self.binary_list.remove (cmd)
@@ -290,21 +292,22 @@ class StatDaemon(Daemon,StreamBased):
           self.quit_event.set()
 
       elif len(lines) == 0:
-
         self.error("header was empty")
         self.quit_event.set()
 
       else:
-
         self.debug("parsing header")
         self.header = Config.parseHeader (lines)
 
-        process_stats = True
         try:
           if self.header["ZERO_COPY"] == "1":
             process_stats = False
         except:
-          process_stats = True
+          self.debug("ZERO_COPY did not exist in header")
+
+      if self.quit_event.isSet():
+        self.debug("quit event set, exiting loop")
+        continue
 
       if not process_stats:
         self.debug("not analyzing stats due to ZERO_COPY")
