@@ -78,12 +78,37 @@ void spip::BlockFormatMeerKAT::unpack_hgft (char * buffer, uint64_t nbytes)
           power = (unsigned) ((re * re) + (im * im));
           itime = ((iblock * nsamp_block) + isamp) / nsamp_per_time;
           freq_time[ipol][ifreq_ft][itime] += power;
+          bandpass[ipol][ifreq_ft] += power;
+
+
+         float powerf = float(power);
+          // now parse in the min max
+          ts_min[ipol][itime]   = std::min (powerf, ts_min[ipol][itime]);
+          ts_max[ipol][itime]   = std::max (powerf, ts_max[ipol][itime]);
+          ts_sum[ipol][itime]   += powerf;
+          ts_sumsq[ipol][itime] += powerf * powerf;
 
           idat += 2;
         }
       }
     }
   }
+
+  const float scale = float(nsamp_per_time);
+  for (unsigned ipol=0; ipol<npol; ipol++)
+  {
+    for (unsigned itime=0; itime<ntime; itime++)
+    {
+      float sumsq = ts_sumsq[ipol][itime];
+      float sumsum = ts_sum[ipol][itime] * ts_sum[ipol][itime];
+      float variance = (sumsq - sumsum/scale) / scale;
+      ts_rms[ipol][itime] = 0.0;
+      if (variance > 0)
+        ts_rms[ipol][itime] = sqrtf (variance);
+      ts_mean[ipol][itime] = ts_sum[ipol][itime] / scale;
+    }
+  }
+
 }
 
 
