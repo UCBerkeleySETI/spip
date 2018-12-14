@@ -16,6 +16,9 @@
 #include <cstdlib>
 #include <pthread.h>
 
+#define NPOL 2
+#define NSUBBAND 2
+
 namespace spip {
 
   enum ControlCmd   { None, Start, Stop, Quit };
@@ -105,13 +108,13 @@ namespace spip {
 
       ControlState control_state;
 
-      ControlState control_states[2];
+      ControlState control_states[NPOL];
 
-      std::string data_hosts[2];
+      std::string data_hosts[NPOL];
 
-      int data_ports[2];
+      int data_ports[NPOL];
 
-      std::string data_mcasts[2];
+      std::string data_mcasts[NPOL];
 
       unsigned nchan;
 
@@ -157,27 +160,30 @@ namespace spip {
 
       pthread_mutex_t mutex_db;
 
-      pthread_cond_t cond_recvs[2];
+      pthread_cond_t cond_recvs[NPOL];
 
-      pthread_mutex_t mutex_recvs[2];
+      pthread_mutex_t mutex_recvs[NPOL];
 
       IBVQueue queue1;
 
       IBVQueue queue2;
 
-      IBVQueue * queues[2];
+      IBVQueue * queues[NPOL];
 
-      UDPFormat * formats[2];
+      UDPFormat * formats[NPOL];
 
-      UDPStats * stats[2];
+      UDPStats * stats[NPOL];
 
-      int cores[2];
+      int cores[NPOL];
 
-      bool full[2];
+      int64_t full[NPOL];
 
-      char * curr_blocks[2];
+      char * curr_blocks[NPOL];
+      char * next_blocks[NPOL];
+      char * last_blocks[NPOL];
 
-      char * next_blocks[2];
+      char * curr_blocks_ptrs[NSUBBAND][NPOL];
+      char * next_blocks_ptrs[NSUBBAND][NPOL];
 
       unsigned chunk_size;
 

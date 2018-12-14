@@ -525,17 +525,14 @@ void spip::IBVReceiveMerge2DB::start_threads (int c1, int c2)
   cores[0] = c1;
   cores[1] = c2;
 
-  // flag for whether the recv thread has filled the current buffer
-  full[0] = true;
-  full[1] = true;
-
-  control_states[0] = Idle;
-  control_states[1] = Idle;
-
-  curr_blocks[0] = NULL;
-  curr_blocks[1] = NULL;
-  next_blocks[0] = NULL;
-  next_blocks[1] = NULL;
+  for (unsigned j=0; j<NPOL; j++)
+  {
+    full[j] = 0;
+    control_states[j] = Idle;
+    curr_blocks[j] = NULL;
+    next_blocks[j] = NULL;
+    last_blocks[j] = NULL;
+  }
 
   spip::IBVQueue::keep_receiving = true;
 
@@ -566,7 +563,7 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
   pthread_mutex_lock (&(mutex_recvs[0]));
   pthread_mutex_lock (&(mutex_recvs[1]));
 
-  uint64_t ibuf = 0;
+  int64_t ibuf = 0;
 
 #ifdef _DEBUG
   cerr << "spip::IBVReceiveMerge2DB::datablock_thread locked mutexes" << endl;
@@ -583,16 +580,28 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
   // if we have a start command then we can continue
   if (control_cmd == Start)
   {
-   // open the data block for writing
+    // open the data block for writing
     curr_blocks[0] = (char *) (db1->open_block());
     curr_blocks[1] = (char *) (db2->open_block());
     next_blocks[0] = (char *) (db1->open_block());
     next_blocks[1] = (char *) (db2->open_block());
+    last_blocks[0] = (char *) (db1->open_block());
+    last_blocks[1] = (char *) (db2->open_block());
+
+    for (unsigned i=0; i<NSUBBAND; i++)
+    {
+      for (unsigned j=0; j<NPOL; j++)
+      {
+        curr_blocks_ptrs[i][j] = curr_blocks[i];
+        next_blocks_ptrs[i][j] = next_blocks[i];
+      }
+    }
 
     // state of this thread
     control_state = Active;
 
-    full[0] = full[1] = false;
+    // each threads bufffer is empty
+    full[0] = full[1] = -1;
 
 #ifdef _DEBUG
     cerr << "spip::IBVReceiveMerge2DB::datablock opened buffers for ibuf=" << ibuf << endl;
@@ -621,75 +630,104 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
   pthread_mutex_unlock (&(mutex_recvs[1]));
 
 #ifdef _DEBUG
-  cerr << "spip::IBVReceiveMerge2DB::datablock signaled recv " << ibuf << endl;
+  cerr << "spip::IBVReceiveMerge2DB::datablock signaled recv for ibuf=" << ibuf << endl;
 #endif
 
   // while the receiving state is Active
   while (control_state == Active)
   {
-    // zero the next buffer that DB would provide
-    //db1->zero_next_block();
-    //db2->zero_next_block();
-
     // wait for RECV threads to fill buffer
     pthread_mutex_lock (&mutex_db);
 
-    // if the current buffer has been filled  by both receive threads
-    while (!full[0] || !full[1])
+    // full a block on each polarisation
+    unsigned full_blocks = 0;
+    while (full_blocks < NPOL)
     {
+      // wait for either thread to complete ibuf
+      while (full[0] != ibuf && full[1] != ibuf)
+      {
+        // release the mutex and wait for a signal on cond_db
+        pthread_cond_wait (&cond_db, &mutex_db);
+      }
+
 #ifdef _DEBUG
-      cerr << "spip::IBVReceiveMerge2DB::datablock checking buffer " << ibuf 
-           << " [" << full[0] << "," << full[1] << "]" << endl;
+      cerr << "spip::IBVReceiveMerge2DB::datablock full= " << full[0] << ", " << full[1] << endl;
 #endif
-      pthread_cond_wait (&cond_db, &mutex_db);
+
+      // a signal on cond_db has been received
+      for (unsigned j=0; j<NPOL; j++)
+      {
+        // thread j is full
+        if (full[j] == ibuf)
+        {
+          // acquire thread mutex of full block
+          pthread_mutex_lock (&(mutex_recvs[j]));
+
+          // check if the control command for this thread
+          if (control_cmd == Stop || control_cmd == Quit)
+          {
+            cerr << "Thread " << j << " Idle" << endl;
+            control_states[j] = Idle;
+          }
+          else
+          {
+            // rotate the thread's buffers for both subbands
+            for (unsigned i=0; i<2; i++)
+            {
+              curr_blocks_ptrs[i][j] = next_blocks[i];
+              next_blocks_ptrs[i][j] = last_blocks[i];
+            }
+
+            // tell the thread to continue
+            full[j] = -1;
+          }
+
+          // release the DB mutex allowing thread to continue
+          pthread_mutex_unlock (&mutex_db);
+          pthread_cond_signal (&(cond_recvs[j]));
+          pthread_mutex_unlock (&(mutex_recvs[j]));
+
+          // increment the number of full blocks
+          full_blocks++;
+        }
+      }
     }
-    
-#ifdef _DEBUG
-    cerr << "spip::IBVReceiveMerge2DB::datablock filled buffer " << ibuf << endl;
-#endif
-    
-    // close curr data blocks
+
+    // both threads have now completed the block
+    ibuf++;
+
+    // close curr data blocks since they are full
     db1->close_block(db1->get_data_bufsz());
     db2->close_block(db2->get_data_bufsz());
-
-    // acquire both recv threads' mutexes
-    pthread_mutex_lock (&(mutex_recvs[0]));
-    pthread_mutex_lock (&(mutex_recvs[1]));
-
-    ibuf++;
 
     // check for state changes
     if (control_cmd == Stop || control_cmd == Quit)
     {
       cerr << "STATE=Idle" << endl;
       control_state = Idle;
-      control_states[0] = control_states[1] = control_state;
 
-      // close next data blocks TODO change to 0 bytes?
+      // close next blocks which maybe partially full
+      db1->close_block(db1->get_data_bufsz());
+      db2->close_block(db2->get_data_bufsz());
+
+      // close last blocks which maybe partially full
       db1->close_block(db1->get_data_bufsz());
       db2->close_block(db2->get_data_bufsz());
     }
     else
     {
-      // switch the curr/next blocks
-      curr_blocks[0] = next_blocks[0];  
-      curr_blocks[1] = next_blocks[1];  
+      // rotate the curr/next/last to match the thread ptrs
+      for (unsigned i=0; i<2; i++)
+      {
+        curr_blocks[i] = next_blocks[i];
+        next_blocks[i] = last_blocks[i];
+      }
 
-      // open new next blocks
-      next_blocks[0] = (char *) (db1->open_block());
-      next_blocks[1] = (char *) (db2->open_block());
-
-      full[0] = full[1] = false;
+      // open new last blocks
+      last_blocks[0] = (char *) (db1->open_block());
+      last_blocks[1] = (char *) (db2->open_block());
     }
-
-    // release the DB mutex now that we have the recv threads locked
-    pthread_mutex_unlock (&mutex_db);
-    pthread_cond_signal (&(cond_recvs[0]));
-    pthread_cond_signal (&(cond_recvs[1]));
-    pthread_mutex_unlock (&(mutex_recvs[0]));
-    pthread_mutex_unlock (&(mutex_recvs[1]));
   }
-
   close();
 
 #ifdef _DEBUG
@@ -720,7 +758,7 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
 
   // block accounting 
   const int64_t data_bufsz = (db1->get_data_bufsz() + db2->get_data_bufsz()) / 2;
-  int64_t curr_byte_offset;
+  int64_t curr_byte_offset = 0;
   int64_t next_byte_offset = 0;
   int64_t last_byte_offset = data_bufsz;
 
@@ -758,7 +796,7 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
     // to empty (i.e. when it has provided a new buffer to fill
     pthread_mutex_lock (mutex_recv);
 
-    while (full[p] && control_states[p] == Active)
+    while (full[p] != -1 && control_states[p] == Active)
     {
 #ifdef _DEBUG
       cerr << "spip::IBVReceiveMerge2DB::receive["<<p<<"] waiting for empty " << ibuf << " [" << full[0] << ", " << full[1] << "]" << endl;
@@ -769,7 +807,7 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
     if (control_states[p] == Active)
     {
       curr_byte_offset = next_byte_offset;
-      next_byte_offset += data_bufsz;
+      next_byte_offset = last_byte_offset;
       last_byte_offset += data_bufsz;
 
 #ifdef _DEBUG
@@ -826,7 +864,7 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
 
               pol_bytes_curr_buf += bytes_received;
               stat->increment_bytes (bytes_received);
-              format->insert_last_packet (curr_blocks[subband] + block_offset);
+              format->insert_last_packet (curr_blocks_ptrs[subband][p] + block_offset);
               queue->close_packet();
             }
 
@@ -839,7 +877,7 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
 
               pol_bytes_next_buf += bytes_received;
               stat->increment_bytes (bytes_received);
-              format->insert_last_packet (next_blocks[subband] + block_offset);
+              format->insert_last_packet (next_blocks_ptrs[subband][p] + block_offset);
               queue->close_packet();
             }
 
@@ -857,7 +895,8 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
           }
 
           // close open data block buffer if is is now full
-          if (pol_bytes_curr_buf >= data_bufsz || filled_curr_buffer)
+          //if (pol_bytes_curr_buf >= data_bufsz || filled_curr_buffer)
+          if (filled_curr_buffer)
           {
 #ifdef _DEBUG
             if (p == 1)
@@ -883,7 +922,7 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
       }
 
       pthread_mutex_lock (&mutex_db);
-      full[p] = true;
+      full[p] = ibuf;
 
 #ifdef _DEBUG
       cerr << "spip::IBVReceiveMerge2DB::receive["<<p<<"] filled buffer " << ibuf << endl; 
