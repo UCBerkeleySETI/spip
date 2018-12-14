@@ -153,6 +153,7 @@ class KATCPDaemon(Daemon):
     self.beam_config["OUTNPOL"] = "4"
     self.beam_config["OUTNBIT"] =  "8"
     self.beam_config["OUTTDEC"] = "32"
+    self.beam_config["ZERO_COPY"] = "1"
     self.beam_config["lock"].release()
 
   #############################################################################
@@ -339,7 +340,7 @@ class KATCPDaemon(Daemon):
       xml +=     "<precisetime_uncertainty_polh key='PRECISETIME_UNCERTAINTY_POLH'>" + self.beam_config["PRECISETIME_UNCERTAINTY_POLH"] + "</precisetime_uncertainty_polh>"
       xml +=     "<ktt_gnss_delta key='TFR_KTT_GNSS'>" + self.beam_config["TFR_KTT_GNSS"] + "</ktt_gnss_delta>"
       xml +=     "<nchan_per_stream key='NCHAN_PER_STREAM'>" + self.beam_config["NCHAN_PER_STREAM"] + "</nchan_per_stream>"
-      xml +=     "<zero_copy key='ZERO_COPY'>1</zero_copy>"
+      xml +=     "<zero_copy key='ZERO_COPY'>" + self.beam_config["ZERO_COPY"] + "</zero_copy>"
       xml +=   "</custom_parameters>"
 
       xml +=   "<processing_modes>"
