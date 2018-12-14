@@ -218,6 +218,9 @@ class RepackDaemon(Daemon):
 
           obs_dir = beam_dir + "/" + observation
 
+          if not os.path.exists(obs_dir + "/obs.info"):
+            continue
+
           info_age = files.get_file_age (obs_dir + "/obs.info")
           if info_age < 5:
             continue
