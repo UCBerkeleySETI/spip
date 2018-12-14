@@ -939,6 +939,26 @@ class KATCPServer (DeviceServer):
     self.script.beam_config["lock"].release()
     return ("ok", "")
 
+  @request()
+  @return_reply(Str())
+  def request_disable_zeroed_buffers (self, req):
+    """Disable zeroing of ring buffers, enabling stats mode."""
+    self.script.beam_config["lock"].acquire()
+    self.script.beam_config["ZERO_COPY"] = "0"
+    self.script.beam_config["lock"].release()
+    return ("ok", "")
+
+  @request()
+  @return_reply(Str())
+  def request_enable_zeroed_buffers (self, req):
+    """Enable zeroing of ring buffers, disabling stats mode."""
+    self.script.beam_config["lock"].acquire()
+    self.script.beam_config["ZERO_COPY"] = "1"
+    self.script.beam_config["lock"].release()
+    return ("ok", "")
+
+
+
   # test if a number is a power of two
   def test_power_of_two (self, num):
     return num > 0 and not (num & (num - 1))
