@@ -35,6 +35,7 @@ libspipnet_la_SOURCES += \
   IBVReceiver.C \
   IBVReceiveDB.C \
   IBVReceiveMerge2DB.C \
+  IBVReceiverMerge2.C \
   SPEADReceiver.C \
   SPEADBeamFormerConfig.C \
   SPEADReceiverMerge.C
@@ -42,7 +43,8 @@ libspipnet_la_SOURCES += \
 libspipnet_headers += \
   spip/IBVQueue.h \
   spip/IBVReceiveDB.h \
-  spip/IBVReceiveMerge2DB.h
+  spip/IBVReceiveMerge2DB.h \
+  spip/IBVReceiverMerge2.h
 
 AM_CXXFLAGS += @BOOST_CPPFLAGS@ @SPEAD2_CFLAGS@
 libspipnet_la_LIBADD += @BOOST_SYSTEM_LDFLAGS@ @SPEAD2_LIBS@

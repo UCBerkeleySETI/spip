@@ -44,6 +44,7 @@ bin_PROGRAMS += meerkat_speadrecv \
   meerkat_speadmeta \
 	meerkat_ibvrecv \
   meerkat_ibvmerge2db \
+  meerkat_ibvmerge2 \
 	meerkat_speadtimestamp
 
 meerkat_speadrecv_SOURCES = meerkat_speadrecv.C

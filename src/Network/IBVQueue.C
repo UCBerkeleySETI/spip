@@ -38,6 +38,7 @@ spip::IBVQueue::IBVQueue (boost::asio::io_service& io_service) : join_socket(io_
   islot = -1;
   ipacket = 0;
   npackets = 0;
+  num_multicast = 0;
 }
 
 spip::IBVQueue::~IBVQueue ()

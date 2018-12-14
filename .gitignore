@@ -56,6 +56,7 @@ src/Formats/MeerKAT/meerkat_dbstats
 src/Formats/MeerKAT/meerkat_dummyserver
 src/Formats/MeerKAT/meerkat_ibvdb
 src/Formats/MeerKAT/meerkat_ibvmerge2db
+src/Formats/MeerKAT/meerkat_ibvmerge2
 src/Formats/MeerKAT/meerkat_ibvrecv
 src/Formats/MeerKAT/meerkat_udpdb
 src/Formats/MeerKAT/meerkat_udpgen

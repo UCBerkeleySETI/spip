@@ -157,6 +157,9 @@ class TCSDaemon(Daemon):
       cmd = "find " + beam_dir + " -mindepth 2 -maxdepth 2 -type d | sort | tail -n 1"
       rval, observation = self.system (cmd, 3)
 
+      if len(observation) == 0:
+        return
+
       # strip prefix 
       observation = observation[0][(len(beam_dir)+1):]
 
@@ -482,6 +485,10 @@ class TCSDaemon(Daemon):
               val = ''
             obs_config[key] = val
             self.log(1, key + "=" + val)
+
+            # hack for DSPSR requiring this parameter
+            if key == "CAL_FREQ":
+              obs_config["CALFREQ"] = val
 
           # extract the stream informatiom
           s = self.beam_states[b]["config"]["stream_configuration"]

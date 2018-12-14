@@ -202,15 +202,18 @@ void * stats_thread (void * arg)
   uint64_t b_recv_total = 0;
   uint64_t b_recv_curr = 0;
   uint64_t b_recv_1sec;
+  uint64_t b_drop_total = 0;
+  uint64_t b_drop_curr = 0;
+  uint64_t b_drop_1sec;
 
   uint64_t s_curr = 0;
   uint64_t s_total = 0;
   uint64_t s_1sec;
 
-  uint64_t b_drop_curr = 0;
-
   float gb_recv_ps = 0;
   float mb_recv_ps = 0;
+  float gb_drop_ps = 0;
+  float mb_drop_ps = 0;
 
   while (!quit_threads)
   {
@@ -223,17 +226,21 @@ void * stats_thread (void * arg)
 
       // calc the values for the last second
       b_recv_1sec = b_recv_curr - b_recv_total;
+      b_drop_1sec = b_drop_curr - b_drop_total;
       s_1sec = s_curr - s_total;
 
       // update the totals
       b_recv_total = b_recv_curr;
+      b_drop_total = b_drop_curr;
       s_total = s_curr;
 
       mb_recv_ps = (double) b_recv_1sec / 1000000;
       gb_recv_ps = (mb_recv_ps * 8)/1000;
+      mb_drop_ps = (double) b_drop_1sec / 1000000;
+      gb_drop_ps = (mb_drop_ps * 8)/1000;
 
       // determine how much memory is free in the receivers
-      fprintf (stderr,"Recv %6.3f [Gb/s] Sleeps %lu Dropped %lu B\n", gb_recv_ps, s_1sec, b_drop_curr);
+      fprintf (stderr,"Recv %6.3f [Gb/s] Drop %6.3f [Gb/s] Sleeps %lu Dropped %lu B\n", gb_recv_ps, gb_drop_ps, s_1sec, b_drop_curr);
       sleep(1);
     }
   }
