@@ -224,15 +224,18 @@ class StatDaemon(Daemon,StreamBased):
     db_id      = self.cfg["RECEIVING_DATA_BLOCK"]
     num_stream = self.cfg["NUM_STREAM"]
     stream_id  = str(self.id)
-    self.log (2, "StatDaemon::main stream_id=" + str(self.id))
+    self.debug("stream_id=" + str(self.id))
     self.db_key = SMRBDaemon.getDBKey (db_prefix, stream_id, num_stream, db_id)
-    self.log (2, "StatDaemon::main db_key=" + self.db_key)
+    self.debug("db_key=" + self.db_key)
 
     # start dbstats in a separate thread
     self.stat_dir = self.processing_dir + "/" + self.beam_name + "/" + self.cfreq
+    self.archived_dir = self.processing_dir + "/archived/" + self.beam_name + "/" + self.cfreq
 
     if not os.path.exists(self.stat_dir):
       os.makedirs(self.stat_dir, 0755)
+    if not os.path.exists(self.archived_dir):
+      os.makedirs(self.archived_dir, 0755)
 
     # configure the histogram plot with all channels included
     self.hg_plot.configure (-1, self.histogram_abs_xmax)
@@ -255,10 +258,10 @@ class StatDaemon(Daemon,StreamBased):
     # stat will use the stream config file created for the recv command
     self.stream_config_file = "/tmp/spip_stream_" + str(self.id) + ".cfg"
     while (not os.path.exists(self.stream_config_file)):
-      self.log (2, "StatDaemon::main waiting for stream_config file [" + self.stream_config_file +"] to be created by recv")
+      self.debug("waiting for stream_config file [" + self.stream_config_file +"] to be created by recv")
       time.sleep(1)    
 
-    self.log (2, "StatDaemon::main wait_for_smrb()")
+    self.debug("wait_for_smrb()")
     smrb_exists = SMRBDaemon.waitForSMRB(self.db_key, self)
 
     if not smrb_exists:
@@ -270,6 +273,43 @@ class StatDaemon(Daemon,StreamBased):
     stat_cmd = self.build_cmd()
 
     while (not self.quit_event.isSet()):
+
+      # wait for the header to determine when dbstats should run
+      cmd = "dada_header -k " + self.db_key
+      self.log(0, cmd)
+      self.binary_list.append (cmd)
+      rval, lines = self.system (cmd)
+      self.binary_list.remove (cmd)
+
+      # if the command returned ok and we have a header
+      if rval != 0:
+        if self.quit_event.isSet():
+          self.debug(cmd + " failed, but quit_event true")
+        else:
+          self.error(cmd + " failed")
+          self.quit_event.set()
+
+      elif len(lines) == 0:
+
+        self.error("header was empty")
+        self.quit_event.set()
+
+      else:
+
+        self.debug("parsing header")
+        self.header = Config.parseHeader (lines)
+
+        process_stats = True
+        try:
+          if self.header["ZERO_COPY"] == "1":
+            process_stats = False
+        except:
+          process_stats = True
+
+      if not process_stats:
+        self.debug("not analyzing stats due to ZERO_COPY")
+        time.sleep(5)
+        continue
 
       # create a log pipe for the stats command
       stat_log_pipe   = LogSocket ("stat_src", "stat_src", str(self.id), "stream",
@@ -288,11 +328,11 @@ class StatDaemon(Daemon,StreamBased):
        # initialize the threads
       stat_thread = dbstatsThread (stat_cmd, self.stat_dir, stat_log_pipe.sock, 2)
 
-      self.log (2, "StatDaemon::main cmd=" + stat_cmd)
+      self.debug("cmd=" + stat_cmd)
 
-      self.log (2, "StatDaemon::main starting stat thread")
+      self.debug("starting stat thread")
       stat_thread.start()
-      self.log (2, "StatDaemon::main stat thread started")
+      self.debug("stat thread started")
 
       pref_freq = 0
 
@@ -301,7 +341,7 @@ class StatDaemon(Daemon,StreamBased):
         # get a list of all the files in stat_dir
         files = os.listdir (self.stat_dir)
 
-        self.log (2, "StatDaemon::main found " + str(len(files)) + " in " + self.stat_dir)
+        self.debug("found " + str(len(files)) + " in " + self.stat_dir)
 
         # if stat files exist in the directory
         if len(files) > 0:
@@ -333,9 +373,9 @@ class StatDaemon(Daemon,StreamBased):
 
         time.sleep(5)
 
-      self.log (2, "StatDaemon::main joining stat thread")
+      self.debug("joining stat thread")
       rval = stat_thread.join()
-      self.log (2, "StatDaemon::main stat thread joined")
+      self.debug("stat thread joined")
 
       self.log (1, "END   " + stat_cmd)
 
@@ -413,7 +453,8 @@ class StatDaemon(Daemon,StreamBased):
       self.results["lock"].release()
 
       for file in files:
-        os.remove (self.stat_dir + "/" + file)
+        os.rename (self.stat_dir + "/" + file, self.archived_dir + "/" + file)
+        #os.remove (self.stat_dir + "/" + file)
 
   #############################################################################
   # StatDaemon::process_bp
@@ -462,7 +503,8 @@ class StatDaemon(Daemon,StreamBased):
       self.results["lock"].release()
 
       for file in files:
-        os.remove (self.stat_dir + "/" + file)
+        os.rename (self.stat_dir + "/" + file, self.archived_dir + "/" + file)
+        # os.remove (self.stat_dir + "/" + file)
 
 
   #############################################################################
@@ -525,7 +567,8 @@ class StatDaemon(Daemon,StreamBased):
       self.results["lock"].release()
 
       for file in files:
-        os.remove (self.stat_dir + "/" + file)
+        os.rename (self.stat_dir + "/" + file, self.archived_dir + "/" + file)
+        # os.remove (self.stat_dir + "/" + file)
 
   #############################################################################
   # StatDaemon::process_ts
@@ -571,7 +614,8 @@ class StatDaemon(Daemon,StreamBased):
         self.results[prefix + "_hires"] = self.ts_plot.getRawImage()
 
       for file in files:
-        os.remove (self.stat_dir + "/" + file)
+        os.rename (self.stat_dir + "/" + file, self.archived_dir + "/" + file)
+        # os.remove (self.stat_dir + "/" + file)
 
       self.ts_valid = True
       self.results["lock"].release()
@@ -612,7 +656,8 @@ class StatDaemon(Daemon,StreamBased):
       self.results["lock"].release()
 
       for file in files:
-        os.remove (self.stat_dir + "/" + file)
+        os.rename (self.stat_dir + "/" + file, self.archived_dir + "/" + file)
+        #os.remove (self.stat_dir + "/" + file)
 
 
 ###############################################################################
