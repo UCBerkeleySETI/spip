@@ -483,10 +483,6 @@ class TCSDaemon(Daemon):
             obs_config[key] = val
             self.log(1, key + "=" + val)
 
-            # hack for DSPSR requiring this parameter
-            if key == "CAL_FREQ":
-              obs_config["CALFREQ"] = val
-
           # extract the stream informatiom
           s = self.beam_states[b]["config"]["stream_configuration"]
 
