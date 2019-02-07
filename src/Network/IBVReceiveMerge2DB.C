@@ -30,7 +30,7 @@ using namespace std;
 
 spip::IBVReceiveMerge2DB::IBVReceiveMerge2DB (const char * key1, const char * key2,
                                               boost::asio::io_service& io_service)
-                                              : queue1(io_service), queue2(io_service)
+//                                              : queue1(io_service), queue2(io_service)
 {
   db1 = new DataBlockWrite (key1);
   db2 = new DataBlockWrite (key2);
@@ -63,8 +63,17 @@ spip::IBVReceiveMerge2DB::IBVReceiveMerge2DB (const char * key1, const char * ke
     stats[i] = NULL;
   }
 
-  queues[0] = &queue1;
-  queues[1] = &queue2;
+#ifdef HAVE_HWLOC
+  spip::HardwareAffinity hw_affinity;
+  hw_affinity.bind_thread_to_cpu_core (2);
+  hw_affinity.bind_to_memory (0);
+#endif
+
+  queues[0] = new IBVQueue(io_service);
+  queues[1] = new IBVQueue(io_service);
+
+  //queues[0] = &queue1;
+  //queues[1] = &queue2;
 
   pthread_cond_init( &cond_db, NULL);
   pthread_mutex_init( &mutex_db, NULL);
@@ -314,13 +323,13 @@ void spip::IBVReceiveMerge2DB::control_thread()
 
         // write header
         if (verbose)
-          cerr << "control_thread: control_cmd = Start" << endl;
+          cerr << "control_thread: set_control_cmd(Start)" << endl;
         set_control_cmd (Start);
       }
       else if (strcmp (cmd, "STOP") == 0)
       {
         if (verbose)
-          cerr << "control_thread: control_cmd = Stop" << endl;
+          cerr << "control_thread: set_control_cmd(Stop)" << endl;
         set_control_cmd (Stop);
       }
       else if (strcmp (cmd, "QUIT") == 0)
@@ -654,11 +663,17 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
       cerr << "spip::IBVReceiveMerge2DB::datablock full= " << full[0] << ", " << full[1] << endl;
 #endif
 
-      // a signal on cond_db has been received
+      // check for a stopping command
+      if (control_cmd == Stop || control_cmd == Quit)
+      {
+        control_state = Stopping;
+      }
+
+      // a signal on cond_db has been received, check both threads
       for (unsigned j=0; j<NPOL; j++)
       {
         // thread j is full
-        if (full[j] == ibuf)
+        if (full[j] == ibuf || control_state == Stopping)
         {
           // acquire thread mutex of full block
           pthread_mutex_lock (&(mutex_recvs[j]));
@@ -666,7 +681,7 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
           // check if the control command for this thread
           if (control_cmd == Stop || control_cmd == Quit)
           {
-            cerr << "Thread " << j << " Idle" << endl;
+            cerr << "Thread " << j << " Idle " << endl;
             control_states[j] = Idle;
           }
           else
@@ -677,10 +692,10 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
               curr_blocks_ptrs[i][j] = next_blocks[i];
               next_blocks_ptrs[i][j] = last_blocks[i];
             }
-
-            // tell the thread to continue
-            full[j] = -1;
           }
+
+          // tell this thread to continue
+          full[j] = -1;
 
           // release the DB mutex allowing thread to continue
           pthread_mutex_unlock (&mutex_db);
@@ -693,7 +708,7 @@ bool spip::IBVReceiveMerge2DB::datablock_thread ()
       }
     }
 
-    // both threads have now completed the block
+    // both threads have now completed the block, or are exiting
     ibuf++;
 
     // close curr data blocks since they are full
@@ -799,11 +814,14 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
     while (full[p] != -1 && control_states[p] == Active)
     {
 #ifdef _DEBUG
-      cerr << "spip::IBVReceiveMerge2DB::receive["<<p<<"] waiting for empty " << ibuf << " [" << full[0] << ", " << full[1] << "]" << endl;
+      cerr << "spip::IBVReceiveMerge2DB::receive["<<p<<"] waiting for empty " 
+           << ibuf << " [" << full[0] << ", " << full[1] << "]" << endl;
 #endif
+      // release mutex_recv, waiting on cond_recv
       pthread_cond_wait (cond_recv, mutex_recv);
     }
 
+    // if the control state of the thread is active, process a block
     if (control_states[p] == Active)
     {
       curr_byte_offset = next_byte_offset;
@@ -844,6 +862,7 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
             // data stream is finished
             if (byte_offset == -2)
             {
+              cerr << "spip::IBVReceiveMerge2DB::receive["<<p<<"] received END STREAM packet" << endl;
               set_control_cmd(Stop);
             } 
           }
@@ -895,8 +914,8 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
           }
 
           // close open data block buffer if is is now full
-          //if (pol_bytes_curr_buf >= data_bufsz || filled_curr_buffer)
-          if (filled_curr_buffer)
+          //if (filled_curr_buffer)
+          if (pol_bytes_curr_buf >= data_bufsz || filled_curr_buffer)
           {
 #ifdef _DEBUG
             if (p == 1)
@@ -933,8 +952,11 @@ bool spip::IBVReceiveMerge2DB::receive_thread (int p)
 
       stat->sleeps(queue->process_sleeps());
     }
+    // control state is not active
     else
+    {
       pthread_mutex_unlock (mutex_recv);
+    }
   }
 
 #ifdef _DEBUG

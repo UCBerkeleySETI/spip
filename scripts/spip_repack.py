@@ -538,6 +538,8 @@ class RepackDaemon(Daemon):
     new["ext:obsbw"]    = header["BW"]
     new["ext:obsnchan"] = header["NCHAN"]
 
+    new["ext:stt_crd1"] = header["RA"]
+    new["ext:stt_crd2"] = header["DEC"]
     new["ext:stp_crd1"] = header["RA"]
     new["ext:stp_crd2"] = header["DEC"]
     new["ext:stt_date"] = header["UTC_START"][0:10]

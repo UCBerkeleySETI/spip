@@ -35,9 +35,9 @@ endif
 
 if HAVE_SPEAD2
 
-libmeerkat_headers += spip/UDPFormatMeerKATSPEAD.h spip/UDPFormatMeerKATSPEAD1k.h
+libmeerkat_headers += spip/UDPFormatMeerKATSPEAD.h spip/UDPFormatMeerKATSPEAD1k.h spip/UDPFormatMeerKATSPEAD2k.h
 
-libmeerkat_la_SOURCES += UDPFormatMeerKATSPEAD.C UDPFormatMeerKATSPEAD1k.C
+libmeerkat_la_SOURCES += UDPFormatMeerKATSPEAD.C UDPFormatMeerKATSPEAD1k.C UDPFormatMeerKATSPEAD2k.C
 
 bin_PROGRAMS += meerkat_speadrecv \
 	meerkat_speadrecvmerge \

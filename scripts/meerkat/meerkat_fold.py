@@ -27,6 +27,7 @@ class MEERKATFoldDaemon (MEERKATProcDaemon):
 
   def __init__ (self, name, id):
     MEERKATProcDaemon.__init__(self, name , id)
+    self.tag = "fold"
 
   def getEnvironment (self):
     self.log (2, "MEERKATFoldDaemon::getEnvironment()")

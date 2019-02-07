@@ -12,6 +12,7 @@
 #include "spip/UDPFormatMeerKATSimple.h"
 #include "spip/UDPFormatMeerKATSPEAD.h"
 #include "spip/UDPFormatMeerKATSPEAD1k.h"
+#include "spip/UDPFormatMeerKATSPEAD2k.h"
 
 #include <unistd.h>
 #include <signal.h>
@@ -108,6 +109,10 @@ int main(int argc, char *argv[])
     {
       ibvrecv->set_format (new spip::UDPFormatMeerKATSPEAD1k());
     }
+    else if (format->compare("spead2k") == 0)
+    {
+      ibvrecv->set_format (new spip::UDPFormatMeerKATSPEAD2k());
+    }
 #endif
     else
     {
@@ -168,7 +173,7 @@ void usage()
   cout << "meerkat_ibvrecv [options] config\n"
     "  header      ascii file contain config and header\n"
 #ifdef HAVE_SPEAD2
-    "  -f format   receive UDP data of format [simple spead]\n"
+    "  -f format   receive UDP data of format [simple spead spead1k spead2k]\n"
 #else
     "  -f format   receive UDP data of format [simple]\n"
 #endif

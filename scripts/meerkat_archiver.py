@@ -190,12 +190,10 @@ class MeerKATArchiverDaemon(Daemon):
                 continue
               else:
                 raise
-
-          
           
             self.log (2, "main: transferring " + str(len(files)) + " files")
 
-            self.log (1, beam + "/" + utc + "/"  + source + " transferring")
+            self.log (1, beam + "/" + utc + "/"  + source + " transferring to MeerKAT Archive")
 
             for file in files:
 
@@ -211,6 +209,16 @@ class MeerKATArchiverDaemon(Daemon):
 
             self.log (2, "main: ftp_agent.close()")
             self.ftp_agent.close()
+
+            # rsync to ozstar TODO remove
+            local_path = self.completed_dir + "/" + beam + "/" + utc
+            remote_host = "pulsar@ozstar.swin.edu.au"
+            remote_path = "/fred/oz002/timing/meerkat/commissioning/"
+
+            self.log (1, beam + "/" + utc + "/"  + source + " transferring to OzSTAR")
+
+            cmd = "rsync -azv " + local_path + " " + remote_host + ":" + remote_path
+            rval, lines = self.system(cmd, 2)
 
             # now move this observation from completed to transferred
             cmd = "mkdir -p " + self.transferred_dir + "/" + beam

@@ -271,6 +271,13 @@ class KATCPServer (DeviceServer):
       default=0)
     self.add_sensor(self._beam_sensors["integrated"])
 
+    self._beam_sensors["input_channels"] = Sensor.integer("input_channels",
+      description="Number of configured input channels for Beam "+b,
+      unit="",
+      default=0)
+    self.add_sensor(self._beam_sensors["input_channels"])
+
+
   @request()
   @return_reply(Str())
   def request_beam(self, req):
@@ -409,6 +416,7 @@ class KATCPServer (DeviceServer):
     self.script.beam_config["OBSERVER"] = self.script.cam_config["OBSERVER"]
     self.script.beam_config["ANTENNAE"] = self.script.cam_config["ANTENNAE"]
     self.script.beam_config["SCHEDULE_BLOCK_ID"] = self.script.cam_config["SCHEDULE_BLOCK_ID"]
+    self.script.beam_config["PROPOSAL_ID"] = self.script.cam_config["PROPOSAL_ID"]
     self.script.beam_config["EXPERIMENT_ID"] = self.script.cam_config["EXPERIMENT_ID"]
     self.script.beam_config["DESCRIPTION"] = self.script.cam_config["DESCRIPTION"]
     self.script.beam_config["lock"].release()
@@ -761,6 +769,7 @@ class KATCPServer (DeviceServer):
   @return_reply(Str())
   def request_deconfigure(self, req, msg):
     """Deconfigure for the data_product."""
+    self.script.log(1, "request_deconfigure()")
 
     # in case the observing was terminated early
     if self._data_product["state"] == "recording":
@@ -833,6 +842,7 @@ class KATCPServer (DeviceServer):
   @return_reply(Str())
   def request_output_bins(self, req, nbin):
     """Set the number of output phase bins."""
+    self.script.log(1, "request_output_bins: nbin=" + str(nbin))
     if not self.test_power_of_two(nbin):
       self.script.log (-1, "request_output_bins: " + str(nbin) + " not a power of two")
       return ("fail", "nbin not a power of two")
@@ -848,6 +858,7 @@ class KATCPServer (DeviceServer):
   @return_reply(Str())
   def request_output_tsubint (self, req, tsubint):
     """Set the length of output sub-integrations."""
+    self.script.log(1, "request_output_tsubint: tsubint=" + str(tsubint)) 
     if tsubint < 10 or tsubint > 60:
       self.script.log (-1, "request_output_tsubint: " + str(tsubint) + " not within range 10 - 60")
       return ("fail", "length of output subints must be between 10 and 60 seconds")
@@ -860,6 +871,7 @@ class KATCPServer (DeviceServer):
   @return_reply(Str())
   def request_dispersion_measure (self, req, dm):
     """Set the value of dispersion measure to be removed"""
+    self.script.log(1, "request_dispersion_measure: dm=" + str(dm)) 
     if dm > 2000:
       self.script.log (-1, "request_dispersion_measure: " + str(dm) + " > 2000")
       return ("fail", "dm greater than limit of 2000")
@@ -872,6 +884,7 @@ class KATCPServer (DeviceServer):
   @return_reply(Str())
   def request_calibration_freq(self, req, cal_freq):
     """Set the value of noise diode firing frequecny in Hz."""
+    self.script.log(1, "request_calibration_freq: cal_freq=" + str(cal_freq)) 
     if cal_freq < 0 or cal_freq > 1000:
       return ("fail", "CAL freq not within range 0 - 1000")
     self.script.beam_config["lock"].acquire()
@@ -887,6 +900,7 @@ class KATCPServer (DeviceServer):
   @return_reply(Str())
   def request_output_npol(self, req, outnpol):
     """Set the number of output pol parameters."""
+    self.script.log(1, "request_output_npol: outnpol=" + str(outnpol)) 
     if outnpol != 1 and outnpol != 2 and outnpol != 3 and outnpol != 4:
       self.script.log (-1, "request_output_npol: " + str(outnpol) + " not 1, 2 or 4")
       return ("fail", "output npol must be between 1, 2 or 4")
@@ -899,6 +913,7 @@ class KATCPServer (DeviceServer):
   @return_reply(Str())
   def request_output_nbit(self, req, outnbit):
     """Set the number of bits per output sample."""
+    self.script.log(1, "request_output_nbit: outnbit=" + str(outnbit)) 
     if outnbit != 1 and outnbit != 2 and outnbit != 4 and outnbit != 8:
       self.script.log (-1, "request_output_nbit: " + str(outnbit) + " not 1, 2, 4 or 8")
       return ("fail", "output nbit must be between 1, 2, 4 or 8")
@@ -911,6 +926,7 @@ class KATCPServer (DeviceServer):
   @return_reply(Str())
   def request_output_tdec(self, req, outtdec):
     """Set the number of input samples integrated into 1 output sample."""
+    self.script.log(1, "request_output_tdec: outtdec=" + str(outtdec)) 
     if outtdec < 16 or outtdec > 131072:
       self.script.log (-1, "request_output_tdec: " + str(outtdec) + " not in range [16..131072]")
       return ("fail", "output tdec must be between 16 and 131072")
@@ -926,6 +942,7 @@ class KATCPServer (DeviceServer):
     self.script.beam_config["lock"].acquire()
     self.script.beam_config["PERFORM_FOLD"] = "1"
     self.script.beam_config["PERFORM_SEARCH"] = "0"
+    self.script.log(1, "request_search_mode: PERFORM_FOLD=1")
     self.script.beam_config["lock"].release()
     return ("ok", "")
 
@@ -936,6 +953,7 @@ class KATCPServer (DeviceServer):
     self.script.beam_config["lock"].acquire()
     self.script.beam_config["PERFORM_FOLD"] = "0"
     self.script.beam_config["PERFORM_SEARCH"] = "1"
+    self.script.log(1, "request_search_mode: PERFORM_SEARCH=1")
     self.script.beam_config["lock"].release()
     return ("ok", "")
 
@@ -944,6 +962,7 @@ class KATCPServer (DeviceServer):
   def request_disable_zeroed_buffers (self, req):
     """Disable zeroing of ring buffers, enabling stats mode."""
     self.script.beam_config["lock"].acquire()
+    self.script.log(1, "request_disable_zeroed_buffers: ZERO_COPY=0")
     self.script.beam_config["ZERO_COPY"] = "0"
     self.script.beam_config["lock"].release()
     return ("ok", "")
@@ -953,6 +972,7 @@ class KATCPServer (DeviceServer):
   def request_enable_zeroed_buffers (self, req):
     """Enable zeroing of ring buffers, disabling stats mode."""
     self.script.beam_config["lock"].acquire()
+    self.script.log(1, "request_enable_zeroed_buffers: ZERO_COPY=1")
     self.script.beam_config["ZERO_COPY"] = "1"
     self.script.beam_config["lock"].release()
     return ("ok", "")

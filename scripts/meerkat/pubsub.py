@@ -67,6 +67,9 @@ class PubSubThread (threading.Thread):
     sensors["NCHAN"]             = {"comp": "cbf", "sensor": self.fengine_stream + '.antenna-channelised-voltage-n-chans'}
     sensors["ADC_SYNC_TIME"]     = {"comp": "cbf", "sensor": self.fengine_stream + '.synchronisation-epoch'}
     sensors["NCHAN_PER_STREAM"]  = {"comp": "cbf", "sensor": self.polh_stream + '.n-chans-per-substream'}
+    sensors["CBF_INPUTS"]        = {"comp": "cbf", "sensor": self.fengine_stream + '.input-labelling'}
+    sensors["POLH_WEIGHTS"]      = {"comp": "cbf", "sensor": self.polh_stream + '.weight'}
+    sensors["POLV_WEIGHTS"]      = {"comp": "cbf", "sensor": self.polv_stream + '.weight'}
     sensors["ITRF"]              = {"comp": "sub", "sensor": "array-position-itrf"}
     sensors["SCHEDULE_BLOCK_ID"] = {"comp": "sub", "sensor": "active-sbs"}
     sensors["FREQ"]              = {"comp": "sub", "sensor": 'streams.' + self.polh_stream + '.centre-frequency'}
@@ -93,14 +96,14 @@ class PubSubThread (threading.Thread):
                            "PRECISETIME_FRACTION_POLV", "PRECISETIME_UNCERTAINTY_POLV", "TFR_KTT_GNSS"]
     self.script.log(1, "PubSubThread::configure self.antennae=" + str(self.antennae))
 
-    for i in range(len(self.antennae)):
-      if not i % 2 == 0:
-        sensors["ANT_WEIGHT_" + str(i)] = {"comp": "cbf", "sensor": self.polh_stream + "-input" + str(i) + "-weight"}
-        self.script.log(1, "PubSubThread::configure i=" + str(i) + " stream=" + self.polh_stream)
-      else:
-        sensors["ANT_WEIGHT_" + str(i)] = {"comp": "cbf", "sensor": self.polv_stream + "-input" + str(i) + "-weight"}
-        self.script.log(1, "PubSubThread::configure i=" + str(i) + " stream=" + self.polv_stream)
-  
+    #for i in range(len(self.antennae)):
+    #  if not i % 2 == 0:
+    #    sensors["ANT_WEIGHT_" + str(i)] = {"comp": "cbf", "sensor": self.polh_stream + "-input" + str(i) + "-weight"}
+    #    self.script.log(1, "PubSubThread::configure i=" + str(i) + " stream=" + self.polh_stream)
+    #  else:
+    #    sensors["ANT_WEIGHT_" + str(i)] = {"comp": "cbf", "sensor": self.polv_stream + "-input" + str(i) + "-weight"}
+    #    self.script.log(1, "PubSubThread::configure i=" + str(i) + " stream=" + self.polv_stream)
+
     self.script.log(3, "PubSubThread::configure sensors=" + str(sensors))
     for key in sensors.keys():
 
@@ -224,6 +227,8 @@ class PubSubThread (threading.Thread):
 
   def update_cam_config (self, key, name, value):
     if key in self.script.cam_config.keys():
+      if value == "":
+        value = "None"
       if self.script.cam_config[key] != value:
         if key in self.chatty_sensors:
           chatty_delta = times.diffCurrentDateTime(self.chatty_first_update)

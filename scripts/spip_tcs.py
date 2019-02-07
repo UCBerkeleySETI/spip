@@ -139,6 +139,7 @@ class TCSDaemon(Daemon):
     Daemon.__init__(self, name, str(id))
     self.beam_states = {}
     self.host = sockets.getHostNameShort()
+    self.start_offset_seconds = 20
 
   def load_header_param (self, b, area, param, header, key):
     try:
@@ -459,7 +460,7 @@ class TCSDaemon(Daemon):
 
           # if no UTC_START has been specified, set it to +5 seconds
           if o["utc_start"]["#text"] == "None":
-            utc_start = times.getUTCTime(5)
+            utc_start = times.getUTCTime(self.start_offset_seconds)
             o["utc_start"]["#text"] = utc_start
             self.log(1, "TCSDaemon::issue_start_cmd utc_start=" + utc_start)
 

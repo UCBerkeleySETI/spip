@@ -117,6 +117,8 @@ class KATCPDaemon(Daemon):
     self.cam_config["DESCRIPTION"] = "None"
     self.cam_config["POOL_RESOURCES"] = "None"
     self.cam_config["SUBARRAY_STATE"] = "None"
+    self.cam_config["WEIGHTS_POLH"] = "Unknown"
+    self.cam_config["WEIGHTS_POLV"] = "Unknown"
 
   # reset the sepcified beam configuration
   def reset_beam_config (self):
@@ -154,6 +156,8 @@ class KATCPDaemon(Daemon):
     self.beam_config["OUTNBIT"] =  "8"
     self.beam_config["OUTTDEC"] = "32"
     self.beam_config["ZERO_COPY"] = "1"
+    self.beam_config["WEIGHTS_POLH"] = "Unknown"
+    self.beam_config["WEIGHTS_POLV"] = "Unknown"
     self.beam_config["lock"].release()
 
   #############################################################################
@@ -187,6 +191,9 @@ class KATCPDaemon(Daemon):
 
       # TODO compute overall device status
       self.katcp._device_status.set_value("ok")
+
+      # configure fixed sensors
+      self.katcp._beam_sensors["input_channels"].set_value (self.input_nchan)
 
       # connect to SPIP_LMC to retreive temperature information
       if self.quit_event.isSet():
@@ -290,14 +297,16 @@ class KATCPDaemon(Daemon):
 
     ra = self.beam_config["RA"]
     if ra == "None":
+      self.log(1, "RA not provided, acquiring from psrcat")
       (reply, message) = catalog.get_psrcat_param (self.beam_config["SOURCE"], "raj")
-      if reply == "ok":
+      if reply:
         ra = message
 
     dec = self.beam_config["DEC"]
     if dec == "None":
+      self.log(1, "DEC not provided, acquiring from psrcat")
       (reply, message) = catalog.get_psrcat_param (self.beam_config["SOURCE"], "decj")
-      if reply == "ok":
+      if reply:
         dec = message
 
     xml +=     "<ra key='RA' units='hh:mm:ss'>" + ra + "</ra>"
@@ -341,6 +350,8 @@ class KATCPDaemon(Daemon):
       xml +=     "<ktt_gnss_delta key='TFR_KTT_GNSS'>" + self.beam_config["TFR_KTT_GNSS"] + "</ktt_gnss_delta>"
       xml +=     "<nchan_per_stream key='NCHAN_PER_STREAM'>" + self.beam_config["NCHAN_PER_STREAM"] + "</nchan_per_stream>"
       xml +=     "<zero_copy key='ZERO_COPY'>" + self.beam_config["ZERO_COPY"] + "</zero_copy>"
+      xml +=     "<weights_polh key='WEIGHTS_POLH'>" + self.beam_config["WEIGHTS_POLH"] + "</weights_polh>"
+      xml +=     "<weights_polv key='WEIGHTS_POLV'>" + self.beam_config["WEIGHTS_POLV"] + "</weights_polv>"
       xml +=   "</custom_parameters>"
 
       xml +=   "<processing_modes>"

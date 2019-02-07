@@ -8,6 +8,7 @@
 #include "spip/IBVReceiverMerge2.h"
 #include "spip/UDPFormatMeerKATSPEAD.h"
 #include "spip/UDPFormatMeerKATSPEAD1k.h"
+#include "spip/UDPFormatMeerKATSPEAD2k.h"
 #include "spip/TCPSocketServer.h"
 
 #include <unistd.h>
@@ -97,6 +98,8 @@ int main(int argc, char *argv[])
       ibvmerge2->set_formats (new spip::UDPFormatMeerKATSPEAD(), new spip::UDPFormatMeerKATSPEAD());
     else if (format.compare("spead1k") == 0)
       ibvmerge2->set_formats (new spip::UDPFormatMeerKATSPEAD1k(), new spip::UDPFormatMeerKATSPEAD1k());
+    else if (format.compare("spead2k") == 0)
+      ibvmerge2->set_formats (new spip::UDPFormatMeerKATSPEAD2k(), new spip::UDPFormatMeerKATSPEAD2k());
     else
     {
       cerr << "ERROR: unrecognized UDP format [" << format << "]" << endl;
@@ -179,7 +182,7 @@ void usage()
       "  header      ascii file contain header\n"
       "  -b c1,c2    bind pols 1 and 2 to cores c1 and c2\n"
       "  -c port     listen for control commands on port\n"
-      "  -f format   UDP data format [spead spead1k]\n"
+      "  -f format   UDP data format [spead spead1k spead2k]\n"
       "  -h          print this help text\n"
       "  -v          verbose output\n"
     << endl;

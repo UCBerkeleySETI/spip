@@ -164,9 +164,9 @@ namespace spip {
 
       pthread_mutex_t mutex_recvs[NPOL];
 
-      IBVQueue queue1;
+      //IBVQueue queue1;
 
-      IBVQueue queue2;
+      //IBVQueue queue2;
 
       IBVQueue * queues[NPOL];
 

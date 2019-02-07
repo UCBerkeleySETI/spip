@@ -10,7 +10,7 @@ from spip.utils.core import system
 # test whether the specified target exists in the pulsar catalog
 def test_pulsar_valid (target):
 
-  (reply, message) = get_psrcat_param (target, "name")
+  (reply, message) = get_psrcat_param (target, "jname")
   if not reply:
     return (reply, message)
 
@@ -21,15 +21,23 @@ def test_pulsar_valid (target):
 
 def get_psrcat_param (target, param):
 
+  # remove the _R suffix
+  if target.endswith('_R'):
+    target = target[:-2]
+
   cmd = "psrcat -all " + target + " -c " + param + " -nohead -o short"
   rval, lines = system (cmd)
   if rval != 0 or len(lines) <= 0:
     return (False, "could not use psrcat")
 
   if lines[0].startswith("WARNING"):
-    return (False, "pulsar " + target + " did not exist in catalog " + lines[0])
+    return (False, "pulsar " + target + " did not exist in catalog")
 
-  return (True, target)
+  parts = lines[0].split()
+  if len(parts) == 2 and parts[0] == "1":
+    return (True, parts[1])
+  else:
+    return (False, "pulsar " + target + " did not match only 1 entry")
 
 def test_fluxcal (target, fluxcal_on_file, fluxcal_off_file):
 

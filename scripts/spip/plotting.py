@@ -234,9 +234,15 @@ class BandpassPlot (InlinePlot):
       self.xvals = numpy.arange (self.xmin, self.xmax, \
                                  self.xstep, dtype=float)
 
+    ymin = numpy.amin(spectrum)
+    ymax = numpy.amax(spectrum)
+
     self.openPlot (xres, yres, plain)
     if self.log: 
-      self.ax.set_yscale ('log', nonposy='clip')
+      if ymin == 0 and ymax == 0:
+        self.ax.set_yscale ('linear')
+      else:
+        self.ax.set_yscale ('log', nonposy='clip')
     else:
       self.ax.set_yscale ('linear')
     if self.zap:
@@ -245,12 +251,8 @@ class BandpassPlot (InlinePlot):
       self.ax.plot(spectrum, self.xvals, c=self.fgcolor)
       self.ax.set_ylim((0, nchan))
     else:
-      ymin = numpy.amin(spectrum)
-      ymax = numpy.amax(spectrum)
-
       if ymax == ymin:
         ymax = ymin + 1
-        spectrum[0] = 1
       self.ax.plot(self.xvals, spectrum, color=self.fgcolor)
       self.ax.set_xlim((self.xmin, self.xmax))
       self.ax.set_ylim((ymin, ymax))

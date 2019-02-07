@@ -32,6 +32,7 @@ class MEERKATProcThread (threading.Thread):
     self.dir = script.out_dir
     self.env = env  
     self.dl = dl
+    self.tag = "proc"
 
   def run (self):
     cmd = "cd " + self.dir + "; " + self.cmd
@@ -150,7 +151,7 @@ class MEERKATProcDaemon (Daemon, StreamBased):
     while (not self.quit_event.isSet()):
 
       # wait for the header to determine if folding is required
-      cmd = "dada_header -k " + self.db_key
+      cmd = "dada_header -k " + self.db_key + " -t " + self.tag
       self.log(0, cmd)
       self.binary_list.append (cmd)
       rval, lines = self.system (cmd)

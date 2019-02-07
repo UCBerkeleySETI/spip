@@ -140,8 +140,9 @@ class RecvDaemon(Daemon,StreamBased):
       self.running = True
 
       self.numa_core = self.cfg["STREAM_RECV_CORE_" + self.id]
+      self.numa_node = self.cfg["STREAM_NUMA_" + self.id]
 
-      recv_cmd = "numactl -C " + self.numa_core + " -- " + cmd
+      recv_cmd = "numactl -C " + self.numa_core + " --membind=" + self.numa_node + " -- " + cmd
  
       self.log(1, "START  " + cmd)
     

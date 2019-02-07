@@ -14,6 +14,7 @@ from spip.daemons.bases import StreamBased
 from spip.daemons.daemon import Daemon
 from spip.threads.reporting_thread import ReportingThread
 from spip.log_socket import LogSocket
+from spip.config import Config
 from spip.utils import times,sockets
 from spip.utils.core import system_piped
 from spip.plotting import HistogramPlot,FreqTimePlot,BandpassPlot,TimeseriesPlot
@@ -62,11 +63,11 @@ class StatReportingThread(ReportingThread):
         ndim = self.script.results["hg_ndim"]
         dims = { 0: "real", 1: "imag" }
 
-        for ipol in range(npol):
+        for ipol in range(int(npol)):
 
           xml += "<polarisation name='" + str(ipol)+ "'>"
        
-          for idim in range(ndim): 
+          for idim in range(int(ndim)):
 
             suffix = str(ipol) + "_" + dims[idim]
             
@@ -277,7 +278,7 @@ class StatDaemon(Daemon,StreamBased):
       process_stats = True
 
       # wait for the header to determine when dbstats should run
-      cmd = "dada_header -k " + self.db_key
+      cmd = "dada_header -k " + self.db_key + " -t stat"
       self.info(cmd)
       self.binary_list.append (cmd)
       rval, lines = self.system (cmd)

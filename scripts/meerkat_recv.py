@@ -59,7 +59,10 @@ class MeerKATRecvDaemon(RecvDaemon):
             + " -c " + self.ctrl_port
 
     if int(self.local_config["NCHAN"]) <= 1024:
-      cmd = cmd + " -f spead1k"
+      if self.cfg["CONFIG_NAME"] == "meerkat_cx5_1k2k":
+        cmd = cmd + " -f spead2k"
+      else:
+        cmd = cmd + " -f spead1k"
     else:
       cmd = cmd + " -f spead"
 
