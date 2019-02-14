@@ -58,6 +58,7 @@ AC_CONFIG_FILES([Makefile
   src/Instruments/KeckRTC/Makefile
   src/Instruments/MeerKAT/Makefile
   src/Instruments/UWB/Makefile
+  src/Instruments/Breakthrough/Makefile
   src/SignalProcessing/Makefile
   src/Telescope/Makefile
   src/Util/Makefile

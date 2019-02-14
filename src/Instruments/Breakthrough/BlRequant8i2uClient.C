@@ -39,8 +39,8 @@ int64_t spip::BlRequant8i2uClient::open ()
     throw invalid_argument ("Only input nbit=8 supported");
 
   // check the input/output block sizes
-  if (read_db->get_data_bufsz() != write_db->get_data_bufsz() * 2)
-    throw invalid_argument ("input ring buffer must be double the size of the output ring buffer");
+  if (read_db->get_data_bufsz() != write_db->get_data_bufsz() * 4)
+    throw invalid_argument ("input ring buffer must be 4x the size of the output ring buffer");
 
   sample_bytes = 1;
   scale_factor = 256.0;
@@ -70,7 +70,7 @@ int64_t spip::BlRequant8i2uClient::io_block (void * read_buffer,
   int8_t * write = (int8_t *) write_buffer;
 
   // read 1 value at a time.
-  uint64_t ndat = read_bytes / 4;
+  uint64_t ndat = read_bytes;
 
   // Compute STDEV of REAL and IMAG components
   double sum_re = 0.0;

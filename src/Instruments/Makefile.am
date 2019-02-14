@@ -1,2 +1,3 @@
 
-SUBDIRS = MeerKAT UWB Examples KeckRTC Breakthrough
+#SUBDIRS = MeerKAT UWB Examples KeckRTC Breakthrough
+SUBDIRS = Breakthrough

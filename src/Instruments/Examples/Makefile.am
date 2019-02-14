@@ -18,6 +18,6 @@ LDADD = libinstexamples.la \
   $(top_builddir)/src/Affinity/libspipaffinity.la \
   -lpthread
 
-AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@
+AM_CXXFLAGS += @PSRDADA_CFLAGS@ @HWLOC_CFLAGS@ @CUDA_CFLAGS@
 LDADD += @PSRDADA_LIBS@ @HWLOC_LIBS@
 
