@@ -1,6 +1,6 @@
 
-#ifndef __BlRequantClient_h
-#define __BlRequantClient_h
+#ifndef __BlRequant16ob8iClient_h
+#define __BlRequant16ob8iClient_h
 
 #include "config.h"
 
@@ -8,14 +8,14 @@
 
 namespace spip {
 
-  class BlRequantClient : public ReadWriteBlockClient {
+  class BlRequant16ob8iClient : public ReadWriteBlockClient {
 
     public:
 
-      BlRequantClient (const char * read_key_string,
+      BlRequant16ob8iClient (const char * read_key_string,
                           const char * write_key_string);
 
-      ~BlRequantClient ();
+      ~BlRequant16ob8iClient ();
 
       int64_t open ();
 

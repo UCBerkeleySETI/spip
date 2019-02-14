@@ -6,7 +6,7 @@
  ***************************************************************************/
 
 #include "spip/HardwareAffinity.h"
-#include "spip/BlRequant16ob8iClient.h"
+#include "spip/BlRequant8i2uClient.h"
 
 #include <unistd.h>
 #include <signal.h>
@@ -79,19 +79,19 @@ int main(int argc, char *argv[]) try
 
   read_key = std::string(argv[optind+0]);
   write_key = std::string(argv[optind+1]);
-  spip::BlRequant16ob8iClient * op;
+  spip::BlRequant8i2uClient * op;
 
-  op = new spip::BlRequant16ob8iClient (read_key.c_str(),
+  op = new spip::BlRequant8i2uClient (read_key.c_str(),
                                               write_key.c_str());
   if (verbose)
-    cerr << "bl_requant_16b_to_8b: main()" << endl;
+    cerr << "bl_requant_8b_to_2b: main()" << endl;
   try
   {
     op->main();
   }
   catch (std::exception& exc)
   {
-    cerr << "bl_requant_16b_to_8b: ERROR: " << exc.what() << endl;
+    cerr << "bl_requant_8b_to_2b: ERROR: " << exc.what() << endl;
     return -1;
   }
 
@@ -112,7 +112,7 @@ catch (Error& error)
 
 void usage()
 {
-  cout << "bl_requant_16b_to_8b [options] input out_key\n"
+  cout << "bl_requant_8b_to_2b [options] input out_key\n"
     "  in_key      PSRDada shared memory key for input\n"
     "  out_key     PSRDada shared memory key for output\n"
     "  -b core     bind computation to specified CPU core\n"

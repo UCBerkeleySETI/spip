@@ -5,7 +5,7 @@
  *
  ***************************************************************************/
 
-#include "spip/BlRequantClient.h"
+#include "spip/BlRequant16ob8iClient.h"
 
 #include <cstdio>
 #include <cstring>
@@ -14,18 +14,18 @@
 
 using namespace std;
 
-spip::BlRequantClient::BlRequantClient (
+spip::BlRequant16ob8iClient::BlRequant16ob8iClient (
     const char * read_key_string,
     const char * write_key_string) :
         spip::ReadWriteBlockClient (read_key_string, write_key_string)
 {
 }
 
-spip::BlRequantClient::~BlRequantClient ()
+spip::BlRequant16ob8iClient::~BlRequant16ob8iClient ()
 {
 }
 
-int64_t spip::BlRequantClient::open ()
+int64_t spip::BlRequant16ob8iClient::open ()
 {
   unsigned nbit;
 
@@ -54,12 +54,12 @@ int64_t spip::BlRequantClient::open ()
   return 0;
 }
 
-int64_t spip::BlRequantClient::io_block (void * read_buffer,
+int64_t spip::BlRequant16ob8iClient::io_block (void * read_buffer,
                                             void * write_buffer,
                                             uint64_t read_bytes)
 {
 #ifdef _DEBUG
-  cerr << "spip::BlRequantClient::io_block reading " << read_bytes << endl;
+  cerr << "spip::BlRequant16ob8iClient::io_block reading " << read_bytes << endl;
 #endif
 
   // input buffer pointers
@@ -83,12 +83,12 @@ int64_t spip::BlRequantClient::io_block (void * read_buffer,
 
   int64_t bytes_written = read_bytes / 2;
 #ifdef _DEBUG
-  cerr << "spip::BlRequantClient::io_block wrote " << bytes_written << endl;
+  cerr << "spip::BlRequant16ob8iClient::io_block wrote " << bytes_written << endl;
 #endif
   return bytes_written;
 }
 
-int64_t spip::BlRequantClient::close ()
+int64_t spip::BlRequant16ob8iClient::close ()
 {
   return 0;
 }
