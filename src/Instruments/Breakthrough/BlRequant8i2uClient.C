@@ -11,6 +11,7 @@
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
+#include "math.h" 
 
 using namespace std;
 
@@ -83,9 +84,9 @@ int64_t spip::BlRequant8i2uClient::io_block (void * read_buffer,
       sq_sum_im += read[2*idx+1] * read[2*idx+1];
   }
   double mean_re = sum_re / ndat;
-  double stdev_re = std::sqrt(sq_sum_re / ndat - mean_re * mean_re);
+  double stdev_re = sqrt(sq_sum_re / ndat - mean_re * mean_re);
   double mean_im = sum_im / ndat;
-  double stdev_im = std::sqrt(sq_sum_im / ndat - mean_im * mean_im);
+  double stdev_im = sqrt(sq_sum_im / ndat - mean_im * mean_im);
 
   // Do 2-bit conversion
   for(size_t idx = 0; idx < ndat / 4; idx++) {

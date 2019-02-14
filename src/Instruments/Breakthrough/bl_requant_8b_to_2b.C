@@ -119,7 +119,7 @@ void usage()
     "  -h          print this help text\n"
     "  -v          verbose output\n"
     "\n"
-    "  converts 16-bit offset binary integer input to two's complement 8-bit output\n"
+    "  converts 8-bit integer input to 2-bit scaled by stdev\n"
     << endl;
 }
 
